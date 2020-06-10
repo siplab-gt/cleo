@@ -1,10 +1,10 @@
 from brian2 import NeuronGroup, Network
 from abc import ABC, abstractmethod
 
-class IntegratedDevice(ABC):
+class InterfaceDevice(ABC):
     def __init__(self):
         self.name = None
-        self.brian_objects = {}
+        self.brian_objects = set()
         pass
 
     @abstractmethod
@@ -12,10 +12,7 @@ class IntegratedDevice(ABC):
         pass
 
 
-class Controller(ABC):
-    def __init__(self):
-        self.min_delay_ms = 0
-
+class ControlLoop(ABC):
     @abstractmethod
     def put_state(self, state_dict: dict, time):
         pass
@@ -26,12 +23,12 @@ class Controller(ABC):
         pass
 
 
-class Recorder(IntegratedDevice):
+class Recorder(InterfaceDevice):
     def __init__(self):
         pass
 
 
-class Stimulator(IntegratedDevice):
+class Stimulator(InterfaceDevice):
     def __init__(self):
         pass
 
@@ -57,9 +54,10 @@ class CLOCSimulator:
         for brian_object in recorder.brian_objects:
             self.network.add(brian_object)
 
-    def set_controller(self, controller):
+    def set_control_loop(self, control_loop, control_period):
         self.controller = controller
+        self.network.
 
 
-    def run(self):
-        self.network.run()
+    def run(self, duration):
+        self.network.run(duration)
