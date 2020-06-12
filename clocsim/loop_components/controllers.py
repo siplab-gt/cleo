@@ -1,3 +1,10 @@
+from .. import LoopComponent
+
+class Controller(LoopComponent):
+    def __init__(self):
+        pass
+
+
 from ..base import Controller
 from abc import abstractmethod
 from collections import deque
