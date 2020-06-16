@@ -2,10 +2,9 @@ from brian2 import NeuronGroup, Network, ms, NetworkOperation
 from abc import ABC, abstractmethod
 
 class InterfaceDevice(ABC):
-    def __init__(self):
-        self.name = None
+    def __init__(self, name):
+        self.name = name
         self.brian_objects = set()
-        pass
 
     @abstractmethod
     def connect_to_neurons(self, neuron_group: NeuronGroup):
@@ -24,18 +23,12 @@ class ControlLoop(ABC):
 
 
 class Recorder(InterfaceDevice):
-    def __init__(self):
-        pass
-
     @abstractmethod
     def get_state(self):
         pass
 
 
 class Stimulator(InterfaceDevice):
-    def __init__(self):
-        pass
-
     @abstractmethod
     def update(self, ctrl_signal):
         pass
@@ -89,3 +82,8 @@ class CLOCSimulator:
 
     def run(self, duration):
         self.network.run(duration)
+
+
+if __name__ == "__main__":
+    rec = Recorder()
+    print(rec.brian_objects)
