@@ -1,11 +1,28 @@
 from abc import ABC, abstractmethod
 from typing import Tuple, Any
-from ..base import ControlLoop
 from collections import deque
 
+from ..base import ControlLoop
+from .delays import Delay
+
 class LoopComponent(ABC):
-    @abstractmethod
+    def __init__(self, delay: Delay = None):
+        self.delay = delay
+
     def process_data(self, data, time) -> Tuple(Any, float):
+        out = self._process_data(data)
+        if self.delay is not None:
+            out_time = self.delay.add_delay_to_time(time)
+        else:
+            out_time = time
+        return (out, out_time)
+
+    @abstractmethod
+    def _process_data(self, data) -> Any:
+        '''
+        This is the method that must be implemented, which will process
+        the data without needing to account for time delay.
+        '''
         pass
 
 
