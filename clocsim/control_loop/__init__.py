@@ -26,7 +26,7 @@ class LoopComponent(ABC):
         return (out, out_time)
 
     @abstractmethod
-    def _process_data(self, data) -> Any:
+    def _process_data(self, data, time: float = None) -> Any:
         '''
         This is the method that must be implemented, which will process
         the data without needing to account for time delay.
