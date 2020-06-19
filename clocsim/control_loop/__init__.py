@@ -6,15 +6,23 @@ from ..base import ControlLoop
 from .delays import Delay
 
 class LoopComponent(ABC):
-    def __init__(self, delay: Delay = None):
-        self.delay = delay
+    def __init__(self, **kwargs):
+        self.delay = kwargs.get('delay', None)
+        self.save_history = kwargs.get('save_history', False)
+        if self.save_history is True:
+            self.t = []
+            self.out_t = []
+            self.values = []
 
-    def process_data(self, data, time) -> Tuple(Any, float):
+    def process_data(self, data, time: float) -> Tuple(Any, float):
         out = self._process_data(data)
         if self.delay is not None:
             out_time = self.delay.add_delay_to_time(time)
         else:
             out_time = time
+        self.t.append(time)
+        self.out_t.append(out_time)
+        self.values.append(out)
         return (out, out_time)
 
     @abstractmethod
@@ -42,8 +50,10 @@ class DelayControlLoop(ControlLoop):
         else:
             return None
     
-    ''' Must return a tuple (data, delayed_time). This function is where you'd pipe data
-    through multiple components.'''
     @abstractmethod
     def compute_ctrl_signal(self, state_dict: dict, time: float) -> Tuple(Any, float):
+        ''' 
+        Must return a tuple (data, delayed_time). This function is where you'd pipe data
+        through multiple components.
+        '''
         pass
