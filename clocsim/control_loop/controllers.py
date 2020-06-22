@@ -4,14 +4,14 @@ from nptyping import NDArray
 
 class Controller(LoopComponent):
     def __init__(self, **kwargs):
-        super().__init__(kwargs)
+        super().__init__(**kwargs)
 
 class PIController(Controller):
     def __init__(self, ref_signal, Kp, Ki=0, sample_period_ms=0, **kwargs):
         '''
         ref_signal is a function of time
         '''
-        super().__init__(kwargs)
+        super().__init__(**kwargs)
         self.ref_signal = ref_signal
         self.Kp = Kp
         self.Ki = Ki
