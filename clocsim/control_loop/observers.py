@@ -1,5 +1,7 @@
 from . import LoopComponent
 import numpy as np
+from nptyping import NDArray, Int32
+from typing import Any
 from .delays import Delay
 
 class FiringRateEstimator(LoopComponent):
@@ -13,7 +15,8 @@ class FiringRateEstimator(LoopComponent):
         self.alpha = np.exp(-sample_period_ms / tau_ms)
         self.prev_rate = None
 
-    def _process_data(self, data: np.array) -> np.array:
+    def _process_data(self, data: NDArray[(1, Any), Int32]) \
+            -> NDArray[(1, Any), float]:
         '''
         `data` should be a vector of spike counts.
         '''
