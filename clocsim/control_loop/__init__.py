@@ -52,9 +52,10 @@ class DelayControlLoop(ControlLoop):
             return None
     
     @abstractmethod
-    def compute_ctrl_signal(self, state_dict: dict, time: float) -> Tuple(Any, float):
+    def compute_ctrl_signal(self, state_dict: dict, time: float) -> Tuple(dict, float):
         ''' 
-        Must return a tuple (data, delayed_time). This function is where you'd pipe data
-        through multiple components.
+        Must return a tuple (dict, delayed_time). This function is where you set
+        up the data processing pipeline. The output dictionary must have one name-value
+        pair for each stimulator you want to control.
         '''
         pass
