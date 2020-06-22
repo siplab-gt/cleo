@@ -20,9 +20,10 @@ class LoopComponent(ABC):
             out_time = self.delay.add_delay_to_time(time)
         else:
             out_time = time
-        self.t.append(time)
-        self.out_t.append(out_time)
-        self.values.append(out)
+        if self.save_history:
+            self.t.append(time)
+            self.out_t.append(out_time)
+            self.values.append(out)
         return (out, out_time)
 
     @abstractmethod
