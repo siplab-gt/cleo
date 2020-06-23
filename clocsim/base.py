@@ -62,6 +62,8 @@ class CLOCSimulator:
         return state
 
     def update_controllers(self, ctrl_signal):
+        if ctrl_signal is None:
+            return
         for name, signal in ctrl_signal.items():
             self.stimulators[name].update(signal)
 
