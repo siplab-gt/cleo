@@ -2,6 +2,8 @@ from abc import ABC, abstractmethod
 from typing import Tuple, Any
 from collections import deque
 
+from brian2 import ms
+
 from ..base import ControlLoop
 from .delays import Delay
 
@@ -14,20 +16,20 @@ class LoopComponent(ABC):
             self.out_t = []
             self.values = []
 
-    def process_data(self, data, time: float) -> Tuple(Any, float):
-        out = self._process_data(data)
+    def process_data(self, data, time_ms: float) -> Tuple[Any, float]:
+        out = self._process_data(data, time_ms)
         if self.delay is not None:
-            out_time = self.delay.add_delay_to_time(time)
+            out_time_ms = self.delay.add_delay_to_time(time_ms)
         else:
-            out_time = time
+            out_time_ms = time_ms
         if self.save_history:
-            self.t.append(time)
-            self.out_t.append(out_time)
+            self.t.append(time_ms)
+            self.out_t.append(out_time_ms)
             self.values.append(out)
-        return (out, out_time)
+        return (out, out_time_ms)
 
     @abstractmethod
-    def _process_data(self, data, time: float = None) -> Any:
+    def _process_data(self, data, time_ms: float = None) -> Any:
         '''
         This is the method that must be implemented, which will process
         the data without needing to account for time delay.
@@ -36,23 +38,30 @@ class LoopComponent(ABC):
 
 
 class DelayControlLoop(ControlLoop):
+    '''
+    The unit for keeping track of time in the control loop is milliseconds.
+    To deal in quantities relative to seconds (e.g., defining a target firing
+    rate in Hz), the component involved must make the conversion.
+    '''
     def __init__(self):
         self.out_buffer = deque([])
 
-    def put_state(self, state_dict: dict, time: float):
-        out, time = self.compute_ctrl_signal(state_dict, time)
-        self.out_buffer.append((out, time))
+    def put_state(self, state_dict: dict, t):
+        time_ms = t / ms
+        out, time_ms = self.compute_ctrl_signal(state_dict, time_ms)
+        self.out_buffer.append((out, time_ms))
 
     def get_ctrl_signal(self, time):
-        next_out_signal, next_out_time = self.out_buffer[0]
-        if time >= next_out_time:
+        time_ms = time / ms
+        next_out_signal, next_out_time_ms = self.out_buffer[0]
+        if time_ms >= next_out_time_ms:
             self.out_buffer.popleft()
             return next_out_signal
         else:
             return None
     
     @abstractmethod
-    def compute_ctrl_signal(self, state_dict: dict, time: float) -> Tuple(dict, float):
+    def compute_ctrl_signal(self, state_dict: dict, time_ms: float) -> Tuple[dict, float]:
         ''' 
         Must return a tuple (dict, delayed_time). This function is where you set
         up the data processing pipeline. The output dictionary must have one name-value
