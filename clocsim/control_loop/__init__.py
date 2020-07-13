@@ -53,6 +53,8 @@ class DelayControlLoop(ControlLoop):
 
     def get_ctrl_signal(self, time):
         time_ms = time / ms
+        if len(self.out_buffer) == 0:
+            return None
         next_out_signal, next_out_time_ms = self.out_buffer[0]
         if time_ms >= next_out_time_ms:
             self.out_buffer.popleft()

@@ -77,6 +77,9 @@ class CLOCSimulator:
             ctrl_signal = control_loop.get_ctrl_signal(t)
             self.update_controllers(ctrl_signal)
 
+        # TODO: is the send_signal function guaranteed to be called first?
+        # this is necessary if you want to update the stimulators in the same
+        # timestep.
         self.network.add(NetworkOperation(send_signal, dt=sample_period))
         self.network.add(NetworkOperation(receive_signal, dt=poll_ctrl_period))
 
