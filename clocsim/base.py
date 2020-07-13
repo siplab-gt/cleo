@@ -1,5 +1,7 @@
-from brian2 import NeuronGroup, Network, ms, NetworkOperation
 from abc import ABC, abstractmethod
+
+from brian2 import NeuronGroup, Network, ms, NetworkOperation, defaultclock
+
 
 class InterfaceDevice(ABC):
     def __init__(self, name):
@@ -12,6 +14,10 @@ class InterfaceDevice(ABC):
 
 
 class ControlLoop(ABC):
+    @abstractmethod
+    def is_sampling_now(self, time) -> bool:
+        pass
+
     @abstractmethod
     def put_state(self, state_dict: dict, time):
         pass
@@ -67,21 +73,18 @@ class CLOCSimulator:
         for name, signal in ctrl_signal.items():
             self.stimulators[name].update(signal)
 
-    def set_control_loop(self, control_loop, sample_period=1*ms, poll_ctrl_period=0.1*ms):
+    def set_control_loop(self, control_loop, communication_period=None):
         self.control_loop = control_loop
+        if communication_period is None:
+            communication_period = defaultclock.dt
 
-        def send_signal(t):
-            control_loop.put_state(self.get_state(), t)
-
-        def receive_signal(t):
+        def communicate_with_ctrl_loop(t):
+            if control_loop.is_sampling_now(t):
+                control_loop.put_state(self.get_state(), t)
             ctrl_signal = control_loop.get_ctrl_signal(t)
             self.update_controllers(ctrl_signal)
 
-        # TODO: is the send_signal function guaranteed to be called first?
-        # this is necessary if you want to update the stimulators in the same
-        # timestep.
-        self.network.add(NetworkOperation(send_signal, dt=sample_period))
-        self.network.add(NetworkOperation(receive_signal, dt=poll_ctrl_period))
+        self.network.add(NetworkOperation(communicate_with_ctrl_loop, dt=communication_period))
 
 
 

@@ -70,3 +70,18 @@ class DelayControlLoop(ControlLoop):
         pair for each stimulator you want to control.
         '''
         pass
+
+class FixedSamplingSerialProcessingControlLoop(DelayControlLoop):
+    '''
+    Samples on a fixed schedule, even if a computation exceeds the sampling period.
+    The computation delay for each sample is added on to the output
+    time for the previous signal (hence, processing is serial).
+    '''
+
+    def __init__(self, sampling_period_ms):
+        self.sampling_period_ms = sampling_period_ms
+        super().__init__()
+
+    def is_sampling_now(self, time):
+        # current sample
+        pass
