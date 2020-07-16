@@ -14,6 +14,7 @@ class FiringRateEstimator(LoopComponent):
         self.T_s = sample_period_ms / 1000
         self.alpha = np.exp(-sample_period_ms / tau_ms)
         self.prev_rate = None
+        self.prev_time_ms = None
 
     def _process_data(self, data: NDArray[(1, Any), Int32], time_ms=None) \
             -> NDArray[(1, Any), float]:
@@ -22,7 +23,12 @@ class FiringRateEstimator(LoopComponent):
         '''
         if self.prev_rate is None:
             self.prev_rate = np.zeros(data.shape)
+        if self.prev_time_ms is None:
+            self.prev_time_ms = time_ms - self.T_s*1000
 
-        curr_rate = self.prev_rate*self.alpha + (1-self.alpha)*data/self.T_s
+        intersample_period_s = (time_ms - self.prev_time_ms)/1000
+        alpha = np.exp(-intersample_period_s / self.tau_s)
+        curr_rate = self.prev_rate*alpha + (1-alpha)*data/intersample_period_s
         self.prev_rate = curr_rate
+        self.prev_time_ms = time_ms
         return curr_rate

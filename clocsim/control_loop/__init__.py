@@ -42,14 +42,33 @@ class DelayControlLoop(ControlLoop):
     The unit for keeping track of time in the control loop is milliseconds.
     To deal in quantities relative to seconds (e.g., defining a target firing
     rate in Hz), the component involved must make the conversion.
+
+    For non-serial processing, the order of input/output is preserved even
+    if the computed output time for a sample is sooner than that for a previous
+    sample.
+
+    Fixed sampling: on a fixed schedule no matter what
+    Wait for computation sampling: Can't sample during computation. Samples ASAP
+    after an over-period computation: otherwise remains on schedule.
     '''
-    def __init__(self):
+    def __init__(self, sampling_period_ms, **kwargs):
         self.out_buffer = deque([])
+        self.sampling_period_ms = sampling_period_ms
+        self.sampling = kwargs.get('sampling', 'fixed')
+        if self.sampling not in ['fixed', 'wait for computation']:
+            raise ValueError('Invalid sampling scheme:', self.sampling)
+        self.processing = kwargs.get('processing', 'serial')
+        if self.processing not in ['serial', 'parallel']:
+            raise ValueError('Invalid processing scheme:', self.processing)
 
     def put_state(self, state_dict: dict, t):
-        time_ms = t / ms
-        out, time_ms = self.compute_ctrl_signal(state_dict, time_ms)
-        self.out_buffer.append((out, time_ms))
+        in_time_ms = t / ms
+        out, out_time_ms = self.compute_ctrl_signal(state_dict, in_time_ms)
+        if self.processing == 'serial' and len(self.out_buffer) > 0:
+            prev_out_time_ms = self.out_buffer[-1][1]
+            # add delay onto the output time of the last computation
+            out_time_ms = prev_out_time_ms + out_time_ms - in_time_ms
+        self.out_buffer.append((out, out_time_ms))
 
     def get_ctrl_signal(self, time):
         time_ms = time / ms
@@ -62,6 +81,24 @@ class DelayControlLoop(ControlLoop):
         else:
             return None
     
+    def is_sampling_now(self, time):
+        time_ms = time / ms
+        if self.sampling == 'fixed':
+            if time_ms % self.sampling_period_ms == 0:
+                return True
+        elif self.sampling == 'wait for computation':
+            if time_ms % self.sampling_period_ms == 0:
+                # if done computing
+                if len(self.out_buffer) == 0 or self.out_buffer[0][1] <= time_ms:
+                    self.overrun = False
+                    return True
+                else:  # if not done computing
+                    self.overrun = True
+                    return False
+            else:  # off-schedule, only sample if the last sampling period was missed (there was an overrun)
+                return self.overrun
+        return False
+
     @abstractmethod
     def compute_ctrl_signal(self, state_dict: dict, time_ms: float) -> Tuple[dict, float]:
         ''' 
@@ -69,19 +106,4 @@ class DelayControlLoop(ControlLoop):
         up the data processing pipeline. The output dictionary must have one name-value
         pair for each stimulator you want to control.
         '''
-        pass
-
-class FixedSamplingSerialProcessingControlLoop(DelayControlLoop):
-    '''
-    Samples on a fixed schedule, even if a computation exceeds the sampling period.
-    The computation delay for each sample is added on to the output
-    time for the previous signal (hence, processing is serial).
-    '''
-
-    def __init__(self, sampling_period_ms):
-        self.sampling_period_ms = sampling_period_ms
-        super().__init__()
-
-    def is_sampling_now(self, time):
-        # current sample
         pass
