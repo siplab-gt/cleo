@@ -1,5 +1,4 @@
 from .base import Stimulator
-from brian2 import NeuronGroup
 
 class StateVariableSetter(Stimulator):
     def __init__(self, name, index, variable_to_ctrl, unit):
