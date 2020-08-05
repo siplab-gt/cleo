@@ -1,4 +1,4 @@
-from .base import Stimulator
+from ..base import Stimulator
 
 class StateVariableSetter(Stimulator):
     def __init__(self, name, index, variable_to_ctrl, unit):
