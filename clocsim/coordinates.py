@@ -7,7 +7,7 @@ import numpy as np
 from .utilities import modify_model_with_eqs
 
 def assign_coords_rect_prism(neuron_group, distribution: str, xlim: Tuple[float, float],
-        ylim: Tuple[float, float], zlim: Tuple[float, float], unit, 
+        ylim: Tuple[float, float], zlim: Tuple[float, float], unit=mm, 
         xyz_grid_shape:Tuple[int, int, int]=None):
     _create_variables(neuron_group)
     if distribution not in ['grid', 'random']:
