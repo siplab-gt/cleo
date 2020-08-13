@@ -68,7 +68,8 @@ def assign_coords_cylinder(neuron_group, distribution: str, xyz_start, xyz_end, 
     neuron_group.y = points[:, 1]*unit
     neuron_group.z = points[:, 2]*unit
 
-def plot_neuron_positions(*neuron_groups, xlim=None, ylim=None, zlim=None, axis_scale_unit=mm):
+def plot_neuron_positions(*neuron_groups, xlim=None, ylim=None, zlim=None,
+        axis_scale_unit=mm, opto=None, invert_z=True):
     try:
         from matplotlib import pyplot as plt
         from mpl_toolkits.mplot3d import Axes3D
@@ -91,8 +92,16 @@ def plot_neuron_positions(*neuron_groups, xlim=None, ylim=None, zlim=None, axis_
         ax.set_xlim(xlim)
     if ylim is not None:
         ax.set_ylim(ylim)
-    if zlim is not None:
+    if zlim is None:
+        zlim = ax.get_zlim()
+    if invert_z:
+        ax.set_zlim(zlim[1], zlim[0])
+    else:
         ax.set_zlim(zlim)
+
+    if opto is not None:
+        opto.add_self_to_plot(ax, axis_scale_unit)
+
     plt.show()
 
 def _create_variables(neuron_group):
