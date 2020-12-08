@@ -30,7 +30,7 @@ four_state = '''
 '''
 
 # from try.projectpyrho.org's default 4-state params
-ChR2_4s = {
+ChR2_four_state = {
     'g0': 114000*psiemens, 
     'gamma': 0.00742,
     'phim': 2.33e17/mm2/second,  # *photon, not in Brian2
@@ -51,15 +51,15 @@ ChR2_4s = {
 }
 
 # from Foutz et al. 2012
-default_fiber = {
+default_blue = {
     'R0': 0.1*mm,  # optical fiber radius
-    'NAfib': 0.37  # optical fiber numerical aperture
-}
-
-# from Foutz et al. 2012
-default_tissue = {
-    'K': 7.37/mm,  # absorbance coefficient
-    'S': 0.125/mm,  # scattering coefficient
+    'NAfib': 0.37,  # optical fiber numerical aperture
+    'wavelength': 473*nmeter,
+    # NOTE: the following depend on wavelength and tissue properties
+    # 'K': 7.37/mm,  # absorbance coefficient
+    'K': 0.125/mm,  # absorbance coefficient
+    # 'S': 0.125/mm,  # scattering coefficient
+    'S': 7.37/mm,  # scattering coefficient
     'ntis': 1.36  # tissue index of refraction
 }
 
@@ -68,8 +68,8 @@ class OptogeneticIntervention(Stimulator):
     Requires neurons to have 3D spatial coordinates already assigned.
     Will add the necessary equations to the neurons for the optogenetic model.
     '''
-    def __init__(self, name, opsin_model:str, opsin_params:dict, wavelength,
-            light_source:dict=default_fiber, tissue:dict=default_tissue,
+    def __init__(self, name, opsin_model:str, opsin_params:dict,
+            light_model_params:dict,
             p_expression:float=1, location:Tuple[float, float, float]=(0,0,0)*mm,
             direction:Tuple[float, float, float]=(0,0,1)):
         '''
@@ -77,28 +77,40 @@ class OptogeneticIntervention(Stimulator):
         '''
         super().__init__(name)
         self.opsin_model = Equations(opsin_model, **opsin_params)
-        self.wavelength = wavelength
-        self.light_source = light_source
-        self.tissue = tissue
+        self.light_model_params = light_model_params
         self.p_expression = p_expression
         self.location = location
         # direction unit vector
         self.dir_uvec = (direction/np.linalg.norm(direction)).reshape((3,1))
 
-    def _Foutz12_transmittance(self, r, z):
+    def _Foutz12_transmittance(self, r, z, scatter=True, spread=True, gaussian=True):
         '''Foutz et al. 2012 transmittance model: Gaussian cone with Kubelka-Munk propagation'''
-        # divergence half-angle of cone
-        theta_div = np.arcsin(self.light_source['NAfib'] / self.tissue['ntis'])
-        Rz = self.light_source['R0'] + z*np.tan(theta_div)  # radius as light spreads
-        C = (self.light_source['R0']/Rz)**2
-        G = 1/np.sqrt(2*np.pi) * np.exp(-2*(r/Rz)**2)
+
+        if spread:
+            # divergence half-angle of cone
+            theta_div = np.arcsin(self.light_model_params['NAfib'] / 
+                    self.light_model_params['ntis'])
+            Rz = self.light_model_params['R0'] + z*np.tan(theta_div)  # radius as light spreads("apparent radius" from original code)
+            C = (self.light_model_params['R0']/Rz)**2
+        else:
+            Rz = self.light_model_params['R0']  # "apparent radius"
+            C = 1
+
+        if gaussian:
+            G = 1/np.sqrt(2*np.pi) * np.exp(-2*(r/Rz)**2)
+        else:
+            G = 1
         
-        S = self.tissue['S']
-        a = 1 + self.tissue['K']/S
-        b = np.sqrt(a**2 - 1)
-        M = b / (a*np.sinh(b*S*np.sqrt(r**2+z**2)) + b*np.cosh(b*S*np.sqrt(r**2+z**2)))
+        def kubelka_munk(dist):
+            S = self.light_model_params['S']
+            a = 1 + self.light_model_params['K']/S
+            b = np.sqrt(a**2 - 1)
+            dist = np.sqrt(r**2 + z**2)
+            return b / (a*np.sinh(b*S*dist) + b*np.cosh(b*S*dist))
+        M = kubelka_munk(np.sqrt(r**2+z**2)) if scatter else 1
+
+        # cone of light shouldn't extend backwards
         T = G*C*M
-        # should be 0 for negative z
         T[z<0] = 0
         return T
 
@@ -116,7 +128,7 @@ class OptogeneticIntervention(Stimulator):
             phi = Irr / Ephoton : 1/second/meter2''',
             # Ephoton = h*c/lambda
             Ephoton = 6.63e-34*meter2*kgram/second * 2.998e8*meter/second \
-                / self.wavelength
+                / self.light_model_params['wavelength']
         )
 
         self.opto_syn = Synapses(neuron_group, neuron_group,
@@ -162,7 +174,7 @@ class OptogeneticIntervention(Stimulator):
     def _alpha_cmap_for_wavelength(self):
         from matplotlib import colors
         from ..utilities import wavelength_to_rgb
-        c = wavelength_to_rgb(self.wavelength/nmeter)
+        c = wavelength_to_rgb(self.light_model_params['wavelength']/nmeter)
         c_clear = (*c, 0)
         c_opaque = (*c, 1)
         return colors.LinearSegmentedColormap.from_list(
