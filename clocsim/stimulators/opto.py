@@ -13,10 +13,10 @@ from . import Stimulator
 # target population. rho_rel is channel density relative to standard model fit,
 # allowing for heterogeneous opsin expression.
 four_state = '''
-    dC1/dt = Gd1*O1 + Gr0*C2 - Ga1*C1 : 1
-    dO1/dt = Ga1*C1 + Gb*O2 - (Gd1+Gr)*O1 : 1
-    dO2/dt = Ga2*C2 + Gf*O1 - (Gd2+Gb)*O2 : 1
-    dC2/dt = Gd2*O2 - (Gr0+Ga2)*C2 : 1
+    dC1/dt = Gd1*O1 + Gr0*C2 - Ga1*C1 : 1 (clock-driven)
+    dO1/dt = Ga1*C1 + Gb*O2 - (Gd1+Gr)*O1 : 1 (clock-driven)
+    dO2/dt = Ga2*C2 + Gf*O1 - (Gd2+Gb)*O2 : 1 (clock-driven)
+    dC2/dt = Gd2*O2 - (Gr0+Ga2)*C2 : 1 (clock-driven)
     Ga1 = k1*phi**p/(phi**p + phim**p) : 1
     Gf = kf*phi**q/(phi**q + phim**q) + Gf0 : 1
     Gb = kb*phi**q/(phi**q + phim**q) + Gb0 : 1
@@ -25,7 +25,7 @@ four_state = '''
     fphi = O1 + gamma*O2 : 1
     fv = (1 - exp(-(v_post-E)/v0)) / ((v_post-E)/v1) : 1
 
-    Iopto_post = g0*fphi*fv*(v_post-E)*rho_rel : ampere
+    Iopto_post = g0*fphi*fv*(v_post-E)*rho_rel : ampere (summed)
     rho_rel = 1 : 1
 '''
 
@@ -114,18 +114,31 @@ class OptogeneticIntervention(Stimulator):
         T[z<0] = 0
         return T
 
+
+    def get_rz_for_xyz(self, x, y, z):
+        '''Assumes x, y, z already have units'''
+        # have to add unit back on since it's stripped by hstack
+        coords = np.vstack([x.reshape((1,-2)), y.reshape((1,-2)),
+                z.reshape((1,-2))]).T*meter
+        rel_coords = coords - self.location  # relative to fiber location
+        # must use brian2's dot function for matrix multiply to preserve
+        # units correctly.
+        zc = usf.dot(rel_coords, self.dir_uvec)  # distance along cylinder axis
+        # just need length (norm) of radius vectors
+        # not using np.linalg.norm because it strips units
+        r = np.sqrt( np.sum( (rel_coords-usf.dot(zc, self.dir_uvec.T))**2, axis=1 ) )
+        r = r.reshape((-1, 1))
+        return r, zc
+
+
     def connect_to_neurons(self, neuron_group):
-        # calculate z, r coordinates
-        coords = np.vstack([neuron_group.x, neuron_group.y, neuron_group.z]).T
-        z = coords @ self.dir_uvec
-        axial_points = z @ self.dir_uvec.T
-        r = coords - axial_points
+        r, z = self.get_rz_for_xyz(neuron_group.x, neuron_group.y, neuron_group.z)
 
         light_model = Equations('''
-            Irr = Irr0*T : watt/meter2
-            Irr0 : watt/meter2
+            Irr = Irr0*T : watt/meter**2
+            Irr0 : watt/meter**2
             T : 1
-            phi = Irr / Ephoton : 1/second/meter2''',
+            phi = Irr / Ephoton : 1/second/meter**2''',
             # Ephoton = h*c/lambda
             Ephoton = 6.63e-34*meter2*kgram/second * 2.998e8*meter/second \
                 / self.light_model_params['wavelength']
@@ -146,26 +159,16 @@ class OptogeneticIntervention(Stimulator):
         x = np.linspace(xlim[0], xlim[1], 100)
         y = np.linspace(ylim[0], ylim[1], 100)
         z = np.linspace(zlim[0], zlim[1], 100)
-        x, y, z = np.meshgrid(x, y, z)
+        x, y, z = np.meshgrid(x, y, z)*axis_scale_unit
 
-        coords = np.vstack([x.flatten(), y.flatten(), z.flatten()]).T
-        coords = coords*axis_scale_unit
-        rel_coords = coords - self.location  # relative to fiber location
-        # must use brian2's dot function for matrix multiply to preserve
-        # units correctly.
-        zc = usf.dot(rel_coords, self.dir_uvec)  # distance along cylinder axis
-        # just need length (norm) of radius vectors
-        # not using np.linalg.norm because it strips units
-        r = np.sqrt( np.sum( (rel_coords-usf.dot(zc, self.dir_uvec.T))**2, axis=1 ) )
-        r = r.reshape((-1, 1))
-
+        r, zc = self.get_rz_for_xyz(x, y, z)
         T = self._Foutz12_transmittance(r, zc)
         # filter out points with <0.001 transmittance to make plotting faster
         plot_threshold = 0.0001
         idx_to_plot = T[:,0] >= plot_threshold
         x = x.flatten()[idx_to_plot]; y = y.flatten()[idx_to_plot]; z = z.flatten()[idx_to_plot]
         T = T[idx_to_plot, 0]
-        ax.scatter(x, y, z, c=T, cmap=self._alpha_cmap_for_wavelength(), marker='.',
+        ax.scatter(x/axis_scale_unit, y/axis_scale_unit, z/axis_scale_unit, c=T, cmap=self._alpha_cmap_for_wavelength(), marker='.',
                 edgecolors='face')
 
     def update(self, ctrl_signal):
