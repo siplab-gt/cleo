@@ -150,7 +150,7 @@ class OptogeneticIntervention(Stimulator):
             E_photon=E_photon
         )
 
-        self.opto_syn = Synapses(neuron_group, neuron_group,
+        self.opto_syn = Synapses(neuron_group,
                 model=self.opsin_model+light_model)
         self.opto_syn.connect(j='i', p=self.p_expression)
         # calculate transmittance coefficient for each point
