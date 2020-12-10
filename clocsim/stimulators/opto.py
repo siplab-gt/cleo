@@ -14,13 +14,13 @@ from . import Stimulator
 # allowing for heterogeneous opsin expression.
 four_state = '''
     dC1/dt = Gd1*O1 + Gr0*C2 - Ga1*C1 : 1 (clock-driven)
-    dO1/dt = Ga1*C1 + Gb*O2 - (Gd1+Gr)*O1 : 1 (clock-driven)
+    dO1/dt = Ga1*C1 + Gb*O2 - (Gd1+Gf)*O1 : 1 (clock-driven)
     dO2/dt = Ga2*C2 + Gf*O1 - (Gd2+Gb)*O2 : 1 (clock-driven)
     dC2/dt = Gd2*O2 - (Gr0+Ga2)*C2 : 1 (clock-driven)
-    Ga1 = k1*phi**p/(phi**p + phim**p) : 1
-    Gf = kf*phi**q/(phi**q + phim**q) + Gf0 : 1
-    Gb = kb*phi**q/(phi**q + phim**q) + Gb0 : 1
-    Ga2 = k2*phi**p/(phi**p + phim**p) : 1
+    Ga1 = k1*phi**p/(phi**p + phim**p) : hertz
+    Gf = kf*phi**q/(phi**q + phim**q) + Gf0 : hertz
+    Gb = kb*phi**q/(phi**q + phim**q) + Gb0 : hertz
+    Ga2 = k2*phi**p/(phi**p + phim**p) : hertz
 
     fphi = O1 + gamma*O2 : 1
     fv = (1 - exp(-(v_post-E)/v0)) / ((v_post-E)/v1) : 1
@@ -117,9 +117,12 @@ class OptogeneticIntervention(Stimulator):
 
     def get_rz_for_xyz(self, x, y, z):
         '''Assumes x, y, z already have units'''
-        # have to add unit back on since it's stripped by hstack
-        coords = np.vstack([x.reshape((1,-2)), y.reshape((1,-2)),
-                z.reshape((1,-2))]).T*meter
+        def flatten_if_needed(var):
+            if len(var.shape) != 1:
+                return var.flatten()
+            else: return var
+        # have to add unit back on since it's stripped by vstack
+        coords = np.vstack([flatten_if_needed(x), flatten_if_needed(y), flatten_if_needed(z)]).T*meter
         rel_coords = coords - self.location  # relative to fiber location
         # must use brian2's dot function for matrix multiply to preserve
         # units correctly.
@@ -134,22 +137,24 @@ class OptogeneticIntervention(Stimulator):
     def connect_to_neurons(self, neuron_group):
         r, z = self.get_rz_for_xyz(neuron_group.x, neuron_group.y, neuron_group.z)
 
+        # Ephoton = h*c/lambda
+        E_photon = 6.63e-34*meter2*kgram/second * 2.998e8*meter/second \
+            / self.light_model_params['wavelength']
+
         light_model = Equations('''
             Irr = Irr0*T : watt/meter**2
             Irr0 : watt/meter**2
             T : 1
-            phi = Irr / Ephoton : 1/second/meter**2''',
-            # Ephoton = h*c/lambda
-            Ephoton = 6.63e-34*meter2*kgram/second * 2.998e8*meter/second \
-                / self.light_model_params['wavelength']
+            phi = Irr / Ephoton : 1/second/meter**2
+            Ephoton = E_photon : joule''',
+            E_photon=E_photon
         )
 
         self.opto_syn = Synapses(neuron_group, neuron_group,
                 model=self.opsin_model+light_model)
-        # calculate transmittance coefficient for each point
-        self.opto_syn.T = self._Foutz12_transmittance(r, z)
-
         self.opto_syn.connect(j='i', p=self.p_expression)
+        # calculate transmittance coefficient for each point
+        self.opto_syn.T = self._Foutz12_transmittance(r, z).flatten()
         self.brian_objects.add(self.opto_syn)
 
     def add_self_to_plot(self, ax, axis_scale_unit):
