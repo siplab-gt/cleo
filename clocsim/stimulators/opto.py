@@ -7,6 +7,7 @@ import brian2.units.unitsafefunctions as usf
 import numpy as np
 
 from . import Stimulator
+from ..utilities import modify_model_with_eqs
 
 # from PyRhO: Evans et al. 2016
 # assuming this model is defined on "synapses" influencing a post-synaptic
@@ -23,9 +24,9 @@ four_state = '''
     Ga2 = k2*phi**p/(phi**p + phim**p) : hertz
 
     fphi = O1 + gamma*O2 : 1
-    fv = (1 - exp(-(v_post-E)/v0)) / ((v_post-E)/v1) : 1
+    fv = (1 - exp(-(v-E)/v0)) / ((v-E)/v1) : 1
 
-    Iopto_post = g0*fphi*fv*(v_post-E)*rho_rel : ampere (summed)
+    Iopto = g0*fphi*fv*(v-E)*rho_rel : ampere (summed)
     rho_rel = 1 : 1
 '''
 
@@ -150,12 +151,14 @@ class OptogeneticIntervention(Stimulator):
             E_photon=E_photon
         )
 
-        self.opto_syn = Synapses(neuron_group,
-                model=self.opsin_model+light_model)
-        self.opto_syn.connect(j='i', p=self.p_expression)
+        # self.opto_syn = Synapses(neuron_group,
+        #         model=self.opsin_model+light_model)
+        # self.opto_syn.connect(j='i', p=self.p_expression)
+        modify_model_with_eqs(neuron_group, self.opsin_model+light_model)
+        neuron_group.C1 = 1
         # calculate transmittance coefficient for each point
-        self.opto_syn.T = self._Foutz12_transmittance(r, z).flatten()
-        self.brian_objects.add(self.opto_syn)
+        neuron_group.T = self._Foutz12_transmittance(r, z).flatten()
+
 
     def add_self_to_plot(self, ax, axis_scale_unit):
         # show light with point field, assigning r and z coordinates
