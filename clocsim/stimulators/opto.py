@@ -56,7 +56,7 @@ default_blue = {
     'R0': 0.1*mm,  # optical fiber radius
     'NAfib': 0.37,  # optical fiber numerical aperture
     'wavelength': 473*nmeter,
-    # NOTE: the following depend on wavelength and tissue properties
+    # NOTE: the following depend on wavelength and tissue properties and thus would be different for another wavelength
     # 'K': 7.37/mm,  # absorbance coefficient
     'K': 0.125/mm,  # absorbance coefficient
     # 'S': 0.125/mm,  # scattering coefficient
@@ -144,7 +144,7 @@ class OptogeneticIntervention(Stimulator):
 
         light_model = Equations('''
             Irr = Irr0*T : watt/meter**2
-            Irr0 : watt/meter**2
+            Irr0 : watt/meter**2 (shared)
             T : 1
             phi = Irr / Ephoton : 1/second/meter**2
             Ephoton = E_photon : joule''',
@@ -156,6 +156,8 @@ class OptogeneticIntervention(Stimulator):
         # self.opto_syn.connect(j='i', p=self.p_expression)
         modify_model_with_eqs(neuron_group, self.opsin_model+light_model)
         neuron_group.C1 = 1
+        for k, v in {'C1':1, 'O1':0, 'O2':0, 'C2':0}.items():
+            setattr(neuron_group, k, v)
         # calculate transmittance coefficient for each point
         neuron_group.T = self._Foutz12_transmittance(r, z).flatten()
 
