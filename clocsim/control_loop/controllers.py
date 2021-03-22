@@ -22,7 +22,7 @@ class PIController(Controller):
         self.prev_time_ms = None
     
     def _process_data(self, data, time_ms: float):
-        if self.prev_time_ms = None:
+        if self.prev_time_ms is None:
             self.prev_time_ms = time_ms - self.sample_period_s*1000
         intersample_period_s = (time_ms - self.prev_time_ms)/1000
         error = self.ref_signal(time_ms) - data
