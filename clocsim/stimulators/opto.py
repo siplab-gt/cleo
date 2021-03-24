@@ -13,14 +13,19 @@ from . import Stimulator
 # target population. rho_rel is channel density relative to standard model fit,
 # allowing for heterogeneous opsin expression.
 four_state = '''
-    dC1/dt = Gd1*O1 + Gr0*C2 - Ga1*C1 : 1 (clock-driven)
-    dO1/dt = Ga1*C1 + Gb*O2 - (Gd1+Gf)*O1 : 1 (clock-driven)
-    dO2/dt = Ga2*C2 + Gf*O1 - (Gd2+Gb)*O2 : 1 (clock-driven)
-    dC2/dt = Gd2*O2 - (Gr0+Ga2)*C2 : 1 (clock-driven)
-    Ga1 = k1*phi**p/(phi**p + phim**p) : hertz
-    Gf = kf*phi**q/(phi**q + phim**q) + Gf0 : hertz
-    Gb = kb*phi**q/(phi**q + phim**q) + Gb0 : hertz
-    Ga2 = k2*phi**p/(phi**p + phim**p) : hertz
+    dC1/dt = Gd1*O1 + Gr0*C2 - Ga1*C1 : 1
+    dO1/dt = Ga1*C1 + Gb*O2 - (Gd1+Gf)*O1 : 1
+    dO2/dt = Ga2*C2 + Gf*O1 - (Gd2+Gb)*O2 : 1
+    C2 = 1 - C1 - O1 - O2 : 1
+    # dC2/dt = Gd2*O2 - (Gr0+Ga2)*C2 : 1 (clock-driven)
+
+    Theta = int(phi > 0*phi) : 1
+    Hp = Theta * phi**p/(phi**p + phim**p) : 1
+    Ga1 = k1*Hp : hertz
+    Ga2 = k2*Hp : hertz
+    Hq = Theta * phi**q/(phi**q + phim**q) : 1
+    Gf = kf*Hq + Gf0 : hertz
+    Gb = kb*Hq + Gb0 : hertz
 
     fphi = O1 + gamma*O2 : 1
     fv = (1 - exp(-(v_post-E)/v0)) / ((v_post-E)/v1) : 1
@@ -55,7 +60,7 @@ default_blue = {
     'R0': 0.1*mm,  # optical fiber radius
     'NAfib': 0.37,  # optical fiber numerical aperture
     'wavelength': 473*nmeter,
-    # NOTE: the following depend on wavelength and tissue properties
+    # NOTE: the following depend on wavelength and tissue properties and thus would be different for another wavelength
     # 'K': 7.37/mm,  # absorbance coefficient
     'K': 0.125/mm,  # absorbance coefficient
     # 'S': 0.125/mm,  # scattering coefficient
@@ -143,7 +148,7 @@ class OptogeneticIntervention(Stimulator):
 
         light_model = Equations('''
             Irr = Irr0*T : watt/meter**2
-            Irr0 : watt/meter**2
+            Irr0 : watt/meter**2 (shared)
             T : 1
             phi = Irr / Ephoton : 1/second/meter**2
             Ephoton = E_photon : joule''',
@@ -153,6 +158,9 @@ class OptogeneticIntervention(Stimulator):
         self.opto_syn = Synapses(neuron_group,
                 model=self.opsin_model+light_model)
         self.opto_syn.connect(j='i', p=self.p_expression)
+        neuron_group.C1 = 1
+        for k, v in {'C1':1, 'O1':0, 'O2':0}.items():
+            setattr(self.opto_syn, k, v)
         # calculate transmittance coefficient for each point
         self.opto_syn.T = self._Foutz12_transmittance(r, z).flatten()
         self.brian_objects.add(self.opto_syn)
