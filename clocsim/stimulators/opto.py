@@ -13,9 +13,9 @@ from . import Stimulator
 # target population. rho_rel is channel density relative to standard model fit,
 # allowing for heterogeneous opsin expression.
 four_state = '''
-    dC1/dt = Gd1*O1 + Gr0*C2 - Ga1*C1 : 1
-    dO1/dt = Ga1*C1 + Gb*O2 - (Gd1+Gf)*O1 : 1
-    dO2/dt = Ga2*C2 + Gf*O1 - (Gd2+Gb)*O2 : 1
+    dC1/dt = Gd1*O1 + Gr0*C2 - Ga1*C1 : 1 (clock-driven)
+    dO1/dt = Ga1*C1 + Gb*O2 - (Gd1+Gf)*O1 : 1 (clock-driven)
+    dO2/dt = Ga2*C2 + Gf*O1 - (Gd2+Gb)*O2 : 1 (clock-driven)
     C2 = 1 - C1 - O1 - O2 : 1
     # dC2/dt = Gd2*O2 - (Gr0+Ga2)*C2 : 1 (clock-driven)
 
@@ -148,7 +148,7 @@ class OptogeneticIntervention(Stimulator):
 
         light_model = Equations('''
             Irr = Irr0*T : watt/meter**2
-            Irr0 : watt/meter**2 (shared)
+            Irr0 : watt/meter**2 
             T : 1
             phi = Irr / Ephoton : 1/second/meter**2
             Ephoton = E_photon : joule''',
@@ -158,7 +158,6 @@ class OptogeneticIntervention(Stimulator):
         self.opto_syn = Synapses(neuron_group,
                 model=self.opsin_model+light_model)
         self.opto_syn.connect(j='i', p=self.p_expression)
-        neuron_group.C1 = 1
         for k, v in {'C1':1, 'O1':0, 'O2':0}.items():
             setattr(self.opto_syn, k, v)
         # calculate transmittance coefficient for each point
