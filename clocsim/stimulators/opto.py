@@ -140,6 +140,7 @@ class OptogeneticIntervention(Stimulator):
 
 
     def connect_to_neurons(self, neuron_group):
+        # TODO: check for Iopto
         r, z = self.get_rz_for_xyz(neuron_group.x, neuron_group.y, neuron_group.z)
 
         # Ephoton = h*c/lambda
@@ -168,23 +169,23 @@ class OptogeneticIntervention(Stimulator):
         # show light with point field, assigning r and z coordinates
         # to all points
         xlim=ax.get_xlim(); ylim=ax.get_ylim(); zlim=ax.get_zlim()
-        x = np.linspace(xlim[0], xlim[1], 100)
-        y = np.linspace(ylim[0], ylim[1], 100)
-        z = np.linspace(zlim[0], zlim[1], 100)
+        x = np.linspace(xlim[0], xlim[1], 50)
+        y = np.linspace(ylim[0], ylim[1], 50)
+        z = np.linspace(zlim[0], zlim[1], 50)
         x, y, z = np.meshgrid(x, y, z)*axis_scale_unit
 
         r, zc = self.get_rz_for_xyz(x, y, z)
         T = self._Foutz12_transmittance(r, zc)
         # filter out points with <0.001 transmittance to make plotting faster
-        plot_threshold = 0.0001
+        plot_threshold = 0.001
         idx_to_plot = T[:,0] >= plot_threshold
         x = x.flatten()[idx_to_plot]; y = y.flatten()[idx_to_plot]; z = z.flatten()[idx_to_plot]
         T = T[idx_to_plot, 0]
-        ax.scatter(x/axis_scale_unit, y/axis_scale_unit, z/axis_scale_unit, c=T, cmap=self._alpha_cmap_for_wavelength(), marker='.',
-                edgecolors='face')
+        ax.scatter(x/axis_scale_unit, y/axis_scale_unit, z/axis_scale_unit, c=T, cmap=self._alpha_cmap_for_wavelength(), marker=',',
+                edgecolors='none')
 
-    def update(self, ctrl_signal):
-        self.opto_syn.Irr0 = ctrl_signal
+    def update(self, Irr0_mW_per_mm2):
+        self.opto_syn.Irr0 = Irr0_mW_per_mm2*mwatt/mm2
     
     def _alpha_cmap_for_wavelength(self):
         from matplotlib import colors

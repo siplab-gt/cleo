@@ -69,7 +69,7 @@ def assign_coords_cylinder(neuron_group, distribution: str, xyz_start, xyz_end, 
     neuron_group.z = points[:, 2]*unit
 
 def plot_neuron_positions(*neuron_groups, xlim=None, ylim=None, zlim=None,
-        axis_scale_unit=mm, opto=None, invert_z=True):
+        color=None, axis_scale_unit=mm, opto=None, invert_z=True):
     try:
         from matplotlib import pyplot as plt
         from mpl_toolkits.mplot3d import Axes3D
@@ -83,8 +83,12 @@ def plot_neuron_positions(*neuron_groups, xlim=None, ylim=None, zlim=None,
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
     for ng in neuron_groups:
-        ax.scatter(ng.x/axis_scale_unit, ng.y/axis_scale_unit,
-                ng.z/axis_scale_unit)
+        if color is not None:
+            ax.scatter(ng.x/axis_scale_unit, ng.y/axis_scale_unit,
+                    ng.z/axis_scale_unit, color=color)
+        else:
+            ax.scatter(ng.x/axis_scale_unit, ng.y/axis_scale_unit,
+                    ng.z/axis_scale_unit)
         ax.set_xlabel(f'x ({axis_scale_unit._dispname})')
         ax.set_ylabel(f'y ({axis_scale_unit._dispname})')
         ax.set_zlabel(f'z ({axis_scale_unit._dispname})')
@@ -102,7 +106,7 @@ def plot_neuron_positions(*neuron_groups, xlim=None, ylim=None, zlim=None,
     if opto is not None:
         opto.add_self_to_plot(ax, axis_scale_unit)
 
-    plt.show()
+    return fig
 
 def _create_variables(neuron_group):
     for dim in ['x', 'y', 'z']:
