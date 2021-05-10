@@ -1,0 +1,1 @@
+Hello there! This package has the goal of making it easy to simulate closed-loop control experiments in neuroscience with the Brian 2 simulator.
