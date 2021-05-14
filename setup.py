@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import os
-from distutils.core import setup
+from setuptools import setup
 
 import versioneer
 
@@ -32,5 +32,7 @@ setup(name='clocsim',
       extras_require={'test': ['pytest'],
                       'docs': ['sphinx>=4.0']
                       },
+      setup_requires=['pytest-runner'],
+      tests_require=['pytest', 'pylint', 'pytest-pylint'],
       python_requires='>=3.7',
       )
