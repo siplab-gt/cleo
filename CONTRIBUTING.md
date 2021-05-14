@@ -1,7 +1,7 @@
 # How to contribute
 
 ## Testing
-We use `pytest` and place tests in the `tests` package parallel to the source package in the repository root. We will also use doctests when possible in the docstrings (in the `Examples` section, [see below](#Documentation)).
+We use `pytest` and place tests in the `tests` directory parallel to the source package in the repository root. We will also use doctests when possible in the docstrings (in the `Examples` section, [see below](#Documentation)).
 
 ## Documentation
 
