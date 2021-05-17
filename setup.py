@@ -29,7 +29,8 @@ setup(name='clocsim',
       provides='clocsim',
       keywords='Brian simulator closed loop neuroscience electrode optogenetics',
       install_requires=['brian2>=2.4',
-                        'matplotlib>=3.4' 
+                        'matplotlib>=3.4',
+                        'nptyping',
                         ],
       extras_require={'test': ['pytest'],
                       'docs': ['sphinx>=4.0']
