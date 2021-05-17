@@ -5,9 +5,11 @@ from setuptools import setup
 
 import versioneer
 
-# Utility function to read the README file.
+
 def read(fname):
+    """Utility function to read the README file."""
     return open(os.path.join(os.path.dirname(__file__), fname)).read()
+
 
 setup(name='clocsim',
       version=versioneer.get_version(),
@@ -33,6 +35,7 @@ setup(name='clocsim',
                       'docs': ['sphinx>=4.0']
                       },
       setup_requires=['pytest-runner'],
-      tests_require=['pytest', 'pylint', 'pytest-pylint'],
+      tests_require=['pytest', 'flake8', 'pytest-flake8', 'pep8-naming',
+                     'flake8-docstrings', 'flake8-pytest-style'],
       python_requires='>=3.7',
       )
