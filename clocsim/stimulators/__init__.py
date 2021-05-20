@@ -8,7 +8,7 @@ class StateVariableSetter(Stimulator):
         self.var = variable_to_ctrl
         self.unit = unit
 
-    def connect_to_neurons(self, neuron_group):
+    def connect_to_neuron_group(self, neuron_group):
         self.neurons = neuron_group[self.i]
 
     def update(self, ctrl_signal):

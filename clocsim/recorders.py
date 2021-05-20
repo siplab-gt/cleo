@@ -10,7 +10,7 @@ class RateRecorder(Recorder):
         self.i = index
         self.mon = None
 
-    def connect_to_neurons(self, neuron_group):
+    def connect_to_neuron_group(self, neuron_group):
         self.mon = PopulationRateMonitor(neuron_group[self.i])
         self.brian_objects.add(self.mon)
 
@@ -26,7 +26,7 @@ class VoltageRecorder(Recorder):
         self.i = index
         self.mon = None
 
-    def connect_to_neurons(self, neuron_group):
+    def connect_to_neuron_group(self, neuron_group):
         self.mon = StateMonitor(neuron_group, 'v', self.i)
         self.brian_objects.add(self.mon)
 
@@ -56,7 +56,7 @@ class GroundTruthSpikeRecorder(Recorder):
             # self.i_to_j = dict(zip(self.i, range(len(index))))
         
 
-    def connect_to_neurons(self, neuron_group):
+    def connect_to_neuron_group(self, neuron_group):
         # self.mon = SpikeMonitor(neuron_group, record=self.i)
         self.mon = SpikeMonitor(neuron_group[self.i])
         self.brian_objects.add(self.mon)

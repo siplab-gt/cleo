@@ -3,6 +3,7 @@
 from abc import ABC, abstractmethod
 
 from brian2 import NeuronGroup, Network, NetworkOperation, defaultclock
+from numpy import rec
 
 
 from ._version import get_versions
@@ -17,8 +18,12 @@ class InterfaceDevice(ABC):
         self.brian_objects = set()
 
     @abstractmethod
-    def connect_to_neurons(self, neuron_group: NeuronGroup):
+    def connect_to_neuron_group(self, neuron_group: NeuronGroup):
         """Connect device to given `neuron_group`.
+
+        If your device introduces any objects which Brian must
+        keep track of, such as a NeuronGroup, Synapses, or Monitor,
+        make sure to add these to `self.brian_objects`.
 
         Parameters
         ----------
@@ -123,36 +128,39 @@ class CLOCSimulator:
         self.recorders = {}
         self.controller = None
 
+    def _inject_device(self, device: InterfaceDevice, *neuron_groups):
+        if len(neuron_groups) == 0:
+            raise Exception('Injecting stimulator for no neuron groups '
+                            'is meaningless.')
+        for ng in neuron_groups:
+            device.connect_to_neuron_group(ng)
+        for brian_object in device.brian_objects:
+            self.network.add(brian_object)
+
+
     def inject_stimulator(self, stimulator: Stimulator, *neuron_groups):
         """Inject stimulator into given neuron groups.
 
-        `connect_to_neurons(group)` is called for each `group`.
+        `connect_to_neuron_group(group)` is called for each `group`.
         
         Parameters
         ----------
         stimulator : Stimulator
         """
-        for ng in neuron_groups:
-            stimulator.connect_to_neurons(ng)
+        self._inject_device(stimulator, *neuron_groups)
         self.stimulators[stimulator.name] = stimulator
-        for brian_object in stimulator.brian_objects:
-            self.network.add(brian_object)
 
     def inject_recorder(self, recorder: Recorder, *neuron_groups):
         """Inject recorder into given neuron groups.
 
-        `connect_to_neurons(group)` is called for each `group`.
+        `connect_to_neuron_group(group)` is called for each `group`.
 
         Parameters
         ----------
         recorder : Recorder
-            [description]
         """
-        for ng in neuron_groups:
-            recorder.connect_to_neurons(ng)
+        self._inject_device(recorder, *neuron_groups)
         self.recorders[recorder.name] = recorder
-        for brian_object in recorder.brian_objects:
-            self.network.add(brian_object)
 
     def get_state(self):
         """Return current recorder measurements.

@@ -139,7 +139,7 @@ class OptogeneticIntervention(Stimulator):
         return r, zc
 
 
-    def connect_to_neurons(self, neuron_group):
+    def connect_to_neuron_group(self, neuron_group):
         # TODO: check for Iopto
         r, z = self.get_rz_for_xyz(neuron_group.x, neuron_group.y, neuron_group.z)
 
