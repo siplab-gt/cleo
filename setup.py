@@ -31,9 +31,10 @@ setup(name='clocsim',
       install_requires=['brian2>=2.4',
                         'matplotlib>=3.4',
                         'nptyping',
+                        'numpy',
+                        'scipy',
                         ],
-      extras_require={'test': ['pytest'],
-                      'docs': ['sphinx>=4.0']
+      extras_require={'docs': ['sphinx>=4.0']
                       },
       setup_requires=['pytest-runner'],
       tests_require=['pytest', 'flake8', 'pytest-flake8', 'pep8-naming',
