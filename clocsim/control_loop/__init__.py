@@ -6,7 +6,7 @@ from collections import deque
 
 from brian2 import ms
 
-from ..base import ControlLoop
+from ..import ControlLoop
 from .delays import Delay
 
 

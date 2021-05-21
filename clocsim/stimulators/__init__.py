@@ -1,4 +1,5 @@
-from ..base import Stimulator
+from .. import Stimulator
+
 
 class StateVariableSetter(Stimulator):
     def __init__(self, name, index, variable_to_ctrl, unit):
@@ -12,4 +13,4 @@ class StateVariableSetter(Stimulator):
         self.neurons = neuron_group[self.i]
 
     def update(self, ctrl_signal):
-        setattr(self.neurons, self.var, ctrl_signal*self.unit)
+        setattr(self.neurons, self.var, ctrl_signal * self.unit)
