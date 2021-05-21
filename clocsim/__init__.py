@@ -1,14 +1,17 @@
 """Contains class definitions for essential, base classes."""
 
 from abc import ABC, abstractmethod
+from tracemalloc import start
 
 from brian2 import NeuronGroup, Network, NetworkOperation, defaultclock
 from numpy import rec
 
 
 from ._version import get_versions
-__version__ = get_versions()['version']
+
+__version__ = get_versions()["version"]
 del get_versions
+
 
 class InterfaceDevice(ABC):
     """Base class for devices to be injected into the network."""
@@ -130,19 +133,19 @@ class CLOCSimulator:
 
     def _inject_device(self, device: InterfaceDevice, *neuron_groups):
         if len(neuron_groups) == 0:
-            raise Exception('Injecting stimulator for no neuron groups '
-                            'is meaningless.')
+            raise Exception(
+                "Injecting stimulator for no neuron groups " "is meaningless."
+            )
         for ng in neuron_groups:
             device.connect_to_neuron_group(ng)
         for brian_object in device.brian_objects:
             self.network.add(brian_object)
 
-
     def inject_stimulator(self, stimulator: Stimulator, *neuron_groups):
         """Inject stimulator into given neuron groups.
 
         `connect_to_neuron_group(group)` is called for each `group`.
-        
+
         Parameters
         ----------
         stimulator : Stimulator
@@ -203,9 +206,12 @@ class CLOCSimulator:
                 control_loop.put_state(self.get_state(), t)
             ctrl_signal = control_loop.get_ctrl_signal(t)
             self.update_stimulators(ctrl_signal)
+
         # communication should be at every timestep. The ControlLoop
         # decides when to sample and deliver results.
-        self.network.add(NetworkOperation(communicate_with_ctrl_loop, dt=defaultclock.dt))
+        self.network.add(
+            NetworkOperation(communicate_with_ctrl_loop, dt=defaultclock.dt)
+        )
 
     def run(self, duration):
         """Run simulation.
