@@ -37,4 +37,4 @@ my_function(a, b='B'):
 ```
 
 ## Style
-We will follow PEP8 conventions.
+We will use Black auto-formatting.
