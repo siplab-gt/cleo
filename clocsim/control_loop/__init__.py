@@ -4,8 +4,6 @@ from abc import ABC, abstractmethod
 from typing import Tuple, Any
 from collections import deque
 
-from brian2 import ms
-
 from .. import ControlLoop
 from .delays import Delay
 
@@ -25,7 +23,7 @@ class LoopComponent(ABC):
             When `delay` is not a `Delay` object.
         """
         self.delay = kwargs.get("delay", None)
-        if type(self.delay) != Delay:
+        if not isinstance(self.delay, Delay):
             raise TypeError("delay must be of the Delay class")
         self.save_history = kwargs.get("save_history", False)
         if self.save_history is True:
@@ -109,49 +107,51 @@ class DelayControlLoop(ControlLoop):
         if self.processing not in ["serial", "parallel"]:
             raise ValueError("Invalid processing scheme:", self.processing)
 
-    def put_state(self, state_dict: dict, t):
-        in_time_ms = t / ms
-        out, out_time_ms = self.compute_ctrl_signal(state_dict, in_time_ms)
+    def put_state(self, state_dict: dict, sample_time_ms):
+        out, out_time_ms = self.compute_ctrl_signal(state_dict, sample_time_ms)
         if self.processing == "serial" and len(self.out_buffer) > 0:
             prev_out_time_ms = self.out_buffer[-1][1]
             # add delay onto the output time of the last computation
-            out_time_ms = prev_out_time_ms + out_time_ms - in_time_ms
+            out_time_ms = prev_out_time_ms + out_time_ms - sample_time_ms
         self.out_buffer.append((out, out_time_ms))
+        self._needs_off_schedule_sample = False
 
-    def get_ctrl_signal(self, time):
-        time_ms = time / ms
+    def get_ctrl_signal(self, query_time_ms):
         if len(self.out_buffer) == 0:
             return None
         next_out_signal, next_out_time_ms = self.out_buffer[0]
-        if time_ms >= next_out_time_ms:
+        if query_time_ms >= next_out_time_ms:
             self.out_buffer.popleft()
             return next_out_signal
         else:
             return None
 
-    def is_sampling_now(self, time):
-        time_ms = time / ms
+    def _is_currently_idle(self, query_time_ms):
+        return len(self.out_buffer) == 0 or self.out_buffer[0][1] <= query_time_ms
+
+    def is_sampling_now(self, query_time_ms):
         if self.sampling == "fixed":
-            if time_ms % self.sampling_period_ms == 0:
+            if query_time_ms % self.sampling_period_ms == 0:
                 return True
         elif self.sampling == "wait for computation":
-            if time_ms % self.sampling_period_ms == 0:
-                # if done computing
-                if len(self.out_buffer) == 0 or self.out_buffer[0][1] <= time_ms:
-                    self.overrun = False
+            if query_time_ms % self.sampling_period_ms == 0:
+                if self._is_currently_idle(query_time_ms):
+                    self._needs_off_schedule_sample = False
                     return True
                 else:  # if not done computing
-                    self.overrun = True
+                    self._needs_off_schedule_sample = True
                     return False
             else:
                 # off-schedule, only sample if the last sampling period
                 # was missed (there was an overrun)
-                return self.overrun
+                return self._needs_off_schedule_sample and self._is_currently_idle(
+                    query_time_ms
+                )
         return False
 
     @abstractmethod
     def compute_ctrl_signal(
-        self, state_dict: dict, time_ms: float
+        self, state_dict: dict, sample_time_ms: float
     ) -> Tuple[dict, float]:
         """Process network state to generate output to update stimulators.
 
