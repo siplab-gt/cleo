@@ -6,7 +6,7 @@ from collections import deque
 
 from brian2 import ms
 
-from ..import ControlLoop
+from .. import ControlLoop
 from .delays import Delay
 
 
@@ -24,32 +24,33 @@ class LoopComponent(ABC):
         TypeError
             When `delay` is not a `Delay` object.
         """
-        self.delay = kwargs.get('delay', None)
+        self.delay = kwargs.get("delay", None)
         if type(self.delay) != Delay:
-            raise TypeError('delay must be of the Delay class')
-        self.save_history = kwargs.get('save_history', False)
+            raise TypeError("delay must be of the Delay class")
+        self.save_history = kwargs.get("save_history", False)
         if self.save_history is True:
             self.t = []
             self.out_t = []
             self.values = []
 
-    def process(self, input: Any, in_time_ms: float) -> Tuple[Any, float]:
+    def process(self, input: Any, in_time_ms: float, **kwargs) -> Tuple[Any, float]:
         """Compute output and output time given input and input time.
 
-        The user should implement :func:`~_process`, which performs the 
+        The user should implement :func:`~_process()`, which performs the
         computation itself without regards for the delay.
 
         Parameters
         ----------
         input : Any
         in_time_ms : float
+        **kwargs : key-value list of arguments passed to :func:`~_process()`
 
         Returns
         -------
         Tuple[Any, float]
             output, out time
         """
-        out = self._process(input, in_time_ms)
+        out = self._process(input, **kwargs)
         if self.delay is not None:
             out_time_ms = self.delay.add_delay_to_time(in_time_ms)
         else:
@@ -61,8 +62,8 @@ class LoopComponent(ABC):
         return (out, out_time_ms)
 
     @abstractmethod
-    def _process(self, input: Any, in_time_ms: float = None) -> Any:
-        """Computes output for given input and input time.
+    def _process(self, input: Any, **kwargs) -> Any:
+        """Computes output for given input.
 
         This is where the user will implement the desired functionality
         of the `LoopComponent` without regard for latency.
@@ -70,9 +71,10 @@ class LoopComponent(ABC):
         Parameters
         ----------
         input : Any
-        in_time_ms : float, optional
-            For use in time-dependent computations, e.g., tracking a time-varying
-            reference trajectory. By default None.
+        **kwargs : optional key-value argument pairs passed from
+        :func:`~process()`. Could be used to pass in such values as
+        the control loop's walltime or the measurement time for time-
+        dependent functions.
 
         Returns
         -------
@@ -83,7 +85,7 @@ class LoopComponent(ABC):
 
 
 class DelayControlLoop(ControlLoop):
-    '''
+    """
     The unit for keeping track of time in the control loop is milliseconds.
     To deal in quantities relative to seconds (e.g., defining a target firing
     rate in Hz), the component involved must make the conversion.
@@ -95,21 +97,22 @@ class DelayControlLoop(ControlLoop):
     Fixed sampling: on a fixed schedule no matter what
     Wait for computation sampling: Can't sample during computation. Samples ASAP
     after an over-period computation: otherwise remains on schedule.
-    '''
+    """
+
     def __init__(self, sampling_period_ms, **kwargs):
         self.out_buffer = deque([])
         self.sampling_period_ms = sampling_period_ms
-        self.sampling = kwargs.get('sampling', 'fixed')
-        if self.sampling not in ['fixed', 'wait for computation']:
-            raise ValueError('Invalid sampling scheme:', self.sampling)
-        self.processing = kwargs.get('processing', 'serial')
-        if self.processing not in ['serial', 'parallel']:
-            raise ValueError('Invalid processing scheme:', self.processing)
+        self.sampling = kwargs.get("sampling", "fixed")
+        if self.sampling not in ["fixed", "wait for computation"]:
+            raise ValueError("Invalid sampling scheme:", self.sampling)
+        self.processing = kwargs.get("processing", "serial")
+        if self.processing not in ["serial", "parallel"]:
+            raise ValueError("Invalid processing scheme:", self.processing)
 
     def put_state(self, state_dict: dict, t):
         in_time_ms = t / ms
         out, out_time_ms = self.compute_ctrl_signal(state_dict, in_time_ms)
-        if self.processing == 'serial' and len(self.out_buffer) > 0:
+        if self.processing == "serial" and len(self.out_buffer) > 0:
             prev_out_time_ms = self.out_buffer[-1][1]
             # add delay onto the output time of the last computation
             out_time_ms = prev_out_time_ms + out_time_ms - in_time_ms
@@ -125,13 +128,13 @@ class DelayControlLoop(ControlLoop):
             return next_out_signal
         else:
             return None
-    
+
     def is_sampling_now(self, time):
         time_ms = time / ms
-        if self.sampling == 'fixed':
+        if self.sampling == "fixed":
             if time_ms % self.sampling_period_ms == 0:
                 return True
-        elif self.sampling == 'wait for computation':
+        elif self.sampling == "wait for computation":
             if time_ms % self.sampling_period_ms == 0:
                 # if done computing
                 if len(self.out_buffer) == 0 or self.out_buffer[0][1] <= time_ms:
@@ -147,7 +150,9 @@ class DelayControlLoop(ControlLoop):
         return False
 
     @abstractmethod
-    def compute_ctrl_signal(self, state_dict: dict, time_ms: float) -> Tuple[dict, float]:
+    def compute_ctrl_signal(
+        self, state_dict: dict, time_ms: float
+    ) -> Tuple[dict, float]:
         """Process network state to generate output to update stimulators.
 
         This is the function the user must implement to define the signal processing
