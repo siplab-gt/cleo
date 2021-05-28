@@ -50,7 +50,7 @@ class LoopComponent(ABC):
         """
         out = self._process(input, **kwargs)
         if self.delay is not None:
-            out_time_ms = self.delay.add_delay_to_time(in_time_ms)
+            out_time_ms = in_time_ms + self.delay.compute()
         else:
             out_time_ms = in_time_ms
         if self.save_history:
@@ -93,7 +93,7 @@ class LatencyProcessingLoop(ProcessingLoop):
     sample.
 
     Fixed sampling: on a fixed schedule no matter what
-    Wait for computation sampling: Can't sample during computation. Samples ASAP
+    `when idle` sampling: Can't sample during computation. Samples ASAP
     after an over-period computation: otherwise remains on schedule.
 
     Note: it doesn't make much sense to combine parallel computation
@@ -105,7 +105,7 @@ class LatencyProcessingLoop(ProcessingLoop):
         self.out_buffer = deque([])
         self.sampling_period_ms = sampling_period_ms
         self.sampling = kwargs.get("sampling", "fixed")
-        if self.sampling not in ["fixed", "wait for computation"]:
+        if self.sampling not in ["fixed", "when idle"]:
             raise ValueError("Invalid sampling scheme:", self.sampling)
         self.processing = kwargs.get("processing", "serial")
         if self.processing not in ["serial", "parallel"]:
@@ -137,7 +137,7 @@ class LatencyProcessingLoop(ProcessingLoop):
         if self.sampling == "fixed":
             if query_time_ms % self.sampling_period_ms == 0:
                 return True
-        elif self.sampling == "wait for computation":
+        elif self.sampling == "when idle":
             if query_time_ms % self.sampling_period_ms == 0:
                 if self._is_currently_idle(query_time_ms):
                     self._needs_off_schedule_sample = False

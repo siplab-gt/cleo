@@ -91,7 +91,7 @@ def test_LatencyProcessingLoop_fixed_parallel():
 
 
 def test_LatencyProcessingLoop_wait_serial():
-    myDCL = MyLPL(1, sampling="wait for computation", processing="serial")
+    myDCL = MyLPL(1, sampling="when idle", processing="serial")
     t = [0, 1, 1.2, 1.3, 2, 2.3, 2.4]
     sampling = [True, False, True, False, False, False, True]
     inputs = [42, -1, 66, -1, -1, -1, 1847]
@@ -105,7 +105,7 @@ def test_LatencyProcessingLoop_wait_parallel():
     because waiting results in only one sample at a time being
     processed."""
 
-    myDCL = MyLPL(1, sampling="wait for computation", processing="parallel")
+    myDCL = MyLPL(1, sampling="when idle", processing="parallel")
     t = [0, 1, 1.2, 1.3, 2, 2.3, 2.4]
     sampling = [True, False, True, False, False, False, True]
     inputs = [42, -1, 66, -1, -1, -1, 1847]
