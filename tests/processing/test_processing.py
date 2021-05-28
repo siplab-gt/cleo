@@ -1,4 +1,4 @@
-"""Tests for clocsim/control_loop/__init__.py"""
+"""Tests for clocsim/processing/__init__.py"""
 from typing import Any, Tuple
 
 from clocsim.processing import LatencyProcessingLoop, LoopComponent
