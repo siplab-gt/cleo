@@ -1,10 +1,8 @@
 """Tests for clocsim/control_loop/__init__.py"""
 from typing import Any, Tuple
 
-import pytest
-
-from clocsim.control_loop import DelayControlLoop, LoopComponent
-from clocsim.control_loop.delays import ConstantDelay, Delay
+from clocsim.processing import LatencyProcessingLoop, LoopComponent
+from clocsim.processing.delays import ConstantDelay, Delay
 
 
 class MyLoopComponent(LoopComponent):
@@ -49,7 +47,7 @@ def test_LoopComponent():
         assert len(my_loop_component.values) == i + 1
 
 
-class MyDelayCL(DelayControlLoop):
+class MyLPL(LatencyProcessingLoop):
     def __init__(self, sampling_period_ms, **kwargs):
         super().__init__(sampling_period_ms, **kwargs)
         self.delay = 1.199
@@ -65,51 +63,51 @@ class MyDelayCL(DelayControlLoop):
         return {"out": out}, out_t
 
 
-def _test_DelayControlLoop(myDCL, t, sampling, inputs, outputs):
+def _test_LatencyProcessingLoop(myLPL, t, sampling, inputs, outputs):
     for i in range(len(t)):
-        assert myDCL.is_sampling_now(t[i]) == sampling[i]
-        if myDCL.is_sampling_now(t[i]):
-            myDCL.put_state({"in": inputs[i]}, t[i])
+        assert myLPL.is_sampling_now(t[i]) == sampling[i]
+        if myLPL.is_sampling_now(t[i]):
+            myLPL.put_state({"in": inputs[i]}, t[i])
         expected_out = [out if out is None else {"out": out} for out in outputs]
-        assert myDCL.get_ctrl_signal(t[i]) == expected_out[i]
+        assert myLPL.get_ctrl_signal(t[i]) == expected_out[i]
 
 
-def test_DelayControlLoop_fixed_serial():
-    myDCL = MyDelayCL(1, sampling="fixed", processing="serial")
+def test_LatencyProcessingLoop_fixed_serial():
+    myDCL = MyLPL(1, sampling="fixed", processing="serial")
     t = [0, 1, 1.2, 1.3, 2, 2.3, 2.4]
     sampling = [True, True, False, False, True, False, False]
     inputs = [42, 66, -1, -1, 1847, -1, -1]
     outputs = [None, None, 42, None, None, None, 67]  # input + measurement_time
-    _test_DelayControlLoop(myDCL, t, sampling, inputs, outputs)
+    _test_LatencyProcessingLoop(myDCL, t, sampling, inputs, outputs)
 
 
-def test_DelayControlLoop_fixed_parallel():
-    myDCL = MyDelayCL(1, sampling="fixed", processing="parallel")
+def test_LatencyProcessingLoop_fixed_parallel():
+    myDCL = MyLPL(1, sampling="fixed", processing="parallel")
     t = [0, 1, 1.2, 1.3, 2, 2.3, 2.4]
     sampling = [True, True, False, False, True, False, False]
     inputs = [42, 66, -1, -1, 1847, -1, -1]
     outputs = [None, None, 42, None, None, 67, None]  # input + measurement_time
-    _test_DelayControlLoop(myDCL, t, sampling, inputs, outputs)
+    _test_LatencyProcessingLoop(myDCL, t, sampling, inputs, outputs)
 
 
-def test_DelayControlLoop_wait_serial():
-    myDCL = MyDelayCL(1, sampling="wait for computation", processing="serial")
+def test_LatencyProcessingLoop_wait_serial():
+    myDCL = MyLPL(1, sampling="wait for computation", processing="serial")
     t = [0, 1, 1.2, 1.3, 2, 2.3, 2.4]
     sampling = [True, False, True, False, False, False, True]
     inputs = [42, -1, 66, -1, -1, -1, 1847]
     outputs = [None, None, 42, None, None, None, 67.2]  # input + measurement_time
-    _test_DelayControlLoop(myDCL, t, sampling, inputs, outputs)
+    _test_LatencyProcessingLoop(myDCL, t, sampling, inputs, outputs)
 
 
-def test_DelayControlLoop_wait_parallel():
+def test_LatencyProcessingLoop_wait_parallel():
     """This combination doesn't make much sense
     as noted in the class docstring. It behaves just as wait_serial
     because waiting results in only one sample at a time being
     processed."""
 
-    myDCL = MyDelayCL(1, sampling="wait for computation", processing="parallel")
+    myDCL = MyLPL(1, sampling="wait for computation", processing="parallel")
     t = [0, 1, 1.2, 1.3, 2, 2.3, 2.4]
     sampling = [True, False, True, False, False, False, True]
     inputs = [42, -1, 66, -1, -1, -1, 1847]
     outputs = [None, None, 42, None, None, None, 67.2]  # input + measurement_time
-    _test_DelayControlLoop(myDCL, t, sampling, inputs, outputs)
+    _test_LatencyProcessingLoop(myDCL, t, sampling, inputs, outputs)

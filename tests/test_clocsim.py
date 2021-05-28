@@ -3,7 +3,7 @@
 import pytest
 from brian2 import NeuronGroup, Network, collect, Synapses, PopulationRateMonitor, ms
 
-from clocsim import CLOCSimulator, ControlLoop, InterfaceDevice, Recorder, Stimulator
+from clocsim import CLOCSimulator, ProcessingLoop, InterfaceDevice, Recorder, Stimulator
 
 
 class MyStim(Stimulator):
@@ -61,7 +61,7 @@ def test_recorder(sim, neurons):
     assert sim.get_state() == {"my_rec": -1}
 
 
-class MyCtrlLoop(ControlLoop):
+class MyCtrlLoop(ProcessingLoop):
     def put_state(self, state_dict: dict, time):
         mock_processing = {-1: "expected"}
         self.my_stim_out = mock_processing[state_dict["my_rec"]]

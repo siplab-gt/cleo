@@ -35,17 +35,17 @@ class InterfaceDevice(ABC):
         pass
 
 
-class ControlLoop(ABC):
+class ProcessingLoop(ABC):
     """Abstract class for implementing signal processing and control.
 
     This must be implemented by the user with their desired closed-loop
-    use case, though most users will find the :func:`~control_loop:DelayControlLoop`
+    use case, though most users will find the :func:`~processing:LatencyProcessingLoop`
     class more useful, since delay handling is already defined.
     """
 
     @abstractmethod
     def is_sampling_now(self, time) -> bool:
-        """Whether the `ControlLoop` will take a sample at this timestep.
+        """Whether the `ProcessingLoop` will take a sample at this timestep.
 
         Parameters
         ----------
@@ -193,24 +193,24 @@ class CLOCSimulator:
         for name, signal in ctrl_signals.items():
             self.stimulators[name].update(signal)
 
-    def set_control_loop(self, control_loop, communication_period=None):
+    def set_processing_loop(self, processing_loop, communication_period=None):
         """Set simulator control loop.
 
         Parameters
         ----------
-        control_loop : ControlLoop
+        processing_loop : ProcessingLoop
         """
 
-        def communicate_with_ctrl_loop(t):
-            if control_loop.is_sampling_now(t):
-                control_loop.put_state(self.get_state(), t)
-            ctrl_signal = control_loop.get_ctrl_signal(t)
+        def communicate_with_proc_loop(t):
+            if processing_loop.is_sampling_now(t):
+                processing_loop.put_state(self.get_state(), t)
+            ctrl_signal = processing_loop.get_ctrl_signal(t)
             self.update_stimulators(ctrl_signal)
 
-        # communication should be at every timestep. The ControlLoop
+        # communication should be at every timestep. The ProcessingLoop
         # decides when to sample and deliver results.
         self.network.add(
-            NetworkOperation(communicate_with_ctrl_loop, dt=defaultclock.dt)
+            NetworkOperation(communicate_with_proc_loop, dt=defaultclock.dt)
         )
 
     def run(self, duration):

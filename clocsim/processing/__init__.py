@@ -1,10 +1,10 @@
-"""Classes and functions for constructing and configuring a :func:`~base.ControlLoop`."""
+"""Classes and functions for constructing and configuring a :func:`~clocsim.ProcessingLoop`."""
 
 from abc import ABC, abstractmethod
 from typing import Tuple, Any
 from collections import deque
 
-from .. import ControlLoop
+from .. import ProcessingLoop
 from .delays import Delay
 
 
@@ -71,7 +71,7 @@ class LoopComponent(ABC):
         input : Any
         **kwargs : optional key-value argument pairs passed from
         :func:`~process()`. Could be used to pass in such values as
-        the control loop's walltime or the measurement time for time-
+        the processing loop's walltime or the measurement time for time-
         dependent functions.
 
         Returns
@@ -82,9 +82,9 @@ class LoopComponent(ABC):
         pass
 
 
-class DelayControlLoop(ControlLoop):
+class LatencyProcessingLoop(ProcessingLoop):
     """
-    The unit for keeping track of time in the control loop is milliseconds.
+    The unit for keeping track of time in the processing loop is milliseconds.
     To deal in quantities relative to seconds (e.g., defining a target firing
     rate in Hz), the component involved must make the conversion.
 
@@ -95,6 +95,10 @@ class DelayControlLoop(ControlLoop):
     Fixed sampling: on a fixed schedule no matter what
     Wait for computation sampling: Can't sample during computation. Samples ASAP
     after an over-period computation: otherwise remains on schedule.
+
+    Note: it doesn't make much sense to combine parallel computation
+    with "wait" sampling, because "wait" sampling would only produce
+    one sample at a time to process.
     """
 
     def __init__(self, sampling_period_ms, **kwargs):
