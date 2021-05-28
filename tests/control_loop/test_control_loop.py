@@ -102,8 +102,12 @@ def test_DelayControlLoop_wait_serial():
 
 
 def test_DelayControlLoop_wait_parallel():
-    assert "done" == True
-    myDCL = MyDelayCL(1, sampling="wait for computation", processing="serial")
+    """This combination doesn't make much sense
+    as noted in the class docstring. It behaves just as wait_serial
+    because waiting results in only one sample at a time being
+    processed."""
+
+    myDCL = MyDelayCL(1, sampling="wait for computation", processing="parallel")
     t = [0, 1, 1.2, 1.3, 2, 2.3, 2.4]
     sampling = [True, False, True, False, False, False, True]
     inputs = [42, -1, 66, -1, -1, -1, 1847]
