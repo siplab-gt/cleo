@@ -61,7 +61,7 @@ def test_recorder(sim, neurons):
     assert sim.get_state() == {"my_rec": -1}
 
 
-class MyCtrlLoop(ProcessingLoop):
+class MyProcLoop(ProcessingLoop):
     def put_state(self, state_dict: dict, time):
         mock_processing = {-1: "expected"}
         self.my_stim_out = mock_processing[state_dict["my_rec"]]
@@ -73,12 +73,12 @@ class MyCtrlLoop(ProcessingLoop):
         return True
 
 
-def test_ctrl_loop_in_sim(sim, neurons):
+def test_proc_loop_in_sim(sim, neurons):
     my_rec = MyRec("my_rec")
     sim.inject_recorder(my_rec, neurons)
     my_stim = MyStim("my_stim", 42)
     sim.inject_stimulator(my_stim, neurons)
 
-    sim.set_control_loop(MyCtrlLoop())
+    sim.set_processing_loop(MyProcLoop())
     sim.run(0.1 * ms)
     assert my_stim.value == "expected"
