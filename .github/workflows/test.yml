@@ -1,14 +1,12 @@
-# This is a basic workflow to help you get started with Actions
-
 name: Test and lint
 
 # Controls when the action will run. 
 on:
-  # Triggers the workflow on push or pull request events for any branch
+  # Triggers the workflow on push or pull request events for master
   push:
-    # branches: [ master ]
+    branches: [ master ]
   pull_request:
-    # branches: [ master ]
+    branches: [ master ]
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
@@ -19,17 +17,17 @@ jobs:
   build:
     # The type of runner that the job will run on
     runs-on: ${{ matrix.os }}
-      strategy:
-        matrix:
-          os: [macos-latest, windows-latest, ubuntu-latest]
-          python: [3.7, 3.8, 3.x]
-          include:
-          - os: ubuntu-latest
-            cache_path: ~/.cache/pip
-          - os: macos-latest
-            cache_path: ~/Library/Caches/pip
-          - os: windows-latest
-            cache_path: ~\AppData\Local\pip\Cache
+    strategy:
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+        python: [3.7, 3.x]
+        include:
+        - os: ubuntu-latest
+          cache_path: ~/.cache/pip
+        - os: macos-latest
+          cache_path: ~/Library/Caches/pip
+        - os: windows-latest
+          cache_path: ~\AppData\Local\pip\Cache
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
