@@ -137,6 +137,10 @@ class CLOCSimulator:
         if len(neuron_groups) == 0:
             raise Exception("Injecting stimulator for no neuron groups is meaningless.")
         for ng in neuron_groups:
+            if ng not in self.network.objects:
+                raise Exception(
+                    "Attempted to connect device {device.name} to neuron group {ng.name}, which is not part of the simulator's network."
+                )
             device.connect_to_neuron_group(ng, **kwparams)
         for brian_object in device.brian_objects:
             self.network.add(brian_object)
