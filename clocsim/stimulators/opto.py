@@ -1,12 +1,32 @@
 from typing import Tuple
 
-from brian2 import NeuronGroup, Synapses, Equations
+from brian2 import NeuronGroup, Synapses, Equations, implementation
 from brian2.units import *
 from brian2.units.allunits import meter2
+from brian2.units.fundamentalunits import check_units
 import brian2.units.unitsafefunctions as usf
 import numpy as np
 
 from . import Stimulator
+
+
+@implementation(
+    "cython",
+    """
+    cdef double f_unless_v_is_0(double f, double v, double f_when_0):
+        if v == 0:
+            return f_when_0
+        else:
+            return f
+    """,
+)
+@check_units(f=1, v=volt, f_when_0=1, result=1)
+def f_unless_v_is_0(f, v, f_when_0):
+    if v == 0 * mV:
+        return f_when_0
+    else:
+        return f
+
 
 # from PyRhO: Evans et al. 2016
 # assuming this model is defined on "synapses" influencing a post-synaptic
@@ -28,7 +48,18 @@ four_state = """
     Gb = kb*Hq + Gb0 : hertz
 
     fphi = O1 + gamma*O2 : 1
-    fv = (1 - exp(-(v_post-E)/v0)) / ((v_post-E)/v1) : 1
+    # fv = (1 - exp(-(v_post-E)/v0)) / ((v_post-E)/v1) : 1
+    fv = (1 - exp(-(v_post-E)/v0)) / -2 : 1
+    # rewrite to avoid division by zero
+    # this doesn't work: results in 0*nan
+    # v_is_0 = int(v_post == 0*mV) : 1
+    # fv =  (1 - v_is_0)*(1 - exp(-(v_post-E)/v0)) / ((v_post-E)/v1) + v_is_0*v1/v0 : 1
+    # fv = f_unless_v_is_0(
+        # (1 - exp(-(v_post-E)/v0)) / ((v_post-E)/v1),
+        # (1 - exp(-(v_post-E)/v0)) / -2,
+        # v_post,
+        # v1/v0
+    # ) : 1
 
     Iopto_post = g0*fphi*fv*(v_post-E)*rho_rel : ampere (summed)
     rho_rel : 1
@@ -97,6 +128,7 @@ class OptogeneticIntervention(Stimulator):
         self.location = location
         # direction unit vector
         self.dir_uvec = (direction / np.linalg.norm(direction)).reshape((3, 1))
+        self.opto_syns = {}
 
     def _Foutz12_transmittance(self, r, z, scatter=True, spread=True, gaussian=True):
         """Foutz et al. 2012 transmittance model: Gaussian cone with Kubelka-Munk propagation"""
@@ -183,15 +215,22 @@ class OptogeneticIntervention(Stimulator):
             E_photon=E_photon,
         )
 
-        self.opto_syn = Synapses(neuron_group, model=self.opsin_model + light_model)
-        self.opto_syn.connect(j="i", p=p_expression)
+        opto_syn = Synapses(
+            neuron_group,
+            model=self.opsin_model + light_model,
+            name=f"synapses_{self.name}_{neuron_group.name}",
+            namespace={"f_unless_v_is_0": f_unless_v_is_0},
+        )
+        opto_syn.connect(j="i", p=p_expression)
         for k, v in {"C1": 1, "O1": 0, "O2": 0}.items():
-            setattr(self.opto_syn, k, v)
-        self.opto_syn.rho_rel = kwparams.get("rho_rel", 1)
-
+            setattr(opto_syn, k, v)
+        # relative channel density
+        opto_syn.rho_rel = kwparams.get("rho_rel", 1)
         # calculate transmittance coefficient for each point
-        self.opto_syn.T = self._Foutz12_transmittance(r, z).flatten()
-        self.brian_objects.add(self.opto_syn)
+        opto_syn.T = self._Foutz12_transmittance(r, z).flatten()
+
+        self.opto_syns[neuron_group.name] = opto_syn
+        self.brian_objects.add(opto_syn)
 
     def add_self_to_plot(self, ax, axis_scale_unit):
         # show light with point field, assigning r and z coordinates
@@ -224,7 +263,8 @@ class OptogeneticIntervention(Stimulator):
         )
 
     def update(self, Irr0_mW_per_mm2):
-        self.opto_syn.Irr0 = Irr0_mW_per_mm2 * mwatt / mm2
+        for opto_syn in self.opto_syns.values():
+            opto_syn.Irr0 = Irr0_mW_per_mm2 * mwatt / mm2
 
     def _alpha_cmap_for_wavelength(self):
         from matplotlib import colors
