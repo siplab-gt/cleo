@@ -193,8 +193,11 @@ class OptogeneticIntervention(Stimulator):
 
     def connect_to_neuron_group(self, neuron_group, **kwparams):
         p_expression = kwparams.get("p_expression", 1)
-        # TODO: check for Iopto
-        r, z = self.get_rz_for_xyz(neuron_group.x, neuron_group.y, neuron_group.z)
+        if any([variable not in neuron_group.variables for variable in ["v", "Iopto"]]):
+            raise Exception(
+                f"""{variable} needed in the model of NeuronGroup
+                {neuron_group.name} to connect OptogeneticIntervention."""
+            )
 
         # fmt: off
         # Ephoton = h*c/lambda
@@ -221,13 +224,21 @@ class OptogeneticIntervention(Stimulator):
             name=f"synapses_{self.name}_{neuron_group.name}",
             namespace={"f_unless_v_is_0": f_unless_v_is_0},
         )
-        opto_syn.connect(j="i", p=p_expression)
+        if p_expression == 1:
+            opto_syn.connect(j="i")
+        else:
+            opto_syn.connect(condition="i==j", p=p_expression)
         for k, v in {"C1": 1, "O1": 0, "O2": 0}.items():
             setattr(opto_syn, k, v)
         # relative channel density
         opto_syn.rho_rel = kwparams.get("rho_rel", 1)
         # calculate transmittance coefficient for each point
-        opto_syn.T = self._Foutz12_transmittance(r, z).flatten()
+        r, z = self.get_rz_for_xyz(neuron_group.x, neuron_group.y, neuron_group.z)
+        T = self._Foutz12_transmittance(r, z).flatten()
+        # reduce to subset expressing opsin before assigning
+        T = [T[k] for k in opto_syn.i]
+
+        opto_syn.T = T
 
         self.opto_syns[neuron_group.name] = opto_syn
         self.brian_objects.add(opto_syn)
