@@ -1,6 +1,6 @@
 from typing import Tuple
 
-from brian2 import NeuronGroup, Synapses, Equations, implementation
+from brian2 import Synapses, Equations
 from brian2.units import *
 from brian2.units.allunits import meter2
 from brian2.units.fundamentalunits import check_units
@@ -9,24 +9,6 @@ from brian2.core.base import BrianObjectException
 import numpy as np
 
 from . import Stimulator
-
-
-@implementation(
-    "cython",
-    """
-    cdef double f_unless_v_is_0(double f, double v, double f_when_0):
-        if v == 0:
-            return f_when_0
-        else:
-            return f
-    """,
-)
-@check_units(f=1, v=volt, f_when_0=1, result=1)
-def f_unless_v_is_0(f, v, f_when_0):
-    if v == 0 * mV:
-        return f_when_0
-    else:
-        return f
 
 
 # from PyRhO: Evans et al. 2016
@@ -49,18 +31,7 @@ four_state = """
     Gb = kb*Hq + Gb0 : hertz
 
     fphi = O1 + gamma*O2 : 1
-    # fv = (1 - exp(-(v_post-E)/v0)) / ((v_post-E)/v1) : 1
     fv = (1 - exp(-(v_post-E)/v0)) / -2 : 1
-    # rewrite to avoid division by zero
-    # this doesn't work: results in 0*nan
-    # v_is_0 = int(v_post == 0*mV) : 1
-    # fv =  (1 - v_is_0)*(1 - exp(-(v_post-E)/v0)) / ((v_post-E)/v1) + v_is_0*v1/v0 : 1
-    # fv = f_unless_v_is_0(
-        # (1 - exp(-(v_post-E)/v0)) / ((v_post-E)/v1),
-        # (1 - exp(-(v_post-E)/v0)) / -2,
-        # v_post,
-        # v1/v0
-    # ) : 1
 
     Iopto_post = g0*fphi*fv*(v_post-E)*rho_rel : ampere (summed)
     rho_rel : 1
