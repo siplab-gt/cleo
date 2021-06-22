@@ -3,7 +3,6 @@ from typing import Tuple
 from brian2 import Synapses, Equations
 from brian2.units import *
 from brian2.units.allunits import meter2
-from brian2.units.fundamentalunits import check_units
 import brian2.units.unitsafefunctions as usf
 from brian2.core.base import BrianObjectException
 import numpy as np
@@ -201,7 +200,6 @@ class OptogeneticIntervention(Stimulator):
             neuron_group,
             model=self.opsin_model + light_model,
             name=f"synapses_{self.name}_{neuron_group.name}",
-            namespace={"f_unless_v_is_0": f_unless_v_is_0},
         )
         if p_expression == 1:
             opto_syn.connect(j="i")
