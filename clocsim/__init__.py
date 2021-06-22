@@ -21,7 +21,7 @@ class InterfaceDevice(ABC):
         self.brian_objects = set()
 
     @abstractmethod
-    def connect_to_neuron_group(self, neuron_group: NeuronGroup):
+    def connect_to_neuron_group(self, neuron_group: NeuronGroup, **kwparams):
         """Connect device to given `neuron_group`.
 
         If your device introduces any objects which Brian must
@@ -31,6 +31,8 @@ class InterfaceDevice(ABC):
         Parameters
         ----------
         neuron_group : NeuronGroup
+        **kwparams : optional, passed from `inject_recorder` or
+            `inject_stimulator`
         """
         pass
 
@@ -131,17 +133,19 @@ class CLOCSimulator:
         self.recorders = {}
         self.controller = None
 
-    def _inject_device(self, device: InterfaceDevice, *neuron_groups):
+    def _inject_device(self, device: InterfaceDevice, *neuron_groups, **kwparams):
         if len(neuron_groups) == 0:
-            raise Exception(
-                "Injecting stimulator for no neuron groups " "is meaningless."
-            )
+            raise Exception("Injecting stimulator for no neuron groups is meaningless.")
         for ng in neuron_groups:
-            device.connect_to_neuron_group(ng)
+            if ng not in self.network.objects:
+                raise Exception(
+                    "Attempted to connect device {device.name} to neuron group {ng.name}, which is not part of the simulator's network."
+                )
+            device.connect_to_neuron_group(ng, **kwparams)
         for brian_object in device.brian_objects:
             self.network.add(brian_object)
 
-    def inject_stimulator(self, stimulator: Stimulator, *neuron_groups):
+    def inject_stimulator(self, stimulator: Stimulator, *neuron_groups, **kwparams):
         """Inject stimulator into given neuron groups.
 
         `connect_to_neuron_group(group)` is called for each `group`.
@@ -150,10 +154,10 @@ class CLOCSimulator:
         ----------
         stimulator : Stimulator
         """
-        self._inject_device(stimulator, *neuron_groups)
+        self._inject_device(stimulator, *neuron_groups, **kwparams)
         self.stimulators[stimulator.name] = stimulator
 
-    def inject_recorder(self, recorder: Recorder, *neuron_groups):
+    def inject_recorder(self, recorder: Recorder, *neuron_groups, **kwparams):
         """Inject recorder into given neuron groups.
 
         `connect_to_neuron_group(group)` is called for each `group`.
@@ -162,7 +166,7 @@ class CLOCSimulator:
         ----------
         recorder : Recorder
         """
-        self._inject_device(recorder, *neuron_groups)
+        self._inject_device(recorder, *neuron_groups, **kwparams)
         self.recorders[recorder.name] = recorder
 
     def get_state(self):
@@ -213,12 +217,13 @@ class CLOCSimulator:
             NetworkOperation(communicate_with_proc_loop, dt=defaultclock.dt)
         )
 
-    def run(self, duration):
+    def run(self, duration, **kwparams):
         """Run simulation.
 
         Parameters
         ----------
         duration : brian2 temporal Unit
             Length of simulation
+        **kwparams : additional arguments passed to brian2.run()
         """
-        self.network.run(duration)
+        self.network.run(duration, **kwparams)

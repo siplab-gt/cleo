@@ -48,6 +48,10 @@ def test_stimulator(sim, neurons):
     sim.update_stimulators({"my_stim": 42})
     assert my_stim.value == 42
 
+    neurons2 = NeuronGroup(1, "v = -70*mV : volt")
+    with pytest.raises(Exception):
+        sim.inject_stimulator(my_stim, neurons2)
+
 
 def test_recorder(sim, neurons):
     my_rec = MyRec("my_rec")
