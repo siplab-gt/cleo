@@ -2,6 +2,7 @@
 
 import pytest
 from brian2 import NeuronGroup, Network, mV, prefs, pamp
+from brian2.core.base import BrianObjectException
 
 prefs.codegen.target = "numpy"  # to avoid cython overhead for short tests
 
@@ -68,14 +69,16 @@ def test_inject_opto(opto, neurons, neurons2):
 
 def test_v_and_Iopto_in_model(opto):
     ng = NeuronGroup(1, "v = -70*mV : volt")
-    with pytest.raises(Exception):
+    sim = CLOCSimulator(Network(ng))
+    with pytest.raises(BrianObjectException):
         sim.inject_stimulator(opto, ng)
     ng = NeuronGroup(
         1,
         """du/dt = (-70*mV + 100*Mohm*Iopto) / (10*ms) : volt
         Iopto : amp""",
     )
-    with pytest.raises(Exception):
+    sim = CLOCSimulator(Network(ng))
+    with pytest.raises(BrianObjectException):
         sim.inject_stimulator(opto, ng)
 
 

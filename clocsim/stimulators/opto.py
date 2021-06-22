@@ -5,6 +5,7 @@ from brian2.units import *
 from brian2.units.allunits import meter2
 from brian2.units.fundamentalunits import check_units
 import brian2.units.unitsafefunctions as usf
+from brian2.core.base import BrianObjectException
 import numpy as np
 
 from . import Stimulator
@@ -193,11 +194,18 @@ class OptogeneticIntervention(Stimulator):
 
     def connect_to_neuron_group(self, neuron_group, **kwparams):
         p_expression = kwparams.get("p_expression", 1)
-        if any([variable not in neuron_group.variables for variable in ["v", "Iopto"]]):
-            raise Exception(
-                f"""{variable} needed in the model of NeuronGroup
-                {neuron_group.name} to connect OptogeneticIntervention."""
-            )
+        for variable, unit in zip(["v", "Iopto"], [volt, amp]):
+            if (
+                variable not in neuron_group.variables
+                or neuron_group.variables[variable].unit != unit
+            ):
+                raise BrianObjectException(
+                    (
+                        f"{variable} : {unit.name} needed in the model of NeuronGroup"
+                        f"{neuron_group.name} to connect OptogeneticIntervention."
+                    ),
+                    neuron_group,
+                )
 
         # fmt: off
         # Ephoton = h*c/lambda
