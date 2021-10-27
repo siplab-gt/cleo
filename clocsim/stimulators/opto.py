@@ -131,9 +131,7 @@ class OptogeneticIntervention(Stimulator):
 
         M = kubelka_munk(np.sqrt(r ** 2 + z ** 2)) if scatter else 1
 
-        # cone of light shouldn't extend backwards
         T = G * C * M
-        T[z < 0] = 0
         return T
 
     def get_rz_for_xyz(self, x, y, z):
