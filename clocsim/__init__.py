@@ -3,7 +3,7 @@
 from abc import ABC, abstractmethod
 from tracemalloc import start
 
-from brian2 import NeuronGroup, Network, NetworkOperation, defaultclock
+from brian2 import NeuronGroup, Subgroup, Network, NetworkOperation, defaultclock, ms
 from numpy import rec
 
 
@@ -137,10 +137,17 @@ class CLOCSimulator:
         if len(neuron_groups) == 0:
             raise Exception("Injecting stimulator for no neuron groups is meaningless.")
         for ng in neuron_groups:
-            if ng not in self.network.objects:
-                raise Exception(
-                    "Attempted to connect device {device.name} to neuron group {ng.name}, which is not part of the simulator's network."
-                )
+            if type(ng) == NeuronGroup:
+                if ng not in self.network.objects:
+                    raise Exception(
+                        f"Attempted to connect device {device.name} to neuron group {ng.name}, which is not part of the simulator's network."
+                    )
+            elif type(ng) == Subgroup:
+                # must look at sorted_objects because ng.source is unhashable
+                if ng.source not in self.network.sorted_objects:
+                    raise Exception(
+                        f"Attempted to connect device {device.name} to neuron group {ng.source.name}, which is not part of the simulator's network."
+                    )
             device.connect_to_neuron_group(ng, **kwparams)
         for brian_object in device.brian_objects:
             self.network.add(brian_object)
@@ -206,15 +213,17 @@ class CLOCSimulator:
         """
 
         def communicate_with_proc_loop(t):
-            if processing_loop.is_sampling_now(t):
-                processing_loop.put_state(self.get_state(), t)
-            ctrl_signal = processing_loop.get_ctrl_signal(t)
+            if processing_loop.is_sampling_now(t / ms):
+                processing_loop.put_state(self.get_state(), t / ms)
+            ctrl_signal = processing_loop.get_ctrl_signal(t / ms)
             self.update_stimulators(ctrl_signal)
 
         # communication should be at every timestep. The ProcessingLoop
         # decides when to sample and deliver results.
+        if communication_period is None:
+            communication_period = defaultclock.dt
         self.network.add(
-            NetworkOperation(communicate_with_proc_loop, dt=defaultclock.dt)
+            NetworkOperation(communicate_with_proc_loop, dt=communication_period)
         )
 
     def run(self, duration, **kwparams):
