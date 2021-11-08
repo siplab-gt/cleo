@@ -22,13 +22,13 @@ class RateRecorder(Recorder):
 
 
 class VoltageRecorder(Recorder):
-    def __init__(self, name, index):
+    def __init__(self, name, voltage_var_name="v"):
         super().__init__(name)
-        self.i = index
+        self.voltage_var_name = voltage_var_name
         self.mon = None
 
     def connect_to_neuron_group(self, neuron_group):
-        self.mon = StateMonitor(neuron_group, "v", self.i)
+        self.mon = StateMonitor(neuron_group, self.voltage_var_name, record=True)
         self.brian_objects.add(self.mon)
 
     def get_state(self):
@@ -45,23 +45,23 @@ class GroundTruthSpikeRecorder(Recorder):
     Note: this will only work for one neuron group at the moment.
     """
 
-    def __init__(self, name, index):
+    def __init__(self, name):
         super().__init__(name)
-        self.i = index
         self.mon = None
         self.num_spikes_seen = 0
-        if isinstance(self.i, int):
-            self.out_template = np.zeros(1)
-        else:
-            self.out_template = np.zeros(len(index))
-            # i is index with respect to neuron group
-            # j is index with respect to output array
-            # self.i_to_j = dict(zip(self.i, range(len(index))))
 
     def connect_to_neuron_group(self, neuron_group):
         # self.mon = SpikeMonitor(neuron_group, record=self.i)
-        self.mon = SpikeMonitor(neuron_group[self.i])
+        self.mon = SpikeMonitor(neuron_group)
         self.brian_objects.add(self.mon)
+        self.out_template = np.zeros(len(neuron_group))
+        # if isinstance(self.i, int):
+        #     self.out_template = np.zeros(1)
+        # else:
+        #     self.out_template = np.zeros(len(index))
+            # i is index with respect to neuron group
+            # j is index with respect to output array
+            # self.i_to_j = dict(zip(self.i, range(len(index))))
 
     def get_state(self):
         num_new_spikes = len(self.mon.t) - self.num_spikes_seen
