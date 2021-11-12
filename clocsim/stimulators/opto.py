@@ -67,9 +67,7 @@ default_blue = {
     "NAfib": 0.37,  # optical fiber numerical aperture
     "wavelength": 473 * nmeter,
     # NOTE: the following depend on wavelength and tissue properties and thus would be different for another wavelength
-    # 'K': 7.37/mm,  # absorbance coefficient
     "K": 0.125 / mm,  # absorbance coefficient
-    # 'S': 0.125/mm,  # scattering coefficient
     "S": 7.37 / mm,  # scattering coefficient
     "ntis": 1.36,  # tissue index of refraction
 }
