@@ -6,8 +6,12 @@ from brian2.units.allunits import meter2
 import brian2.units.unitsafefunctions as usf
 from brian2.core.base import BrianObjectException
 import numpy as np
+import matplotlib
+
+from clocsim.utilities import wavelength_to_rgb
 
 from . import Stimulator
+from ..utilities import wavelength_to_rgb
 
 
 # from PyRhO: Evans et al. 2016
@@ -30,9 +34,9 @@ four_state = """
     Gb = kb*Hq + Gb0 : hertz
 
     fphi = O1 + gamma*O2 : 1
-    fv = (1 - exp(-(v_post-E)/v0)) / -2 : 1
+    fv = (1 - exp(-(V_VAR_NAME_post-E)/v0)) / -2 : 1
 
-    Iopto_post = g0*fphi*fv*(v_post-E)*rho_rel : ampere (summed)
+    IOPTO_VAR_NAME_post = g0*fphi*fv*(V_VAR_NAME_post-E)*rho_rel : ampere (summed)
     rho_rel : 1
 """
 
@@ -94,7 +98,8 @@ class OptogeneticIntervention(Stimulator):
         direction: (x,y,z) tuple representing direction light is pointing
         """
         super().__init__(name, start_value)
-        self.opsin_model = Equations(opsin_model, **opsin_params)
+        self.opsin_model = opsin_model
+        self.opsin_params = opsin_params
         self.light_model_params = light_model_params
         self.location = location
         # direction unit vector
@@ -162,7 +167,9 @@ class OptogeneticIntervention(Stimulator):
 
     def connect_to_neuron_group(self, neuron_group, **kwparams):
         p_expression = kwparams.get("p_expression", 1)
-        for variable, unit in zip(["v", "Iopto"], [volt, amp]):
+        Iopto_var_name = kwparams.get("Iopto_var_name", "Iopto")
+        v_var_name = kwparams.get("v_var_name", "v")
+        for variable, unit in zip([v_var_name, Iopto_var_name], [volt, amp]):
             if (
                 variable not in neuron_group.variables
                 or neuron_group.variables[variable].unit != unit
@@ -174,6 +181,10 @@ class OptogeneticIntervention(Stimulator):
                     ),
                     neuron_group,
                 )
+        # opsin synapse model needs modified names
+        modified_opsin_model = self.opsin_model.replace(
+            "IOPTO_VAR_NAME", Iopto_var_name
+        ).replace("V_VAR_NAME", v_var_name)
 
         # fmt: off
         # Ephoton = h*c/lambda
@@ -184,21 +195,22 @@ class OptogeneticIntervention(Stimulator):
         )
         # fmt: on
 
-        light_model = Equations(
-            """
+        light_model = """
             Irr = Irr0*T : watt/meter**2
             Irr0 : watt/meter**2 
             T : 1
             phi = Irr / Ephoton : 1/second/meter**2
-            Ephoton = E_photon : joule""",
-            E_photon=E_photon,
-        )
+        """
 
         opto_syn = Synapses(
             neuron_group,
-            model=self.opsin_model + light_model,
+            model=modified_opsin_model + light_model,
+            namespace=self.opsin_params,
             name=f"synapses_{self.name}_{neuron_group.name}",
+            method='rk2',
         )
+        opto_syn.namespace['Ephoton'] = E_photon
+
         if p_expression == 1:
             opto_syn.connect(j="i")
         else:
@@ -247,18 +259,24 @@ class OptogeneticIntervention(Stimulator):
             marker=",",
             edgecolors="none",
         )
+        handles = ax.get_legend().legendHandles
+        c = wavelength_to_rgb(self.light_model_params["wavelength"] / nmeter)
+        opto_patch = matplotlib.patches.Patch(color=c, label=self.name)
+        handles.append(opto_patch)
+        ax.legend(handles=handles)
 
-    def update(self, Irr0_mW_per_mm2):
+    def update(self, Irr0_mW_per_mm2: float):
+        if Irr0_mW_per_mm2 < 0:
+            raise ValueError(f"{self.name}: light intensity Irr0 must be nonnegative")
         for opto_syn in self.opto_syns.values():
             opto_syn.Irr0 = Irr0_mW_per_mm2 * mwatt / mm2
 
     def _alpha_cmap_for_wavelength(self):
         from matplotlib import colors
-        from ..utilities import wavelength_to_rgb
 
         c = wavelength_to_rgb(self.light_model_params["wavelength"] / nmeter)
         c_clear = (*c, 0)
-        c_opaque = (*c, 1)
+        c_opaque = (*c, 0.3)
         return colors.LinearSegmentedColormap.from_list(
             "incr_alpha", [(0, c_clear), (1, c_opaque)]
         )

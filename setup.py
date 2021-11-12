@@ -46,6 +46,8 @@ setup(
         "flake8-docstrings",
         "flake8-pytest-style",
         "pytest-mock",
+        "nbmake",
+        "pytest-xdist",
     ],
     python_requires=">=3.7",
 )

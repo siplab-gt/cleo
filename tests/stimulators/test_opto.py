@@ -8,7 +8,7 @@ prefs.codegen.target = "numpy"  # to avoid cython overhead for short tests
 
 from clocsim import CLOCSimulator
 from clocsim.stimulators.opto import *
-from clocsim.coordinates import assign_coords_rect_prism
+from clocsim.coordinates import assign_coords_grid_rect_prism
 
 model = """
         dv/dt = (-(v - -70*mV) - 100*Mohm*Iopto) / (10*ms) : volt
@@ -20,9 +20,7 @@ model = """
 def neurons():
     ng = NeuronGroup(10, model, reset="v=-70*mV", threshold="v>-50*mV")
     ng.v = -70 * mV
-    assign_coords_rect_prism(
-        ng, "grid", (0, 0), (0, 0), (0, 1), xyz_grid_shape=(1, 1, 10)
-    )
+    assign_coords_grid_rect_prism(ng, (0, 0), (0, 0), (0, 1), shape=(1, 1, 10))
     return ng
 
 
@@ -122,13 +120,12 @@ def test_light_model(opto, neurons):
     assert all(opsyn.T[::-1] == np.sort(opsyn.T))
     # another set of neurons just off-center should have lower T
     neurons2 = NeuronGroup(len(neurons), model)
-    assign_coords_rect_prism(
+    assign_coords_grid_rect_prism(
         neurons2,
-        "grid",
         (0.1, 0.1),  # just 100 um off from center in x and y
         (0.1, 0.1),
         (0, 1),
-        xyz_grid_shape=(1, 1, len(neurons)),
+        shape=(1, 1, len(neurons)),
     )
     opto.connect_to_neuron_group(neurons2)
     assert all(np.greater(opsyn.T, opto.opto_syns[neurons2.name].T))

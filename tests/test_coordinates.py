@@ -4,13 +4,13 @@ import numpy as np
 
 from brian2 import NeuronGroup, mm
 
-from clocsim.coordinates import assign_coords_cylinder, assign_coords_rect_prism
+from clocsim.coordinates import *
 
 
 def test_rect_prism_grid():
     ng = NeuronGroup(27, "v=-70*mV : volt")
-    assign_coords_rect_prism(
-        ng, "grid", (0, 1), (0, 1), (0, 1), xyz_grid_shape=(3, 3, 3)
+    assign_coords_grid_rect_prism(
+        ng, (0, 1), (0, 1), (0, 1), shape=(3, 3, 3)
     )
     # check grid spacing in all directions
     assert all([d == 0.5 * mm for d in np.diff(np.unique(ng.x))])
@@ -20,7 +20,7 @@ def test_rect_prism_grid():
 
 def test_rect_prism_random():
     ng = NeuronGroup(27, "v=-70*mV : volt")
-    assign_coords_rect_prism(ng, "random", (-2, -1), (1, 2), (4, 5))
+    assign_coords_rand_rect_prism(ng, (-2, -1), (1, 2), (4, 5))
     # check coords are all within limits
     assert all(np.logical_and(ng.x > -2 * mm, ng.x < -1 * mm))
     assert all(np.logical_and(ng.y > 1 * mm, ng.y < 2 * mm))
@@ -29,7 +29,7 @@ def test_rect_prism_random():
 
 def test_cylinder_random():
     ng = NeuronGroup(100, "v=-70*mV : volt")
-    assign_coords_cylinder(ng, "random", (1, 1, 1), (2, 2, 2), 1)
+    assign_coords_rand_cylinder(ng, (1, 1, 1), (2, 2, 2), 1)
     # none past the ends
     assert not any(np.logical_and.reduce((ng.x < 1 * mm, ng.y < 1 * mm, ng.z < 1 * mm)))
     assert not any(np.logical_and.reduce((ng.x > 2 * mm, ng.y > 2 * mm, ng.z > 2 * mm)))

@@ -32,7 +32,7 @@ def test_RateRecorder(sim, neurons):
 
 
 def test_VoltageRecorder(sim, neurons):
-    v_rec = VoltageRecorder("v_rec", 0)
+    v_rec = VoltageRecorder("v_rec")
     sim.inject_recorder(v_rec, neurons)
 
     sim.run(0.1 * ms)  # will spike at every 0.1 ms timestep
@@ -40,7 +40,7 @@ def test_VoltageRecorder(sim, neurons):
 
 
 def test_GroundTruthSpikeRecorder(sim, neurons):
-    spike_rec = GroundTruthSpikeRecorder("spike_rec", 0)
+    spike_rec = GroundTruthSpikeRecorder("spike_rec")
     sim.inject_recorder(spike_rec, neurons)
 
     sim.run(0.1 * ms)  # will spike at every 0.1 ms timestep
