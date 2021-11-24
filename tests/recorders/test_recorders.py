@@ -1,12 +1,12 @@
 import pytest
 from brian2 import NeuronGroup, Network, ms
 
-from clocsim.recorders import (
+from cleosim.recorders import (
     RateRecorder,
     VoltageRecorder,
     GroundTruthSpikeRecorder,
 )
-from clocsim import CLOCSimulator
+from cleosim import CLSimulator
 
 
 @pytest.fixture
@@ -18,7 +18,7 @@ def neurons():
 @pytest.fixture
 def sim(neurons):
     net = Network(neurons)
-    return CLOCSimulator(net)
+    return CLSimulator(net)
 
 
 def test_RateRecorder(sim, neurons):

@@ -8,7 +8,7 @@ from brian2.core.base import BrianObjectException
 import numpy as np
 import matplotlib
 
-from clocsim.utilities import wavelength_to_rgb
+from cleosim.utilities import wavelength_to_rgb
 
 from . import Stimulator
 from ..utilities import wavelength_to_rgb

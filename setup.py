@@ -12,14 +12,14 @@ def read(fname):
 
 
 setup(
-    name="clocsim",
+    name="cleosim",
     version=versioneer.get_version(),
     cmdclass=versioneer.get_cmdclass(),
-    description="Closed-loop experiment simulator and testbed",
+    description="Closed Loop, Electrophysiology, and Optogenetics Simulator: testbed and prototyping kit",
     author="Kyle Johnsen",
     author_email="kjohnsen@gatech.edu",
     url="siplab.gatech.edu",
-    packages=["clocsim"],
+    packages=["cleosim"],
     long_description=read("README.md"),
     license="MIT",
     classifiers=[
@@ -27,7 +27,7 @@ setup(
         "Intended Audience :: Science/Research",
         "License :: OSI Approved :: MIT License",
     ],
-    provides="clocsim",
+    provides="cleosim",
     keywords="Brian simulator closed loop neuroscience electrode optogenetics",
     install_requires=[
         "brian2>=2.4",

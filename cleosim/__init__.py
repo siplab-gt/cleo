@@ -68,7 +68,7 @@ class ProcessingLoop(ABC):
         ----------
         state_dict : dict
             A dictionary of recorder measurements, as returned by
-            :func:`~base.CLOCSimulator.get_state()`
+            :func:`~base.CLSimulator.get_state()`
         time : brian2 temporal Unit
             The current simulation timestep. Essential for simulating
             control latency and for time-varying control.
@@ -124,7 +124,7 @@ class Stimulator(InterfaceDevice):
         self.value = ctrl_signal
 
 
-class CLOCSimulator:
+class CLSimulator:
     """Integrates simulation components and runs."""
 
     def __init__(self, brian_network: Network):

@@ -1,2 +1,2 @@
 include versioneer.py
-include clocsim/_version.py
+include cleosim/_version.py

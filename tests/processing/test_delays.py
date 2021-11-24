@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from clocsim.processing.delays import *
+from cleosim.processing.delays import *
 
 
 def test_ConstantDelay():

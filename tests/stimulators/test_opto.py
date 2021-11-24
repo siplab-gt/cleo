@@ -6,9 +6,9 @@ from brian2.core.base import BrianObjectException
 
 prefs.codegen.target = "numpy"  # to avoid cython overhead for short tests
 
-from clocsim import CLOCSimulator
-from clocsim.stimulators.opto import *
-from clocsim.coordinates import assign_coords_grid_rect_prism
+from cleosim import CLSimulator
+from cleosim.stimulators.opto import *
+from cleosim.coordinates import assign_coords_grid_rect_prism
 
 model = """
         dv/dt = (-(v - -70*mV) - 100*Mohm*Iopto) / (10*ms) : volt
@@ -36,7 +36,7 @@ opto2 = opto
 
 
 def test_inject_opto(opto, neurons, neurons2):
-    sim = CLOCSimulator(Network(neurons))
+    sim = CLSimulator(Network(neurons))
     sim.inject_stimulator(opto, neurons, rho_rel=2)
     # channel density setting
     assert all(opto.opto_syns[neurons.name].rho_rel == 2)
@@ -57,7 +57,7 @@ def test_inject_opto(opto, neurons, neurons2):
 ## E.g., Iopto = I_ChR2 + I_Jaws
 ## https://brian2.readthedocs.io/en/stable/user/synapses.html#summed-variables
 # def test_two_optos(opto, opto2, neurons):
-#     sim = CLOCSimulator(Network(neurons))
+#     sim = CLSimulator(Network(neurons))
 #     sim.inject_stimulator(opto, neurons)
 #     assert neurons.Iopto == 0
 #     opto.update(1)
@@ -67,7 +67,7 @@ def test_inject_opto(opto, neurons, neurons2):
 
 def test_v_and_Iopto_in_model(opto):
     ng = NeuronGroup(1, "v = -70*mV : volt")
-    sim = CLOCSimulator(Network(ng))
+    sim = CLSimulator(Network(ng))
     with pytest.raises(BrianObjectException):
         sim.inject_stimulator(opto, ng)
     ng = NeuronGroup(
@@ -75,13 +75,13 @@ def test_v_and_Iopto_in_model(opto):
         """du/dt = (-70*mV + 100*Mohm*Iopto) / (10*ms) : volt
         Iopto : amp""",
     )
-    sim = CLOCSimulator(Network(ng))
+    sim = CLSimulator(Network(ng))
     with pytest.raises(BrianObjectException):
         sim.inject_stimulator(opto, ng)
 
 
 def test_opsin_model(opto, neurons):
-    sim = CLOCSimulator(Network(neurons))
+    sim = CLSimulator(Network(neurons))
     sim.inject_stimulator(opto, neurons)
     opsyn = opto.opto_syns[neurons.name]
     assert all(neurons.Iopto) == 0

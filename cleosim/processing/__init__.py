@@ -1,4 +1,4 @@
-"""Classes and functions for constructing and configuring a :func:`~clocsim.ProcessingLoop`."""
+"""Classes and functions for constructing and configuring a :func:`~cleosim.ProcessingLoop`."""
 
 from abc import ABC, abstractmethod
 from typing import Tuple, Any
@@ -165,7 +165,7 @@ class LatencyProcessingLoop(ProcessingLoop):
         Parameters
         ----------
         state_dict : dict
-            {`recorder_name`: `state`} dictionary from :func:`~base.CLOCSimulator.get_state()`
+            {`recorder_name`: `state`} dictionary from :func:`~base.CLSimulator.get_state()`
         time_ms : float
 
         Returns

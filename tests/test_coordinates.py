@@ -4,7 +4,7 @@ import numpy as np
 
 from brian2 import NeuronGroup, mm
 
-from clocsim.coordinates import *
+from cleosim.coordinates import *
 
 
 def test_rect_prism_grid():

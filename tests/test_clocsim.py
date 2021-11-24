@@ -3,7 +3,7 @@
 import pytest
 from brian2 import NeuronGroup, Network, collect, Synapses, PopulationRateMonitor, ms
 
-from clocsim import CLOCSimulator, ProcessingLoop, InterfaceDevice, Recorder, Stimulator
+from cleosim import CLSimulator, ProcessingLoop, InterfaceDevice, Recorder, Stimulator
 
 
 class MyStim(Stimulator):
@@ -30,7 +30,7 @@ def neurons():
 @pytest.fixture
 def sim(neurons):
     net = Network(neurons)
-    return CLOCSimulator(net)
+    return CLSimulator(net)
 
 
 def test_stimulator(sim, neurons):

@@ -42,8 +42,8 @@ def get_config():
     cfg.VCS = "git"
     cfg.style = "pep440-pre"
     cfg.tag_prefix = ""
-    cfg.parentdir_prefix = "clocsim-"
-    cfg.versionfile_source = "clocsim/_version.py"
+    cfg.parentdir_prefix = "cleosim-"
+    cfg.versionfile_source = "cleosim/_version.py"
     cfg.verbose = False
     return cfg
 

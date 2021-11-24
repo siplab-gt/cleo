@@ -1,8 +1,8 @@
-"""Tests for clocsim/processing/__init__.py"""
+"""Tests for cleosim/processing/__init__.py"""
 from typing import Any, Tuple
 
-from clocsim.processing import LatencyProcessingLoop, LoopComponent
-from clocsim.processing.delays import ConstantDelay, Delay
+from cleosim.processing import LatencyProcessingLoop, LoopComponent
+from cleosim.processing.delays import ConstantDelay, Delay
 
 
 class MyLoopComponent(LoopComponent):
