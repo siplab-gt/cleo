@@ -1,6 +1,7 @@
 """Tests for electrodes module"""
 from brian2 import NeuronGroup
 from cleosim.ephys import ElectrodeGroup
+# from cleosim.recorders.electrodes import ElectrodeGroup
 
 def test_ElectrodeGroup():
     eg = ElectrodeGroup("eg", [0, 0, 0])

@@ -10,8 +10,8 @@ import matplotlib
 
 from cleosim.utilities import wavelength_to_rgb
 
-from . import Stimulator
-from ..utilities import wavelength_to_rgb
+from .stimulators import Stimulator
+from .utilities import wavelength_to_rgb
 
 
 # from PyRhO: Evans et al. 2016

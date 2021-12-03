@@ -1,4 +1,4 @@
-from .. import Stimulator
+from cleosim.base import Stimulator
 
 
 class StateVariableSetter(Stimulator):
