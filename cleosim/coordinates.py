@@ -1,8 +1,12 @@
+from __future__ import annotations
 from warnings import warn
 from typing import Tuple
+from collections.abc import Iterable
 
 from brian2 import mm, meter
 import numpy as np
+
+from cleosim.base import InterfaceDevice
 
 from .utilities import modify_model_with_eqs
 
@@ -95,7 +99,7 @@ def plot_neuron_positions(
     zlim=None,
     color=None,
     axis_scale_unit=mm,
-    opto=None,
+    devices_to_plot: Iterable[InterfaceDevice] = [],
     invert_z=True,
 ):
     try:
@@ -141,10 +145,8 @@ def plot_neuron_positions(
 
     ax.legend()
 
-    if opto is not None:
-        opto.add_self_to_plot(ax, axis_scale_unit)
-
-    # return fig
+    for device in devices_to_plot:
+        device.add_self_to_plot(ax, axis_scale_unit)
 
 
 def _init_variables(neuron_group):

@@ -2,7 +2,16 @@
 
 from abc import ABC, abstractmethod
 
-from brian2 import NeuronGroup, Subgroup, Network, NetworkOperation, defaultclock, ms
+from brian2 import (
+    NeuronGroup,
+    Subgroup,
+    Network,
+    NetworkOperation,
+    defaultclock,
+    ms,
+    Unit,
+)
+from matplotlib import pyplot as plt
 
 
 class InterfaceDevice(ABC):
@@ -26,6 +35,9 @@ class InterfaceDevice(ABC):
         **kwparams : optional, passed from `inject_recorder` or
             `inject_stimulator`
         """
+        pass
+
+    def add_self_to_plot(self, ax: plt.Axes, axis_scale_unit: Unit):
         pass
 
 
