@@ -117,21 +117,19 @@ def plot_neuron_positions(
     fig = plt.figure()
     ax = fig.add_subplot(111, projection="3d")
     for ng in neuron_groups:
+        args = [
+            ng.x / axis_scale_unit,
+            ng.y / axis_scale_unit,
+            ng.z / axis_scale_unit
+        ]
+        kwargs = {"label": ng.name, "alpha": 0.3}
         if color is not None:
-            ax.scatter(
-                ng.x / axis_scale_unit,
-                ng.y / axis_scale_unit,
-                ng.z / axis_scale_unit,
-                color=color,
-                label=ng.name,
-            )
-        else:
-            ax.scatter(
-                ng.x / axis_scale_unit, ng.y / axis_scale_unit, ng.z / axis_scale_unit
-            )
+            kwargs["color"] = color
+        ax.scatter(*args, **kwargs)
         ax.set_xlabel(f"x ({axis_scale_unit._dispname})")
         ax.set_ylabel(f"y ({axis_scale_unit._dispname})")
         ax.set_zlabel(f"z ({axis_scale_unit._dispname})")
+
     if xlim is not None:
         ax.set_xlim(xlim)
     if ylim is not None:

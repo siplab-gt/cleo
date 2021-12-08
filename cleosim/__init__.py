@@ -1,7 +1,10 @@
-from abc import ABC, abstractmethod
-
-from brian2 import NeuronGroup, Subgroup, Network, NetworkOperation, defaultclock, ms
-
+# auto-import submodules
+import cleosim.ephys
+import cleosim.opto
+import cleosim.coordinates
+import cleosim.stimulators
+import cleosim.recorders
+import cleosim.utilities
 # bring nested modules up to second level
 from cleosim.base import *
 from cleosim.processing import controllers, delays, observers

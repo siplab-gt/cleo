@@ -4,11 +4,13 @@ from collections.abc import Iterable
 from typing import Any, Tuple
 
 import numpy as np
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d.axes3d import Axes3D
 from numpy.core import numeric
 import numpy.typing as npt
 from brian2 import NeuronGroup, mm, Unit
 
-from cleosim import Recorder
+from cleosim.base import Recorder
 
 
 class Signal(ABC):
@@ -56,6 +58,19 @@ class ElectrodeGroup(Recorder):
         for signal in self.signals:
             state_dict[signal.name] = signal.get_state()
         return state_dict
+
+    def add_self_to_plot(self, ax: Axes3D, axis_scale_unit: Unit):
+        ax.scatter(
+            self.coords[:, 0] / axis_scale_unit,
+            self.coords[:, 1] / axis_scale_unit,
+            self.coords[:, 2] / axis_scale_unit,
+            marker="x",
+            s=40,
+            color="gray",
+            label=self.name,
+            depthshade=False,
+        )
+        ax.legend()
 
 
 def get_1D_probe_coords(
