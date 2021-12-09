@@ -35,13 +35,18 @@ def test_electrode_injection():
 
     dumb = DummySignal("dumb")
     dumber = DummySignal("dumber")
-    eg = ElectrodeGroup("eg", [0, 0, 0], signals=[dumb, dumber])
+    eg = ElectrodeGroup("eg", [0, 0, 0], signals=[dumb])
+    eg.add_signal(dumber)
     sim.inject_recorder(eg, ng)
 
     assert dumb.brian_objects.issubset(sim.network.objects)
     assert dumber.brian_objects.issubset(sim.network.objects)
     assert sim.get_state()["eg"]["dumb"] == ng.name
     assert sim.get_state()["eg"]["dumber"] == ng.name
+
+    with pytest.raises(ValueError):
+        # cannot use same signal object for two electrodes
+        ElectrodeGroup("eg2", [0, 0, 0], signals=[dumb])
 
 
 def test_probe_coords():

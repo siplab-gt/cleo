@@ -16,10 +16,20 @@ from cleosim.base import Recorder
 class Signal(ABC):
     name: str
     brian_objects: set
+    electrode_group: ElectrodeGroup = None
+    _coords: npt.NDArray
 
     def __init__(self, name: str) -> None:
         self.name = name
         self.brian_objects = set()
+
+    def init_for_electrode_group(self, eg: ElectrodeGroup):
+        if self.electrode_group is not None and self.electrode_group is not eg:
+            raise ValueError(f"Signal {self.name} has already been initialized "
+                             f"for ElectrodeGroup {self.electrode_group.name} "
+                             f"and cannot be used with another.")
+        self.electrode_group = eg
+        self._coords = eg.coords
 
     @abstractmethod
     def connect_to_neuron_group(self, neuron_group: NeuronGroup, **kwparams):
@@ -32,7 +42,7 @@ class Signal(ABC):
 
 class ElectrodeGroup(Recorder):
     coords: npt.NDArray
-    signals: Iterable[Signal]
+    signals: list[Signal] = []
     n: int
 
     def __init__(
@@ -46,7 +56,12 @@ class ElectrodeGroup(Recorder):
                 "for n contact locations."
             )
         self.n = len(self.coords)
-        self.signals = signals
+        for signal in signals:
+            self.add_signal(signal)
+
+    def add_signal(self, signal: Signal):
+        signal.init_for_electrode_group(self)
+        self.signals.append(signal)
 
     def connect_to_neuron_group(self, neuron_group: NeuronGroup, **kwparams):
         for signal in self.signals:
