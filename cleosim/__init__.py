@@ -233,6 +233,9 @@ class CLSimulator:
         ----------
         duration : brian2 temporal Unit
             Length of simulation
-        **kwparams : additional arguments passed to brian2.run()
+        **kwparams : additional arguments passed to brian2.run(). 
+            level has a default value of 1
         """
+        level = kwparams.get("level", 1)
+        kwparams["level"] = level
         self.network.run(duration, **kwparams)
