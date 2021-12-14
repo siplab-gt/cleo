@@ -18,7 +18,9 @@ def test_ElectrodeGroup():
     with pytest.raises(ValueError):
         ElectrodeGroup("eg", [0, 0])
     with pytest.raises(ValueError):
-        ElectrodeGroup("eg", [[0, 0], [1, 1]])
+        ElectrodeGroup("eg", [0, 0, 0, 0])
+    with pytest.raises(ValueError):
+        ElectrodeGroup("eg", [[0, 0], [1, 1], [2, 2], [3, 3]])
 
 
 def test_electrode_injection():

@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d.axes3d import Axes3D
 from numpy.core import numeric
 import numpy.typing as npt
-from brian2 import NeuronGroup, mm, Unit
+from brian2 import NeuronGroup, mm, Unit, Quantity
 
 from cleosim.base import Recorder
 
@@ -17,7 +17,6 @@ class Signal(ABC):
     name: str
     brian_objects: set
     electrode_group: ElectrodeGroup = None
-    _coords: npt.NDArray
 
     def __init__(self, name: str) -> None:
         self.name = name
@@ -25,11 +24,12 @@ class Signal(ABC):
 
     def init_for_electrode_group(self, eg: ElectrodeGroup):
         if self.electrode_group is not None and self.electrode_group is not eg:
-            raise ValueError(f"Signal {self.name} has already been initialized "
-                             f"for ElectrodeGroup {self.electrode_group.name} "
-                             f"and cannot be used with another.")
+            raise ValueError(
+                f"Signal {self.name} has already been initialized "
+                f"for ElectrodeGroup {self.electrode_group.name} "
+                f"and cannot be used with another."
+            )
         self.electrode_group = eg
-        self._coords = eg.coords
 
     @abstractmethod
     def connect_to_neuron_group(self, neuron_group: NeuronGroup, **kwparams):
@@ -41,15 +41,15 @@ class Signal(ABC):
 
 
 class ElectrodeGroup(Recorder):
-    coords: npt.NDArray
+    coords: Quantity
     signals: list[Signal] = []
     n: int
 
-    def __init__(
-        self, name: str, coords: npt.ArrayLike, signals: Iterable[Signal] = []
-    ):
+    def __init__(self, name: str, coords: npt.ArrayLike, signals: Iterable[Signal] = [], unit=mm):
         super().__init__(name)
-        self.coords = np.array(coords).reshape((-1, 3))
+        if type(coords) is not np.ndarray:
+            coords = np.array(coords)
+        self.coords = coords.reshape((-1, 3)) * unit
         if len(self.coords.shape) != 2 or self.coords.shape[1] != 3:
             raise ValueError(
                 "coords must be an n by 3 array with x, y, and z coordinates"
@@ -76,9 +76,9 @@ class ElectrodeGroup(Recorder):
 
     def add_self_to_plot(self, ax: Axes3D, axis_scale_unit: Unit):
         ax.scatter(
-            self.coords[:, 0] / axis_scale_unit,
-            self.coords[:, 1] / axis_scale_unit,
-            self.coords[:, 2] / axis_scale_unit,
+            self.xs / axis_scale_unit,
+            self.ys / axis_scale_unit,
+            self.zs / axis_scale_unit,
             marker="x",
             s=40,
             color="gray",
@@ -86,6 +86,18 @@ class ElectrodeGroup(Recorder):
             depthshade=False,
         )
         ax.legend()
+
+    @property
+    def xs(self):
+        return self.coords[:, 0]
+
+    @property
+    def ys(self):
+        return self.coords[:, 1]
+
+    @property
+    def zs(self):
+        return self.coords[:, 2]
 
 
 def get_1D_probe_coords(
