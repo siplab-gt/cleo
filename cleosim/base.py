@@ -215,6 +215,7 @@ class CLSimulator:
         ----------
         processing_loop : ProcessingLoop
         """
+        self.proc_loop = processing_loop
 
         def communicate_with_proc_loop(t):
             if processing_loop.is_sampling_now(t / ms):

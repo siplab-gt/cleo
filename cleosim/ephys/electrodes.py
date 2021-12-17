@@ -42,7 +42,7 @@ class Signal(ABC):
 
 class ElectrodeGroup(Recorder):
     coords: Quantity
-    signals: list[Signal] = []
+    signals: list[Signal]
     n: int
 
     def __init__(self, name: str, coords: npt.ArrayLike, signals: Iterable[Signal] = [], unit=mm):
@@ -56,6 +56,7 @@ class ElectrodeGroup(Recorder):
                 "for n contact locations."
             )
         self.n = len(self.coords)
+        self.signals = []
         for signal in signals:
             self.add_signal(signal)
 
