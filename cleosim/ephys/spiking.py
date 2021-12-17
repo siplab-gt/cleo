@@ -18,10 +18,10 @@ class Spiking(Signal):
     t_ms: npt.NDArray
     i: npt.NDArray[np.uint]
     t_samp_ms: Quantity
-    monitors: list[SpikeMonitor] = []
-    _mon_spikes_already_seen: list[int] = []
-    _dtct_prob_array: npt.NDArray = None
-    i_eg_by_i_ng: bidict = bidict()
+    monitors: list[SpikeMonitor]
+    _mon_spikes_already_seen: list[int]
+    _dtct_prob_array: npt.NDArray
+    i_eg_by_i_ng: bidict
 
     def __init__(
         self,
@@ -51,8 +51,9 @@ class Spiking(Signal):
         dist2 = np.zeros((len(neuron_group), self.electrode_group.n))
         for dim in ["x", "y", "z"]:
             dim_ng, dim_eg = np.meshgrid(
-                getattr(neuron_group, dim), getattr(self.electrode_group, f"{dim}s"),
-                indexing='ij'
+                getattr(neuron_group, dim),
+                getattr(self.electrode_group, f"{dim}s"),
+                indexing="ij",
             )
             dist2 += (dim_ng - dim_eg) ** 2
         distances = np.sqrt(dist2) * meter  # since units stripped
@@ -73,7 +74,10 @@ class Spiking(Signal):
             i_eg_start = len(self.i_eg_by_i_ng)
             new_i_eg = range(i_eg_start, i_eg_start + len(i_ng_to_keep))
             self.i_eg_by_i_ng.update(
-                {(neuron_group, i_ng): i_eg for i_eg, i_ng in zip(new_i_eg, i_ng_to_keep)}
+                {
+                    (neuron_group, i_ng): i_eg
+                    for i_eg, i_ng in zip(new_i_eg, i_ng_to_keep)
+                }
             )
 
         # return neuron-channel detection probabilities array for use in subclass
@@ -106,7 +110,7 @@ class Spiking(Signal):
             i_ng = mon.i[spikes_already_seen:]  # can contain spikes we don't care about
             i_eg = np.concatenate((i_eg, self._i_ng_to_i_eg(i_ng, mon)))
             # get all time in terms of ms
-            t_ms = np.concatenate((t_ms, mon.t[spikes_already_seen:]/ms))
+            t_ms = np.concatenate((t_ms, mon.t[spikes_already_seen:] / ms))
             self._mon_spikes_already_seen[j] = mon.num_spikes
 
         return (i_eg, t_ms)
@@ -129,7 +133,7 @@ class MultiUnitSpiking(Spiking):
 
     def get_state(
         self,
-    ) -> tuple[npt.NDArray[np.uint], npt.NDArray[np.uint]]:
+    ) -> tuple[npt.NDArray[np.uint], npt.NDArray, npt.NDArray[np.uint]]:
         i_eg, t_ms = self._get_new_spikes()
         i_c, t_ms, y = self._noisily_detect_spikes_per_channel(i_eg, t_ms)
         if self.save_history:
@@ -144,13 +148,48 @@ class MultiUnitSpiking(Spiking):
         detected_spikes = np.random.random(probs_for_spikes.shape) < probs_for_spikes
         y = np.sum(detected_spikes, axis=0)
         # ⬇ nonzero gives row, column indices of each nonzero element
-        i_eg_detected, i_c_detected = detected_spikes.nonzero()
-        t_detected = t[i_eg_detected]
+        i_spike_detected, i_c_detected = detected_spikes.nonzero()
+        t_detected = t[i_spike_detected]
         return i_c_detected, t_detected, y
 
 
 class SortedSpiking(Spiking):
     def connect_to_neuron_group(self, neuron_group: NeuronGroup, **kwparams):
+        neuron_channel_dtct_probs = super().connect_to_neuron_group(
+            neuron_group, **kwparams
+        )
+        neuron_multi_channel_probs = self._combine_channel_probs(
+            neuron_channel_dtct_probs
+        )
+        if self._dtct_prob_array is None:
+            self._dtct_prob_array = neuron_multi_channel_probs
+        else:
+            self._dtct_prob_array = np.concatenate(
+                (self._dtct_prob_array, neuron_multi_channel_probs)
+            )
+
+    def _combine_channel_probs(self, neuron_channel_dtct_probs: np.array) -> np.array:
         # combine probabilities for each neuron to get just one representing
-        # when a spike is detected on any channel
-        return super().connect_to_neuron_group(neuron_group, **kwparams)
+        # when a spike is detected on at least 1 channel
+        # p(at least one detected) = 1 - p(none detected) = 1 - q1*q2*q3...
+        return 1 - np.prod(1 - neuron_channel_dtct_probs, axis=1)
+
+    def get_state(
+        self,
+    ) -> tuple[npt.NDArray[np.uint], npt.NDArray, npt.NDArray[np.uint]]:
+        i_eg, t_ms = self._get_new_spikes()
+        i_eg, t_ms = self._noisily_detect_spikes(i_eg, t_ms)
+        y = np.zeros(len(self.i_eg_by_i_ng), dtype=bool)
+        y[i_eg] = 1
+        if self.save_history:
+            self.i = np.concatenate((self.i, i_eg))
+            self.t_ms = np.concatenate((self.t_ms, t_ms))
+        return (i_eg, t_ms, y)
+
+    def _noisily_detect_spikes(self, i_eg, t) -> Tuple[npt.NDArray, npt.NDArray]:
+        probs_for_spikes = self._dtct_prob_array[i_eg]
+        detected_spikes = np.random.random(probs_for_spikes.shape) < probs_for_spikes
+        i_spike_detected = detected_spikes.nonzero()
+        i_eg_out = i_eg[i_spike_detected]
+        t_out = t[i_spike_detected]
+        return i_eg_out, t_out
