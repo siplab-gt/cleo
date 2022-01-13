@@ -4,6 +4,9 @@ from typing import Tuple
 from collections.abc import Iterable
 
 from brian2 import mm, meter
+from brian2.groups.group import Group
+from brian2.groups.neurongroup import NeuronGroup
+from brian2.units.fundamentalunits import get_dimensions
 import numpy as np
 
 from cleosim.base import InterfaceDevice
@@ -117,11 +120,7 @@ def plot_neuron_positions(
     fig = plt.figure()
     ax = fig.add_subplot(111, projection="3d")
     for ng in neuron_groups:
-        args = [
-            ng.x / axis_scale_unit,
-            ng.y / axis_scale_unit,
-            ng.z / axis_scale_unit
-        ]
+        args = [ng.x / axis_scale_unit, ng.y / axis_scale_unit, ng.z / axis_scale_unit]
         kwargs = {"label": ng.name, "alpha": 0.3}
         if color is not None:
             kwargs["color"] = color
@@ -147,9 +146,23 @@ def plot_neuron_positions(
         device.add_self_to_plot(ax, axis_scale_unit)
 
 
-def _init_variables(neuron_group):
-    for dim in ["x", "y", "z"]:
-        if hasattr(neuron_group, dim):
-            setattr(neuron_group, dim, 0 * mm)
+def _init_variables(group: Group):
+    for dim_name in ["x", "y", "z"]:
+        if hasattr(group, dim_name):
+            setattr(group, dim_name, 0 * mm)
         else:
-            modify_model_with_eqs(neuron_group, f"{dim}: meter")
+            if type(group) == NeuronGroup:
+                modify_model_with_eqs(group, f"{dim_name}: meter")
+            elif issubclass(type(group), Group):
+                group.variables.add_array(
+                    dim_name,
+                    size=group._N,
+                    dimensions=get_dimensions(meter),
+                    dtype=float,
+                    constant=True,
+                    scalar=False,
+                )
+            else:
+                raise NotImplementedError(
+                    "Coordinate assignment only implemented for brian2.Group objects"
+                )

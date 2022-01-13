@@ -16,11 +16,12 @@ from cleosim.base import Recorder
 class Signal(ABC):
     name: str
     brian_objects: set
-    electrode_group: ElectrodeGroup = None
+    electrode_group: ElectrodeGroup
 
     def __init__(self, name: str) -> None:
         self.name = name
         self.brian_objects = set()
+        self.electrode_group = None
 
     def init_for_electrode_group(self, eg: ElectrodeGroup):
         if self.electrode_group is not None and self.electrode_group is not eg:
@@ -45,15 +46,13 @@ class ElectrodeGroup(Recorder):
     signals: list[Signal]
     n: int
 
-    def __init__(self, name: str, coords: npt.ArrayLike, signals: Iterable[Signal] = [], unit=mm):
+    def __init__(self, name: str, coords: Quantity, signals: Iterable[Signal] = []):
         super().__init__(name)
-        if type(coords) is not np.ndarray:
-            coords = np.array(coords)
-        self.coords = coords.reshape((-1, 3)) * unit
+        self.coords = coords.reshape((-1, 3))
         if len(self.coords.shape) != 2 or self.coords.shape[1] != 3:
             raise ValueError(
-                "coords must be an n by 3 array with x, y, and z coordinates"
-                "for n contact locations."
+                "coords must be an n by 3 array (with unit) with x, y, and z"
+                "coordinates for n contact locations."
             )
         self.n = len(self.coords)
         self.signals = []
@@ -102,10 +101,10 @@ class ElectrodeGroup(Recorder):
 
 
 def get_1D_probe_coords(
-    length: float * Unit,
+    length: Quantity,
     channel_count: int,
-    base_location: Tuple[float, float, float] * Unit = (0, 0, 0) * mm,
-    direction: Tuple[float, float, float] * Unit = (0, 0, 1),
+    base_location: Tuple[Quantity, Quantity, Quantity] = (0, 0, 0) * mm,
+    direction: Tuple[float, float, float] = (0, 0, 1),
 ) -> npt.NDArray:
     dir_uvec = direction / np.linalg.norm(direction)
     tip_location = base_location + length * dir_uvec

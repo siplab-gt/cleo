@@ -18,7 +18,7 @@ class Spiking(Signal):
     t_ms: npt.NDArray
     i: npt.NDArray[np.uint]
     t_samp_ms: Quantity
-    monitors: list[SpikeMonitor]
+    _monitors: list[SpikeMonitor]
     _mon_spikes_already_seen: list[int]
     _dtct_prob_array: npt.NDArray
     i_eg_by_i_ng: bidict
@@ -40,7 +40,7 @@ class Spiking(Signal):
             self.t_ms = np.array([], dtype=float)
             self.i = np.array([], dtype=np.uint)
             self.t_samp_ms = np.array([], dtype=float)
-        self.monitors = []
+        self._monitors = []
         self._mon_spikes_already_seen = []
         self._dtct_prob_array = None
         self.i_eg_by_i_ng = bidict()
@@ -66,7 +66,7 @@ class Spiking(Signal):
         if len(i_ng_to_keep) > 0:
             # create monitor
             mon = SpikeMonitor(neuron_group)
-            self.monitors.append(mon)
+            self._monitors.append(mon)
             self.brian_objects.add(mon)
             self._mon_spikes_already_seen.append(0)
 
@@ -104,8 +104,8 @@ class Spiking(Signal):
     def _get_new_spikes(self) -> Tuple[npt.NDArray, npt.NDarray]:
         i_eg = np.array([], dtype=np.uint)
         t_ms = np.array([], dtype=float)
-        for j in range(len(self.monitors)):
-            mon = self.monitors[j]
+        for j in range(len(self._monitors)):
+            mon = self._monitors[j]
             spikes_already_seen = self._mon_spikes_already_seen[j]
             i_ng = mon.i[spikes_already_seen:]  # can contain spikes we don't care about
             i_eg = np.concatenate((i_eg, self._i_ng_to_i_eg(i_ng, mon)))

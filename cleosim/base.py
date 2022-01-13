@@ -1,5 +1,6 @@
 """Contains class definitions for essential, base classes."""
 
+from __future__ import annotations
 from abc import ABC, abstractmethod
 
 from brian2 import (
@@ -16,6 +17,9 @@ from matplotlib import pyplot as plt
 
 class InterfaceDevice(ABC):
     """Base class for devices to be injected into the network."""
+    name: str
+    brian_objects: set
+    sim: CLSimulator
 
     def __init__(self, name):
         self.name = name
@@ -42,6 +46,8 @@ class InterfaceDevice(ABC):
 
 
 class ProcessingLoop(ABC):
+    sampling_period_ms: float
+
     """Abstract class for implementing signal processing and control.
 
     This must be implemented by the user with their desired closed-loop
@@ -130,12 +136,16 @@ class Stimulator(InterfaceDevice):
 
 class CLSimulator:
     """Integrates simulation components and runs."""
+    proc_loop: ProcessingLoop
+    network: Network
+    recorders = "set[Recorder]"
+    stimulators = "set[Stimulator]"
+    
 
     def __init__(self, brian_network: Network):
         self.network = brian_network
         self.stimulators = {}
         self.recorders = {}
-        self.controller = None
 
     def _inject_device(self, device: InterfaceDevice, *neuron_groups, **kwparams):
         if len(neuron_groups) == 0:
@@ -152,6 +162,7 @@ class CLSimulator:
                     raise Exception(
                         f"Attempted to connect device {device.name} to neuron group {ng.source.name}, which is not part of the simulator's network."
                     )
+            device.sim = self
             device.connect_to_neuron_group(ng, **kwparams)
         for brian_object in device.brian_objects:
             self.network.add(brian_object)

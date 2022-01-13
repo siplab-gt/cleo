@@ -35,6 +35,7 @@ setup(
         "nptyping",
         "numpy",
         "scipy",
+        "tklfp>=0.1.0",
     ],
     extras_require={"docs": ["sphinx>=4.0"]},
     setup_requires=["pytest-runner"],

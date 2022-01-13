@@ -11,16 +11,16 @@ from cleosim.ephys import ElectrodeGroup, get_1D_probe_coords, Signal
 
 
 def test_ElectrodeGroup():
-    eg = ElectrodeGroup("eg", [0, 0, 0])
+    eg = ElectrodeGroup("eg", [0, 0, 0]*mm)
     assert eg.n == 1
-    eg = ElectrodeGroup("eg", [[0, 0, 0], [1, 1, 1]])
+    eg = ElectrodeGroup("eg", [[0, 0, 0], [1, 1, 1]]*mm)
     assert eg.n == 2
     with pytest.raises(ValueError):
-        ElectrodeGroup("eg", [0, 0])
+        ElectrodeGroup("eg", [0, 0]*mm)
     with pytest.raises(ValueError):
-        ElectrodeGroup("eg", [0, 0, 0, 0])
+        ElectrodeGroup("eg", [0, 0, 0, 0]*mm)
     with pytest.raises(ValueError):
-        ElectrodeGroup("eg", [[0, 0], [1, 1], [2, 2], [3, 3]])
+        ElectrodeGroup("eg", [[0, 0], [1, 1], [2, 2], [3, 3]]*mm)
 
 
 def test_electrode_injection():
@@ -37,7 +37,7 @@ def test_electrode_injection():
 
     dumb = DummySignal("dumb")
     dumber = DummySignal("dumber")
-    eg = ElectrodeGroup("eg", [0, 0, 0], signals=[dumb])
+    eg = ElectrodeGroup("eg", [0, 0, 0]*mm, signals=[dumb])
     eg.add_signal(dumber)
     sim.inject_recorder(eg, ng)
 
@@ -48,7 +48,7 @@ def test_electrode_injection():
 
     with pytest.raises(ValueError):
         # cannot use same signal object for two electrodes
-        ElectrodeGroup("eg2", [0, 0, 0], signals=[dumb])
+        ElectrodeGroup("eg2", [0, 0, 0]*mm, signals=[dumb])
 
 
 def test_probe_coords():
