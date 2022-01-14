@@ -11,6 +11,8 @@ from cleosim.ephys.electrodes import Signal, ElectrodeGroup
 
 class TKLFPSignal(Signal):
     uLFP_threshold_uV: float
+    save_history: bool
+    lfp_uV: np.ndarray
     _elec_coords_mm: np.ndarray
     _tklfps: list[TKLFP]
     _monitors: list[SpikeMonitor]
@@ -18,9 +20,12 @@ class TKLFPSignal(Signal):
     _i_buffers: list[list[np.ndarray]]
     _t_ms_buffers: list[list[np.ndarray]]
 
-    def __init__(self, name: str, uLFP_threshold_uV: float = 1e-3) -> None:
+    def __init__(
+        self, name: str, uLFP_threshold_uV: float = 1e-3, save_history: bool = False
+    ) -> None:
         super().__init__(name)
         self.uLFP_threshold_uV = uLFP_threshold_uV
+        self.save_history = save_history
         self._tklfps = []
         self._monitors = []
         self._mon_spikes_already_seen = []
@@ -34,6 +39,8 @@ class TKLFPSignal(Signal):
         # need to invert z coords since cleosim uses an inverted z axis and
         # tklfp does not
         self.elec_coords_mm[:, 2] *= -1
+        if self.save_history:
+            self.lfp_uV = np.empty((0, self.electrode_group.n))
 
     def connect_to_neuron_group(self, neuron_group: NeuronGroup, **kwparams):
         # prep tklfp object
@@ -72,7 +79,10 @@ class TKLFPSignal(Signal):
         for i_mon in range(len(self._monitors)):
             self._update_spike_buffer(i_mon)
             tot_tklfp += self._tklfp_for_monitor(i_mon, now_ms)
-        return tot_tklfp.reshape((-1,))  # return 1D array (vector)
+        out = tot_tklfp.reshape((-1,))  # return 1D array (vector)
+        if self.save_history:
+            self.lfp_uV = np.vstack([self.lfp_uV, out])
+        return out
 
     def _update_spike_buffer(self, i_mon):
         mon = self._monitors[i_mon]

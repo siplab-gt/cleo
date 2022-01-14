@@ -174,3 +174,12 @@ class LatencyProcessingLoop(ProcessingLoop):
             {'stim_name`: `ctrl_signal`} dictionary and output time in milliseconds.
         """
         pass
+
+
+class RecordOnlyProcessor(LatencyProcessingLoop):
+    """Take samples without performing any control"""
+    def __init__(self, sampling_period_ms, **kwargs):
+        super().__init__(sampling_period_ms, **kwargs)
+
+    def compute_ctrl_signal(self, state_dict: dict, sample_time_ms: float) -> Tuple[dict, float]:
+        return ({}, sample_time_ms)
