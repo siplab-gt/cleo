@@ -56,12 +56,12 @@ class ElectrodeGroup(Recorder):
             )
         self.n = len(self.coords)
         self.signals = []
-        for signal in signals:
-            self.add_signal(signal)
+        self.add_signals(*signals)
 
-    def add_signal(self, signal: Signal):
-        signal.init_for_electrode_group(self)
-        self.signals.append(signal)
+    def add_signals(self, *signals: Signal):
+        for signal in signals:
+            signal.init_for_electrode_group(self)
+            self.signals.append(signal)
 
     def connect_to_neuron_group(self, neuron_group: NeuronGroup, **kwparams):
         for signal in self.signals:

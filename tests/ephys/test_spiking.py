@@ -38,7 +38,7 @@ def test_MUS_multiple_contacts():
         half_detection_radius=0.75 * mm,
         save_history=True,
     )
-    eg = ElectrodeGroup("eg", [[0, 0, 0.25], [0, 0, 0.75]], [mus])
+    eg = ElectrodeGroup("eg", [[0, 0, 0.25], [0, 0, 0.75]] * mm, [mus])
     sim.inject_recorder(eg, sgg)
 
     # remember i here is channel, no longer neuron
@@ -95,7 +95,7 @@ def test_MUS_multiple_groups():
         half_detection_radius=0.2 * mm,
         save_history=True,
     )
-    eg = ElectrodeGroup("eg", [[0, 0, 0], [0, 0, 0.1]], [mus])
+    eg = ElectrodeGroup("eg", [[0, 0, 0], [0, 0, 0.1]] * mm, [mus])
     sim.inject_recorder(eg, sgg1, sgg2, sgg3)
 
     sim.run(10 * ms)
@@ -129,7 +129,7 @@ def test_SortedSpiking():
         half_detection_radius=0.75 * mm,
         save_history=True,
     )
-    eg = ElectrodeGroup("eg", [[0, 0, 0.25], [0, 0, 0.75], [0, 0, 10]], [ss])
+    eg = ElectrodeGroup("eg", [[0, 0, 0.25], [0, 0, 0.75], [0, 0, 10]] * mm, [ss])
     # injecting sgg0 before sgg1 needed to predict i_eg
     sim.inject_recorder(eg, sgg0, sgg1)
 

@@ -38,7 +38,7 @@ def test_electrode_injection():
     dumb = DummySignal("dumb")
     dumber = DummySignal("dumber")
     eg = ElectrodeGroup("eg", [0, 0, 0]*mm, signals=[dumb])
-    eg.add_signal(dumber)
+    eg.add_signals(dumber)
     sim.inject_recorder(eg, ng)
 
     assert dumb.brian_objects.issubset(sim.network.objects)
