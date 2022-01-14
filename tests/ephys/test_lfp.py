@@ -1,11 +1,8 @@
 """Tests for ephys.lfp module"""
 import pytest
-from brian2 import mm, Hz, ms, prefs, meter
-from brian2.core.network import Network
+from brian2 import mm, Hz, ms, prefs, Network, seed
 import numpy as np
-from brian2.groups.neurongroup import NeuronGroup
 from brian2.input.poissongroup import PoissonGroup
-from brian2.input.spikegeneratorgroup import SpikeGeneratorGroup
 
 import cleosim
 from cleosim.base import CLSimulator
@@ -15,49 +12,50 @@ from cleosim.ephys import ElectrodeGroup
 from cleosim.coordinates import assign_coords_rand_rect_prism
 
 
-def inh():
-    ipg = PoissonGroup(20, np.linspace(100, 500, 20) * Hz)
-    assign_coords_rand_rect_prism(ipg, (-0.2, 0.2), (-2, 0.2), (0.75, 0.85))
-    return ipg, "inh"
+def _groups_types_ei(n_e, n_i):
+    generators = []
+    if n_e > 0:
 
+        def gen():
+            epg = PoissonGroup(n_e, np.linspace(100, 500, n_e) * Hz)
+            assign_coords_rand_rect_prism(epg, (-0.2, 0.2), (-2, 0.05), (0.75, 0.85))
+            # out.append((ipg, "exc"))
+            return (epg, "exc")
 
-def exc():
-    epg = PoissonGroup(80, np.linspace(100, 500, 80) * Hz)
-    assign_coords_rand_rect_prism(epg, (-0.2, 0.2), (-2, 0.2), (0.75, 0.85))
-    return epg, "exc"
+        generators.append(gen)
+    if n_i > 0:
 
+        def gen():
+            ipg = PoissonGroup(n_i, np.linspace(100, 500, n_i) * Hz)
+            assign_coords_rand_rect_prism(ipg, (-0.2, 0.2), (-2, 0.05), (0.75, 0.85))
+            # out.append((ipg, "inh"))
+            return (ipg, "inh")
 
-def low_exc():
-    epg = PoissonGroup(60, np.linspace(100, 500, 60) * Hz)
-    assign_coords_rand_rect_prism(epg, (-0.2, 0.2), (-2, 0.2), (0.75, 0.85))
-    return epg, "exc"
-
-
-def high_exc():
-    epg = PoissonGroup(800, np.linspace(100, 500, 800) * Hz)
-    assign_coords_rand_rect_prism(epg, (-0.2, 0.2), (-2, 0.2), (0.75, 0.85))
-    return epg, "exc"
+        generators.append(gen)
+    return generators
 
 
 @pytest.mark.parametrize(
     "groups_and_types,signal_positive",
     [
-        ([inh], [1, 0, 1, 0]),
-        ([exc], [0, 1, 1, 0]),
-        # I thought inhibition should be able to overcome excitation on
-        # the second position (.4 mm), since the I/E amp is 5 but E only 
-        # outnumbers I 4:1. Excitation wins though, I assume because
-        # of the larger spread of the E uLFP kernel.
-        ([exc, inh], [0, 1, 1, 0]),
-        # so lower excitation should let I dominate at .4 um but E at .8 (1st pos)
-        ([low_exc, inh], [0, 0, 1, 0]),
-        ([high_exc, inh], [0, 1, 1, 0]),
+        # sig_pos is for .8, .4, 0, -.4 mm with respect to the neuron
+        # or 0, .4, .8, 1.2 mm in cleosim depth coordinates
+        (_groups_types_ei(0, 100), [1, 0, 1, 0]),
+        (_groups_types_ei(100, 0), [0, 1, 1, 0]),
+        # lower excitation should let I dominate
+        (_groups_types_ei(20, 80), [1, 0, 1, 0]),
+        # higher excitation should let E dominate
+        (_groups_types_ei(200, 20), [0, 1, 1, 0]),
+        # we won't test a normal E-I balance: too unpredictable
     ],
-    ids=("inh", "exc", "tot", "tot_low_exc", "tot_high_exc"),
+    ids=("inh", "exc", "tot_low_exc", "tot_high_exc"),
 )
-def test_TKLFPSignal(groups_and_types, signal_positive):
+def test_TKLFPSignal(groups_and_types, signal_positive, rand_seed):
+    """Can run multiple times with different seeds from command line
+    with --seed [num. seeds]"""
     prefs.codegen.target = "numpy"
-    np.random.seed(1945)
+    np.random.seed(rand_seed)
+    seed(rand_seed)
     # since parametrize passes function, not return value
     groups_and_types = [gt() for gt in groups_and_types]
     net = Network(*[gt[0] for gt in groups_and_types])
@@ -73,7 +71,7 @@ def test_TKLFPSignal(groups_and_types, signal_positive):
         # meaning a depth of .8mm
         (
             get_1D_probe_coords(1.2 * mm, 4, (0, 0, 0) * mm) / mm,
-            get_1D_probe_coords(1.2 * mm, 4, (0.3, 0.3, 0) * mm) / mm,
+            get_1D_probe_coords(1.2 * mm, 4, (0.2, 0.2, 0) * mm) / mm,
         )
     )
     # need to strip and reattach units since concatenate isn't unit-safe
@@ -89,14 +87,15 @@ def test_TKLFPSignal(groups_and_types, signal_positive):
     with pytest.raises(Exception):
         sim.inject_recorder(eg, group, tklfp_type="inh")
 
-    sim.run(20 * ms)
+    sim.run(30 * ms)
 
-    y = tklfp.get_state()
+    lfp = tklfp.get_state()
     # signal should be stronger in closer probe (first 4 contacts)
-    assert all(np.abs(y[:4]) >= np.abs(y[4:]))
+    assert all(np.abs(lfp[:4]) >= np.abs(lfp[4:]))
+    # sign should be same in both probes
+    assert all((lfp[:4] > 0) == (lfp[4:] > 0))
 
     # check signal is positive or negative as expected
-    print(y)
-    assert np.all((y[:4] > 0) == signal_positive)
+    assert np.all((lfp[:4] > 0) == signal_positive)
     # for second probe as well:
-    assert np.all((y[4:] > 0) == signal_positive)
+    assert np.all((lfp[4:] > 0) == signal_positive)
