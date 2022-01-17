@@ -1,7 +1,7 @@
 """Tests for ephys.spiking module"""
 import numpy as np
 
-from brian2 import SpikeGeneratorGroup, ms, mm, Network, prefs
+from brian2 import SpikeGeneratorGroup, ms, mm, Network
 from cleosim import CLSimulator
 from cleosim.ephys import *
 
@@ -22,7 +22,6 @@ def _spike_generator_group(z_coords_mm, indices=None, times_ms=None, **kwparams)
 
 def test_MUS_multiple_contacts():
     np.random.seed(1830)
-    prefs.codegen.target = "numpy"
     # raster of test spikes: each character is 1-ms bin
     # | || |  <- neuron 0, 0mm     contact at .25mm
     #    |||  <- neuron 1, 0.5mm   contact at .75mm
@@ -82,7 +81,6 @@ def test_MUS_multiple_contacts():
 
 def test_MUS_multiple_groups():
     np.random.seed(1836)
-    prefs.codegen.target = "numpy"
     sgg1 = _spike_generator_group((0, 0.1, 9000), period=1 * ms)  # i_eg = 4, 5
     sgg2 = _spike_generator_group((0.19, 0.2), period=0.5 * ms)  # i_eg = 6, 7
     # too far away to record at all:
@@ -108,7 +106,6 @@ def test_MUS_multiple_groups():
 
 def test_SortedSpiking():
     np.random.seed(1918)
-    prefs.codegen.target = "numpy"
     # sgg0 neurons at i_eg 0 and 1 are in range, but have no spikes
     sgg0 = _spike_generator_group((0.1, 777, 0.3), indices=[], times_ms=[])
     # raster of test spikes: each character is 1-ms bin

@@ -1,13 +1,11 @@
 """Tests for opto module"""
 
 import pytest
-from brian2 import NeuronGroup, Network, mV, prefs, pamp
+from brian2 import NeuronGroup, Network, mV, pamp
 from brian2.core.base import BrianObjectException
 
-prefs.codegen.target = "numpy"  # to avoid cython overhead for short tests
 
 from cleosim import CLSimulator
-# from cleosim.opto import *
 from cleosim.opto import *
 from cleosim.coordinates import assign_coords_grid_rect_prism
 

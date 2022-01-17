@@ -1,6 +1,6 @@
 """Tests for ephys.lfp module"""
 import pytest
-from brian2 import mm, Hz, ms, prefs, Network, seed
+from brian2 import mm, Hz, ms, Network, seed
 import numpy as np
 from brian2.input.poissongroup import PoissonGroup
 
@@ -53,7 +53,6 @@ def _groups_types_ei(n_e, n_i):
 def test_TKLFPSignal(groups_and_types, signal_positive, rand_seed):
     """Can run multiple times with different seeds from command line
     with --seed [num. seeds]"""
-    prefs.codegen.target = "numpy"
     np.random.seed(rand_seed)
     seed(rand_seed)
     # since parametrize passes function, not return value
