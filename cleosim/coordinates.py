@@ -100,7 +100,7 @@ def plot_neuron_positions(
     xlim=None,
     ylim=None,
     zlim=None,
-    color=None,
+    colors: Iterable = None,
     axis_scale_unit=mm,
     devices_to_plot: Iterable[InterfaceDevice] = [],
     invert_z=True,
@@ -119,11 +119,13 @@ def plot_neuron_positions(
 
     fig = plt.figure()
     ax = fig.add_subplot(111, projection="3d")
-    for ng in neuron_groups:
+    assert colors is None or len(colors) == len(neuron_groups)
+    for i in range(len(neuron_groups)):
+        ng = neuron_groups[i]
         args = [ng.x / axis_scale_unit, ng.y / axis_scale_unit, ng.z / axis_scale_unit]
         kwargs = {"label": ng.name, "alpha": 0.3}
-        if color is not None:
-            kwargs["color"] = color
+        if colors is not None:
+            kwargs["color"] = colors[i]
         ax.scatter(*args, **kwargs)
         ax.set_xlabel(f"x ({axis_scale_unit._dispname})")
         ax.set_ylabel(f"y ({axis_scale_unit._dispname})")
