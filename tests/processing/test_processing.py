@@ -115,6 +115,7 @@ def test_LatencyProcessingLoop_wait_parallel():
     outputs = [None, None, 42, None, None, None, 67.2]  # input + measurement_time
     _test_LatencyProcessingLoop(myDCL, t, sampling, inputs, outputs)
 
+
 class SampleCounter(LatencyProcessingLoop):
     """Just count samples"""
     def __init__(self, sampling_period_ms, **kwargs):
