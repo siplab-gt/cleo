@@ -7,7 +7,7 @@ from brian2 import NeuronGroup, Quantity, SpikeMonitor, meter, ms
 import numpy as np
 import numpy.typing as npt
 
-from cleosim.ephys import Signal
+from cleosim.electrodes import Signal
 
 
 class Spiking(Signal):
@@ -90,9 +90,10 @@ class Spiking(Signal):
         # solving for p(a) = 1 and p(b) = .5 yields:
         c = 2 * a - b
         h = b - a
-        decaying_p = h / (r - c)
+        with np.errstate(divide='ignore'):
+            decaying_p = h / (r - c)
+        decaying_p[decaying_p == np.inf] = 1  # to fix NaNs caused by /0
         p = 1 * (r <= a) + decaying_p * (r > a)
-        p[r == 0] = 1  # to fix NaNs caused by /0
         return p
 
     def _i_ng_to_i_eg(self, i_ng, monitor):

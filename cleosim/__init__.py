@@ -1,5 +1,5 @@
 # auto-import submodules
-import cleosim.ephys
+import cleosim.electrodes
 import cleosim.opto
 import cleosim.coordinates
 import cleosim.stimulators

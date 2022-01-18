@@ -1,11 +1,23 @@
 from collections.abc import MutableMapping
 
+from scipy import linalg
+import numpy as np
+
 from brian2 import second
 from brian2.groups.group import get_dtype
 from brian2.equations.equations import (Equations, DIFFERENTIAL_EQUATION,
                                         SUBEXPRESSION, PARAMETER,
                                         check_subexpressions,
                                         extract_constant_subexpressions)
+
+def get_orth_vectors_for_v(v):
+    v = v.reshape((3, 1)) 
+    q, r = linalg.qr(
+        np.hstack([v, v, v])
+    )  # get two vectors orthogonal to v from QR decomp
+    w1 = np.reshape(q[:, 1], (1, 3))
+    w2 = np.reshape(q[:, 2], (1, 3))
+    return w1, w2
 
 def modify_model_with_eqs(neuron_group, eqs_to_add):
     '''

@@ -11,7 +11,7 @@ import numpy as np
 
 from cleosim.base import InterfaceDevice
 
-from .utilities import modify_model_with_eqs
+from .utilities import get_orth_vectors_for_v, modify_model_with_eqs
 
 
 def assign_coords_grid_rect_prism(
@@ -72,13 +72,8 @@ def assign_coords_rand_cylinder(neuron_group, xyz_start, xyz_end, radius, unit=m
     c = np.reshape(
         (xyz_end - xyz_start) / cyl_length, (-1, 1)
     )  # unit vector in direction of cylinder
-    from scipy import linalg
 
-    q, r = linalg.qr(
-        np.hstack([c, c, c])
-    )  # get two vectors orthogonal to c from QR decomp
-    r1 = np.reshape(q[:, 1], (1, 3))
-    r2 = np.reshape(q[:, 2], (1, 3))
+    r1, r2 = get_orth_vectors_for_v(c)
 
     def r_unit_vecs(thetas):
         r1s = np.repeat(r1, len(thetas), 0)

@@ -6,7 +6,7 @@ from brian2.monitors.spikemonitor import SpikeMonitor
 import numpy as np
 from tklfp import TKLFP
 
-from cleosim.ephys.electrodes import Signal, ElectrodeGroup
+from cleosim.electrodes.probes import Signal, ElectrodeGroup
 
 
 class TKLFPSignal(Signal):

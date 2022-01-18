@@ -6,10 +6,9 @@ from brian2.input.poissongroup import PoissonGroup
 
 import cleosim
 from cleosim.base import CLSimulator
-from cleosim.ephys.electrodes import get_1D_probe_coords
-from cleosim.ephys.lfp import TKLFPSignal
-from cleosim.ephys import ElectrodeGroup
+from cleosim.electrodes import linear_shank_coords, TKLFPSignal, ElectrodeGroup
 from cleosim.coordinates import assign_coords_rand_rect_prism
+from cleosim.electrodes.probes import concat_coords
 
 
 def _groups_types_ei(n_e, n_i):
@@ -64,17 +63,13 @@ def test_TKLFPSignal(groups_and_types, signal_positive, rand_seed):
     # One probe in middle and another further out.
     # Here we put coords for two probes in one EG.
     # Alternatively you could create two separate EGs
-    contact_coords = np.concatenate(
+    contact_coords = concat_coords(
         # In the paper, z=0 corresponds to stratum pyramidale.
         # Here, z=0 is the surface and str pyr is at z=.8mm,
         # meaning a depth of .8mm
-        (
-            get_1D_probe_coords(1.2 * mm, 4, (0, 0, 0) * mm) / mm,
-            get_1D_probe_coords(1.2 * mm, 4, (0.2, 0.2, 0) * mm) / mm,
-        )
+        linear_shank_coords(1.2 * mm, 4, (0, 0, 0) * mm),
+        linear_shank_coords(1.2 * mm, 4, (0.2, 0.2, 0) * mm),
     )
-    # need to strip and reattach units since concatenate isn't unit-safe
-    contact_coords = contact_coords * mm
     eg = ElectrodeGroup("eg", contact_coords, signals=[tklfp])
     for group, tklfp_type in groups_and_types:
         sim.inject_recorder(eg, group, tklfp_type=tklfp_type, sampling_period_ms=1)

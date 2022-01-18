@@ -3,7 +3,7 @@ import numpy as np
 
 from brian2 import SpikeGeneratorGroup, ms, mm, Network
 from cleosim import CLSimulator
-from cleosim.ephys import *
+from cleosim.electrodes import *
 
 
 def _spike_generator_group(z_coords_mm, indices=None, times_ms=None, **kwparams):
