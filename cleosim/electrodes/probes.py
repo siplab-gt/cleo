@@ -102,7 +102,7 @@ class ElectrodeGroup(Recorder):
         return self.coords[:, 2]
 
 
-def concat_coords(*coords):
+def concat_coords(*coords: Quantity):
     out = np.vstack([c / mm for c in coords])
     return out * mm
 
@@ -187,3 +187,12 @@ def poly3_shank_coords(
     side2 = side - orth_uvec * intercol_space
     out = concat_coords(middle, side1, side2)
     return out[out[:, 2].argsort()]  # sort to return superficial -> deep
+
+
+def tile_coords(coords: Quantity, num_tiles: int, tile_vector: Quantity):
+    num_coords = coords.shape[0]
+    # num_tiles X 3
+    offsets = np.linspace((0, 0, 0) * mm, tile_vector, num_tiles)
+    # num_coords X num_tiles X 3
+    out = np.tile(coords[:, np.newaxis, :], (1, num_tiles, 1)) + offsets
+    return out.reshape((num_coords * num_tiles, 3), order="F")

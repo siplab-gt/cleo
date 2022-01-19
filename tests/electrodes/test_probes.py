@@ -9,9 +9,11 @@ import cleosim
 from cleosim import CLSimulator
 from cleosim.electrodes import ElectrodeGroup, linear_shank_coords, Signal
 from cleosim.electrodes.probes import (
+    concat_coords,
     poly2_shank_coords,
     poly3_shank_coords,
     tetrode_shank_coords,
+    tile_coords,
 )
 
 
@@ -154,3 +156,38 @@ def test_poly3_shank_coords():
     )
     # no matching rows between them
     assert not np.any(np.all(coords == coords2, axis=1))
+
+
+def test_concat_tile_coords():
+    poly2 = poly2_shank_coords(0.5 * mm, 16, 50 * umeter)
+    # tiling 3 shanks over .4 mm creates a .2 mm intershank distance
+    multi_poly2 = tile_coords(poly2, 3, (0.4, 0, 0) * mm)
+    assert multi_poly2.shape == (48, 3)
+    # 3 shanks should have same coords except for in X
+    assert np.all(np.equal(multi_poly2[:16, 1:], multi_poly2[16:32, 1:]))
+    assert np.all(np.equal(multi_poly2[:16, 1:], multi_poly2[32:, 1:]))
+
+    # create a tetrode multi-shank probe further out at X=.6mm
+    tetr = tetrode_shank_coords(0.5 * mm, 3, (0.6, 0, 0) * mm)
+    multi_tetr = tile_coords(tetr, 3, (0.4, 0, 0) * mm)
+    # similar coordinate checks:
+    assert multi_tetr.shape == (36, 3)
+    assert np.all(np.equal(multi_tetr[:12, 1:], multi_tetr[12:24, 1:]))
+    assert np.all(np.equal(multi_tetr[:12, 1:], multi_tetr[24:, 1:]))
+
+    # now combine and repeat along Y axis for a 3D "matrix array"
+    multi_hybrid = concat_coords(multi_poly2, multi_tetr)
+    n_hybr = 48 + 36
+    assert multi_hybrid.shape == (n_hybr, 3)
+    matrix_array = tile_coords(multi_hybrid, 4, (0, 1, 0) * mm)
+    assert matrix_array.shape == (n_hybr * 4, 3)
+    # check for matching z axis between different rows of shanks
+    for i_row in range(2):
+        i_coord1 = i_row * n_hybr
+        i_coord2 = (i_row + 1) * n_hybr
+        i_coord3 = (i_row + 2) * n_hybr
+        assert np.all(
+            np.equal(
+                matrix_array[i_coord1:i_coord2, 2], matrix_array[i_coord2:i_coord3, 2]
+            )
+        )
