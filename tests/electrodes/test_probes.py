@@ -1,9 +1,9 @@
 """Tests for electrodes module"""
 from typing import Tuple, Any
 
-import numpy as np
+# import numpy as np
 import pytest
-from brian2 import NeuronGroup, mm, Network, StateMonitor, umeter
+from brian2 import NeuronGroup, mm, Network, StateMonitor, umeter, np
 
 import cleosim
 from cleosim import CLSimulator
@@ -65,18 +65,18 @@ def _dist(c1, c2):
 
 def test_linear_shank_coords():
     coords = linear_shank_coords(
-        base_location=(0, 0, 0.1) * mm,
+        start_location=(0, 0, 0.1) * mm,
         direction=(0, 0, 0.01),
-        recording_length=1 * mm,
+        array_length=1 * mm,
         channel_count=32,
     )
     assert coords.shape == (32, 3)
     assert _dist(coords[0], coords[-1]) == 1 * mm
 
     coords2 = linear_shank_coords(
-        base_location=(1, 1, 0.1) * mm,
+        start_location=(1, 1, 0.1) * mm,
         direction=(0, 0, 0.01),
-        recording_length=1 * mm,
+        array_length=1 * mm,
         channel_count=32,
     )
     # no matching rows between them
@@ -84,23 +84,26 @@ def test_linear_shank_coords():
 
 
 def test_tetrode_shank_coords():
+    tetr_width = 30*umeter  # default is 25 um
     coords = tetrode_shank_coords(
-        base_location=(0, 0, 0.1) * mm,
+        start_location=(0, 0, 0.1) * mm,
         direction=(0, 0, 0.01),
-        recording_length=1.5 * mm,
+        array_length=1.5 * mm,
         tetrode_count=5,
+        tetrode_width=tetr_width,
     )
     assert coords.shape == (20, 3)
     # check length (length + tiny bit for contacts above and below tetrode centers)
-    assert _dist(coords[0], coords[-1]) == 1.5 * mm + 25 * umeter * np.sqrt(2)
+    assert _dist(coords[0], coords[-1]) == 1.5 * mm + tetr_width * np.sqrt(2)
     # check contact spacing (tetrode width)
-    assert _dist(coords[0], coords[1]) == 25 * umeter
+    assert np.allclose(_dist(coords[0], coords[1])/umeter, tetr_width/umeter)
 
     coords2 = tetrode_shank_coords(
-        base_location=(1, 1, 0.1) * mm,
+        start_location=(1, 1, 0.1) * mm,
         direction=(0, 0, 0.01),
-        recording_length=1.5 * mm,
+        array_length=1.5 * mm,
         tetrode_count=5,
+        tetrode_width=tetr_width,
     )
     # no matching rows between them
     assert not np.any(np.all(coords == coords2, axis=1))
@@ -108,9 +111,9 @@ def test_tetrode_shank_coords():
 
 def test_poly2_shank_coords():
     coords = poly2_shank_coords(
-        base_location=(0, 0, 0.1) * mm,
+        start_location=(0, 0, 0.1) * mm,
         direction=(0, 0, 0.01),
-        recording_length=3 * mm,
+        array_length=3 * mm,
         channel_count=32,
         intercol_space=50 * umeter,
     )
@@ -121,9 +124,9 @@ def test_poly2_shank_coords():
     assert _dist(coords[0, :2], coords[1, :2]) == 50 * umeter
 
     coords2 = poly2_shank_coords(
-        base_location=(0, 0, 0.1) * mm,
+        start_location=(0, 0, 0.1) * mm,
         direction=(0, 0, 0.01),
-        recording_length=3 * mm,
+        array_length=3 * mm,
         channel_count=32,
         intercol_space=51 * umeter,  # <- only difference
     )
@@ -133,9 +136,9 @@ def test_poly2_shank_coords():
 
 def test_poly3_shank_coords():
     coords = poly3_shank_coords(
-        base_location=(0, 0, 0.1) * mm,
+        start_location=(0, 0, 0.1) * mm,
         direction=(0, 0, 0.01),
-        recording_length=0.55 * mm,
+        array_length=0.55 * mm,
         channel_count=32,
         intercol_space=50 * umeter,
     )
@@ -148,9 +151,9 @@ def test_poly3_shank_coords():
     assert _dist(coords[0, :2], coords[2, :2]) == 50 * umeter
 
     coords2 = poly2_shank_coords(
-        base_location=(0, 0, 0.1) * mm,
+        start_location=(0, 0, 0.1) * mm,
         direction=(0, 0, 0.01),
-        recording_length=0.55 * mm,
+        array_length=0.55 * mm,
         channel_count=32,
         intercol_space=51 * umeter,  # <- only difference
     )

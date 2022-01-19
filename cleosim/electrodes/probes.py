@@ -108,48 +108,48 @@ def concat_coords(*coords: Quantity):
 
 
 def linear_shank_coords(
-    recording_length: Quantity,
+    array_length: Quantity,
     channel_count: int,
-    base_location: Quantity = (0, 0, 0) * mm,
+    start_location: Quantity = (0, 0, 0) * mm,
     direction: Tuple[float, float, float] = (0, 0, 1),
 ) -> npt.NDArray:
     dir_uvec = direction / np.linalg.norm(direction)
-    tip_location = base_location + recording_length * dir_uvec
-    return np.linspace(base_location, tip_location, channel_count)
+    end_location = start_location + array_length * dir_uvec
+    return np.linspace(start_location, end_location, channel_count)
 
 
 def tetrode_shank_coords(
-    recording_length: Quantity,
+    array_length: Quantity,
     tetrode_count: int,
-    base_location: Quantity = (0, 0, 0) * mm,
+    start_location: Quantity = (0, 0, 0) * mm,
     direction: Tuple[float, float, float] = (0, 0, 1),
     tetrode_width: Quantity = 25 * umeter,
 ) -> npt.NDArray:
     dir_uvec = direction / np.linalg.norm(direction)
-    tip_location = base_location + recording_length * dir_uvec
-    center_locs = np.linspace(base_location, tip_location, tetrode_count)
+    end_location = start_location + array_length * dir_uvec
+    center_locs = np.linspace(start_location, end_location, tetrode_count)
     # need to add coords around the center locations
     # tetrode_width is the length of one side of the square, so the diagonals
     # are measured in width/sqrt(2)
-    #    x      -dir*25um/sqrt(2)
-    # x  .  x   +/- orth*25um/sqrt(2)
-    #    x      +dir*25um/sqrt(2)
+    #    x      -dir*width/sqrt(2)
+    # x  .  x   +/- orth*width/sqrt(2)
+    #    x      +dir*width/sqrt(2)
     orth_uvec, _ = get_orth_vectors_for_v(dir_uvec)
-    return np.repeat(center_locs, 4, axis=0) + 25 * umeter / np.sqrt(2) * np.tile(
+    return np.repeat(center_locs, 4, axis=0) + tetrode_width / np.sqrt(2) * np.tile(
         np.vstack([-dir_uvec, -orth_uvec, orth_uvec, dir_uvec]), (tetrode_count, 1)
     )
 
 
 def poly2_shank_coords(
-    recording_length: Quantity,
+    array_length: Quantity,
     channel_count: int,
     intercol_space: Quantity,
-    base_location: Quantity = (0, 0, 0) * mm,
+    start_location: Quantity = (0, 0, 0) * mm,
     direction: Tuple[float, float, float] = (0, 0, 1),
 ) -> npt.NDArray:
     dir_uvec = direction / np.linalg.norm(direction)
-    tip_location = base_location + recording_length * dir_uvec
-    out = np.linspace(base_location, tip_location, channel_count)
+    end_location = start_location + array_length * dir_uvec
+    out = np.linspace(start_location, end_location, channel_count)
     orth_uvec, _ = get_orth_vectors_for_v(dir_uvec)
     # place contacts on alternating sides of the central axis
     even_channels = np.arange(channel_count) % 2 == 0
@@ -159,23 +159,23 @@ def poly2_shank_coords(
 
 
 def poly3_shank_coords(
-    recording_length: Quantity,
+    array_length: Quantity,
     channel_count: int,
     intercol_space: Quantity,
-    base_location: Quantity = (0, 0, 0) * mm,
+    start_location: Quantity = (0, 0, 0) * mm,
     direction: Tuple[float, float, float] = (0, 0, 1),
 ) -> npt.NDArray:
     # makes middle column longer if not even. Nothing fancier.
     # length measures middle column
     dir_uvec = direction / np.linalg.norm(direction)
-    tip_location = base_location + recording_length * dir_uvec
-    center_loc = base_location + recording_length * dir_uvec / 2
+    end_location = start_location + array_length * dir_uvec
+    center_loc = start_location + array_length * dir_uvec / 2
     n_middle = channel_count // 3 + channel_count % 3
     n_side = int((channel_count - n_middle) / 2)
 
-    middle = np.linspace(base_location, tip_location, n_middle)
+    middle = np.linspace(start_location, end_location, n_middle)
 
-    spacing = recording_length / n_middle
+    spacing = array_length / n_middle
     side_length = n_side * spacing
     orth_uvec, _ = get_orth_vectors_for_v(dir_uvec)
     side = np.linspace(
