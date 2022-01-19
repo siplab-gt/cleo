@@ -21,7 +21,7 @@ class Spiking(Signal):
     _monitors: list[SpikeMonitor]
     _mon_spikes_already_seen: list[int]
     _dtct_prob_array: npt.NDArray
-    i_eg_by_i_ng: bidict
+    i_probe_by_i_ng: bidict
 
     def __init__(
         self,
@@ -43,19 +43,19 @@ class Spiking(Signal):
         self._monitors = []
         self._mon_spikes_already_seen = []
         self._dtct_prob_array = None
-        self.i_eg_by_i_ng = bidict()
+        self.i_probe_by_i_ng = bidict()
 
     def connect_to_neuron_group(self, neuron_group: NeuronGroup, **kwparams):
         super().connect_to_neuron_group(neuron_group, **kwparams)
         # n_neurons X n_channels X 3
-        dist2 = np.zeros((len(neuron_group), self.electrode_group.n))
+        dist2 = np.zeros((len(neuron_group), self.probe.n))
         for dim in ["x", "y", "z"]:
-            dim_ng, dim_eg = np.meshgrid(
+            dim_ng, dim_probe = np.meshgrid(
                 getattr(neuron_group, dim),
-                getattr(self.electrode_group, f"{dim}s"),
+                getattr(self.probe, f"{dim}s"),
                 indexing="ij",
             )
-            dist2 += (dim_ng - dim_eg) ** 2
+            dist2 += (dim_ng - dim_probe) ** 2
         distances = np.sqrt(dist2) * meter  # since units stripped
         # probs is n_neurons by n_channels
         probs = self._detection_prob_for_distance(distances)
@@ -71,12 +71,12 @@ class Spiking(Signal):
             self._mon_spikes_already_seen.append(0)
 
             # update bidict from electrode group index to (neuron group, index)
-            i_eg_start = len(self.i_eg_by_i_ng)
-            new_i_eg = range(i_eg_start, i_eg_start + len(i_ng_to_keep))
-            self.i_eg_by_i_ng.update(
+            i_probe_start = len(self.i_probe_by_i_ng)
+            new_i_probe = range(i_probe_start, i_probe_start + len(i_ng_to_keep))
+            self.i_probe_by_i_ng.update(
                 {
-                    (neuron_group, i_ng): i_eg
-                    for i_eg, i_ng in zip(new_i_eg, i_ng_to_keep)
+                    (neuron_group, i_ng): i_probe
+                    for i_probe, i_ng in zip(new_i_probe, i_ng_to_keep)
                 }
             )
 
@@ -90,31 +90,31 @@ class Spiking(Signal):
         # solving for p(a) = 1 and p(b) = .5 yields:
         c = 2 * a - b
         h = b - a
-        with np.errstate(divide='ignore'):
+        with np.errstate(divide="ignore"):
             decaying_p = h / (r - c)
         decaying_p[decaying_p == np.inf] = 1  # to fix NaNs caused by /0
         p = 1 * (r <= a) + decaying_p * (r > a)
         return p
 
-    def _i_ng_to_i_eg(self, i_ng, monitor):
+    def _i_ng_to_i_probe(self, i_ng, monitor):
         ng = monitor.source
         # assign value of -1 to neurons we aren't recording to filter out
-        i_eg_unfilt = np.array([self.i_eg_by_i_ng.get((ng, k), -1) for k in i_ng])
-        return i_eg_unfilt[i_eg_unfilt != -1].astype(np.uint)
+        i_probe_unfilt = np.array([self.i_probe_by_i_ng.get((ng, k), -1) for k in i_ng])
+        return i_probe_unfilt[i_probe_unfilt != -1].astype(np.uint)
 
     def _get_new_spikes(self) -> Tuple[npt.NDArray, npt.NDarray]:
-        i_eg = np.array([], dtype=np.uint)
+        i_probe = np.array([], dtype=np.uint)
         t_ms = np.array([], dtype=float)
         for j in range(len(self._monitors)):
             mon = self._monitors[j]
             spikes_already_seen = self._mon_spikes_already_seen[j]
             i_ng = mon.i[spikes_already_seen:]  # can contain spikes we don't care about
-            i_eg = np.concatenate((i_eg, self._i_ng_to_i_eg(i_ng, mon)))
+            i_probe = np.concatenate((i_probe, self._i_ng_to_i_probe(i_ng, mon)))
             # get all time in terms of ms
             t_ms = np.concatenate((t_ms, mon.t[spikes_already_seen:] / ms))
             self._mon_spikes_already_seen[j] = mon.num_spikes
 
-        return (i_eg, t_ms)
+        return (i_probe, t_ms)
 
     def _get_neuron_per_channel_probs(self, ng) -> npt.NDArray:
         pass
@@ -135,17 +135,17 @@ class MultiUnitSpiking(Spiking):
     def get_state(
         self,
     ) -> tuple[npt.NDArray[np.uint], npt.NDArray, npt.NDArray[np.uint]]:
-        i_eg, t_ms = self._get_new_spikes()
-        i_c, t_ms, y = self._noisily_detect_spikes_per_channel(i_eg, t_ms)
+        i_probe, t_ms = self._get_new_spikes()
+        i_c, t_ms, y = self._noisily_detect_spikes_per_channel(i_probe, t_ms)
         if self.save_history:
             self.i = np.concatenate((self.i, i_c))
             self.t_ms = np.concatenate((self.t_ms, t_ms))
         return (i_c, t_ms, y)
 
     def _noisily_detect_spikes_per_channel(
-        self, i_eg, t
+        self, i_probe, t
     ) -> Tuple[npt.NDArray, npt.NDArray, npt.NDArray]:
-        probs_for_spikes = self._dtct_prob_array[i_eg]
+        probs_for_spikes = self._dtct_prob_array[i_probe]
         detected_spikes = np.random.random(probs_for_spikes.shape) < probs_for_spikes
         y = np.sum(detected_spikes, axis=0)
         # ⬇ nonzero gives row, column indices of each nonzero element
@@ -178,19 +178,19 @@ class SortedSpiking(Spiking):
     def get_state(
         self,
     ) -> tuple[npt.NDArray[np.uint], npt.NDArray, npt.NDArray[np.uint]]:
-        i_eg, t_ms = self._get_new_spikes()
-        i_eg, t_ms = self._noisily_detect_spikes(i_eg, t_ms)
-        y = np.zeros(len(self.i_eg_by_i_ng), dtype=bool)
-        y[i_eg] = 1
+        i_probe, t_ms = self._get_new_spikes()
+        i_probe, t_ms = self._noisily_detect_spikes(i_probe, t_ms)
+        y = np.zeros(len(self.i_probe_by_i_ng), dtype=bool)
+        y[i_probe] = 1
         if self.save_history:
-            self.i = np.concatenate((self.i, i_eg))
+            self.i = np.concatenate((self.i, i_probe))
             self.t_ms = np.concatenate((self.t_ms, t_ms))
-        return (i_eg, t_ms, y)
+        return (i_probe, t_ms, y)
 
-    def _noisily_detect_spikes(self, i_eg, t) -> Tuple[npt.NDArray, npt.NDArray]:
-        probs_for_spikes = self._dtct_prob_array[i_eg]
+    def _noisily_detect_spikes(self, i_probe, t) -> Tuple[npt.NDArray, npt.NDArray]:
+        probs_for_spikes = self._dtct_prob_array[i_probe]
         detected_spikes = np.random.random(probs_for_spikes.shape) < probs_for_spikes
         i_spike_detected = detected_spikes.nonzero()
-        i_eg_out = i_eg[i_spike_detected]
+        i_probe_out = i_probe[i_spike_detected]
         t_out = t[i_spike_detected]
-        return i_eg_out, t_out
+        return i_probe_out, t_out

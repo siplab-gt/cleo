@@ -6,9 +6,8 @@ from brian2.input.poissongroup import PoissonGroup
 
 import cleosim
 from cleosim.base import CLSimulator
-from cleosim.electrodes import linear_shank_coords, TKLFPSignal, ElectrodeGroup
+from cleosim.electrodes import linear_shank_coords,concat_coords, TKLFPSignal, Probe
 from cleosim.coordinates import assign_coords_rand_rect_prism
-from cleosim.electrodes.probes import concat_coords
 
 
 def _groups_types_ei(n_e, n_i):
@@ -70,16 +69,16 @@ def test_TKLFPSignal(groups_and_types, signal_positive, rand_seed):
         linear_shank_coords(1.2 * mm, 4, (0, 0, 0) * mm),
         linear_shank_coords(1.2 * mm, 4, (0.2, 0.2, 0) * mm),
     )
-    eg = ElectrodeGroup("eg", contact_coords, signals=[tklfp])
+    probe = Probe("probe", contact_coords, signals=[tklfp])
     for group, tklfp_type in groups_and_types:
-        sim.inject_recorder(eg, group, tklfp_type=tklfp_type, sampling_period_ms=1)
+        sim.inject_recorder(probe, group, tklfp_type=tklfp_type, sampling_period_ms=1)
 
     # doesn't specify tklfp_type:
     with pytest.raises(Exception):
-        sim.inject_recorder(eg, group, sampling_period_ms=1)
+        sim.inject_recorder(probe, group, sampling_period_ms=1)
     # doesn't specify sampling period:
     with pytest.raises(Exception):
-        sim.inject_recorder(eg, group, tklfp_type="inh")
+        sim.inject_recorder(probe, group, tklfp_type="inh")
 
     sim.run(30 * ms)
 

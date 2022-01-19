@@ -7,8 +7,10 @@ from brian2 import NeuronGroup, mm, Network, StateMonitor, umeter, np
 
 import cleosim
 from cleosim import CLSimulator
-from cleosim.electrodes import ElectrodeGroup, linear_shank_coords, Signal
 from cleosim.electrodes.probes import (
+    Probe,
+    linear_shank_coords,
+    Signal,
     concat_coords,
     poly2_shank_coords,
     poly3_shank_coords,
@@ -17,17 +19,17 @@ from cleosim.electrodes.probes import (
 )
 
 
-def test_ElectrodeGroup():
-    eg = ElectrodeGroup("eg", [0, 0, 0] * mm)
-    assert eg.n == 1
-    eg = ElectrodeGroup("eg", [[0, 0, 0], [1, 1, 1]] * mm)
-    assert eg.n == 2
+def test_Probe():
+    probe = Probe("probe", [0, 0, 0] * mm)
+    assert probe.n == 1
+    probe = Probe("probe", [[0, 0, 0], [1, 1, 1]] * mm)
+    assert probe.n == 2
     with pytest.raises(ValueError):
-        ElectrodeGroup("eg", [0, 0] * mm)
+        Probe("probe", [0, 0] * mm)
     with pytest.raises(ValueError):
-        ElectrodeGroup("eg", [0, 0, 0, 0] * mm)
+        Probe("probe", [0, 0, 0, 0] * mm)
     with pytest.raises(ValueError):
-        ElectrodeGroup("eg", [[0, 0], [1, 1], [2, 2], [3, 3]] * mm)
+        Probe("probe", [[0, 0], [1, 1], [2, 2], [3, 3]] * mm)
 
 
 def test_electrode_injection():
@@ -44,18 +46,18 @@ def test_electrode_injection():
 
     dumb = DummySignal("dumb")
     dumber = DummySignal("dumber")
-    eg = ElectrodeGroup("eg", [0, 0, 0] * mm, signals=[dumb])
-    eg.add_signals(dumber)
-    sim.inject_recorder(eg, ng)
+    probe = Probe("probe", [0, 0, 0] * mm, signals=[dumb])
+    probe.add_signals(dumber)
+    sim.inject_recorder(probe, ng)
 
     assert dumb.brian_objects.issubset(sim.network.objects)
     assert dumber.brian_objects.issubset(sim.network.objects)
-    assert sim.get_state()["eg"]["dumb"] == ng.name
-    assert sim.get_state()["eg"]["dumber"] == ng.name
+    assert sim.get_state()["probe"]["dumb"] == ng.name
+    assert sim.get_state()["probe"]["dumber"] == ng.name
 
     with pytest.raises(ValueError):
         # cannot use same signal object for two electrodes
-        ElectrodeGroup("eg2", [0, 0, 0] * mm, signals=[dumb])
+        Probe("probe2", [0, 0, 0] * mm, signals=[dumb])
 
 
 def _dist(c1, c2):

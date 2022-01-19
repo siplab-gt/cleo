@@ -37,8 +37,8 @@ def test_MUS_multiple_contacts():
         half_detection_radius=0.75 * mm,
         save_history=True,
     )
-    eg = ElectrodeGroup("eg", [[0, 0, 0.25], [0, 0, 0.75]] * mm, [mus])
-    sim.inject_recorder(eg, sgg)
+    probe = Probe("probe", [[0, 0, 0.25], [0, 0, 0.75]] * mm, [mus])
+    sim.inject_recorder(probe, sgg)
 
     # remember i here is channel, no longer neuron
     i, t, y = mus.get_state()
@@ -66,7 +66,7 @@ def test_MUS_multiple_contacts():
     # skip to 6 ms
     sim.run(2 * ms)
     # sim.get_state() nested dict is what will be passed to processing loop
-    i, t, y = sim.get_state()["eg"]["mus"]
+    i, t, y = sim.get_state()["probe"]["mus"]
     assert (0 in i) and (1 in i) and len(i) >= 7
     assert all(t_i in t.round(2) for t_i in [4.1, 4.9, 5.1, 5.3, 5.5])
 
@@ -81,8 +81,8 @@ def test_MUS_multiple_contacts():
 
 def test_MUS_multiple_groups():
     np.random.seed(1836)
-    sgg1 = _spike_generator_group((0, 0.1, 9000), period=1 * ms)  # i_eg = 4, 5
-    sgg2 = _spike_generator_group((0.19, 0.2), period=0.5 * ms)  # i_eg = 6, 7
+    sgg1 = _spike_generator_group((0, 0.1, 9000), period=1 * ms)  # i_probe = 4, 5
+    sgg2 = _spike_generator_group((0.19, 0.2), period=0.5 * ms)  # i_probe = 6, 7
     # too far away to record at all:
     sgg3 = _spike_generator_group((9000,), period=1 * ms)
     net = Network(sgg1, sgg2, sgg3)
@@ -93,8 +93,8 @@ def test_MUS_multiple_groups():
         half_detection_radius=0.2 * mm,
         save_history=True,
     )
-    eg = ElectrodeGroup("eg", [[0, 0, 0], [0, 0, 0.1]] * mm, [mus])
-    sim.inject_recorder(eg, sgg1, sgg2, sgg3)
+    probe = Probe("probe", [[0, 0, 0], [0, 0, 0.1]] * mm, [mus])
+    sim.inject_recorder(probe, sgg1, sgg2, sgg3)
 
     sim.run(10 * ms)
     i, t, y = mus.get_state()
@@ -126,12 +126,12 @@ def test_SortedSpiking():
         half_detection_radius=0.75 * mm,
         save_history=True,
     )
-    eg = ElectrodeGroup("eg", [[0, 0, 0.25], [0, 0, 0.75], [0, 0, 10]] * mm, [ss])
+    probe = Probe("probe", [[0, 0, 0.25], [0, 0, 0.75], [0, 0, 10]] * mm, [ss])
     # injecting sgg0 before sgg1 needed to predict i_eg
-    sim.inject_recorder(eg, sgg0, sgg1)
+    sim.inject_recorder(probe, sgg0, sgg1)
 
     sim.run(3 * ms)  # 3 ms
-    i, t, y = sim.get_state()["eg"]["ss"]
+    i, t, y = sim.get_state()["probe"]["ss"]
     assert all(i == [2, 2])
 
     sim.run(1 * ms)  # 4 ms

@@ -6,7 +6,7 @@ from brian2.monitors.spikemonitor import SpikeMonitor
 import numpy as np
 from tklfp import TKLFP
 
-from cleosim.electrodes.probes import Signal, ElectrodeGroup
+from cleosim.electrodes.probes import Signal, Probe
 
 
 class TKLFPSignal(Signal):
@@ -33,14 +33,14 @@ class TKLFPSignal(Signal):
         self._t_ms_buffers = []
         self._buffer_positions = []
 
-    def init_for_electrode_group(self, eg: ElectrodeGroup):
-        super().init_for_electrode_group(eg)
-        self.elec_coords_mm = eg.coords / mm
+    def init_for_electrode_group(self, probe: Probe):
+        super().init_for_electrode_group(probe)
+        self._elec_coords_mm = probe.coords / mm
         # need to invert z coords since cleosim uses an inverted z axis and
         # tklfp does not
-        self.elec_coords_mm[:, 2] *= -1
+        self._elec_coords_mm[:, 2] *= -1
         if self.save_history:
-            self.lfp_uV = np.empty((0, self.electrode_group.n))
+            self.lfp_uV = np.empty((0, self.probe.n))
 
     def connect_to_neuron_group(self, neuron_group: NeuronGroup, **kwparams):
         # prep tklfp object
@@ -56,7 +56,7 @@ class TKLFPSignal(Signal):
             neuron_group.y / mm,
             -neuron_group.z / mm,  # invert neuron zs as well
             is_excitatory=tklfp_type == "exc",
-            elec_coords_mm=self.elec_coords_mm,
+            elec_coords_mm=self._elec_coords_mm,
         )
         self._tklfps.append(tklfp)
 
@@ -74,7 +74,7 @@ class TKLFPSignal(Signal):
 
     def get_state(self) -> np.ndarray:
         tot_tklfp = 0
-        now_ms = self.electrode_group.sim.network.t / ms
+        now_ms = self.probe.sim.network.t / ms
         # loop over neuron groups (monitors, tklfps)
         for i_mon in range(len(self._monitors)):
             self._update_spike_buffer(i_mon)
@@ -109,13 +109,13 @@ class TKLFPSignal(Signal):
         if sampling_period_ms is None:
             try:
                 sampling_period_ms = (
-                    self.electrode_group.sim.proc_loop.sampling_period_ms
+                    self.probe.sim.proc_loop.sampling_period_ms
                 )
             except AttributeError:  # probably means sim doesn't have proc_loop
                 raise Exception(
                     "TKLFP needs to know the sampling period. Either set the simulator's "
-                    f"processing loop before injecting {self.electrode_group.name} or "
-                    f"specify it on injection: .inject_recorder({self.electrode_group.name} "
+                    f"processing loop before injecting {self.probe.name} or "
+                    f"specify it on injection: .inject_recorder({self.probe.name} "
                     ", tklfp_type=..., sampling_period_ms=...)"
                 )
         return np.ceil(

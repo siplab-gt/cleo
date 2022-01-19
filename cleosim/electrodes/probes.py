@@ -18,21 +18,21 @@ from cleosim.utilities import get_orth_vectors_for_v
 class Signal(ABC):
     name: str
     brian_objects: set
-    electrode_group: ElectrodeGroup
+    probe: Probe
 
     def __init__(self, name: str) -> None:
         self.name = name
         self.brian_objects = set()
-        self.electrode_group = None
+        self.probe = None
 
-    def init_for_electrode_group(self, eg: ElectrodeGroup):
-        if self.electrode_group is not None and self.electrode_group is not eg:
+    def init_for_electrode_group(self, eg: Probe):
+        if self.probe is not None and self.probe is not eg:
             raise ValueError(
                 f"Signal {self.name} has already been initialized "
-                f"for ElectrodeGroup {self.electrode_group.name} "
+                f"for ElectrodeGroup {self.probe.name} "
                 f"and cannot be used with another."
             )
-        self.electrode_group = eg
+        self.probe = eg
 
     @abstractmethod
     def connect_to_neuron_group(self, neuron_group: NeuronGroup, **kwparams):
@@ -43,7 +43,7 @@ class Signal(ABC):
         pass
 
 
-class ElectrodeGroup(Recorder):
+class Probe(Recorder):
     coords: Quantity
     signals: list[Signal]
     n: int
