@@ -77,7 +77,7 @@ class Probe(Recorder):
         return state_dict
 
     def add_self_to_plot(self, ax: Axes3D, axis_scale_unit: Unit):
-        ax.scatter(
+        marker = ax.scatter(
             self.xs / axis_scale_unit,
             self.ys / axis_scale_unit,
             self.zs / axis_scale_unit,
@@ -87,7 +87,9 @@ class Probe(Recorder):
             label=self.name,
             depthshade=False,
         )
-        ax.legend()
+        handles = ax.get_legend().legendHandles
+        handles.append(marker)
+        ax.legend(handles=handles)
 
     @property
     def xs(self):

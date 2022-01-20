@@ -17,6 +17,7 @@ from matplotlib import pyplot as plt
 
 class InterfaceDevice(ABC):
     """Base class for devices to be injected into the network."""
+
     name: str
     brian_objects: set
     sim: CLSimulator
@@ -136,16 +137,18 @@ class Stimulator(InterfaceDevice):
 
 class CLSimulator:
     """Integrates simulation components and runs."""
+
     proc_loop: ProcessingLoop
     network: Network
     recorders = "set[Recorder]"
     stimulators = "set[Stimulator]"
-    
+    _processing_net_op: NetworkOperation
 
     def __init__(self, brian_network: Network):
         self.network = brian_network
         self.stimulators = {}
         self.recorders = {}
+        self._processing_net_op = None
 
     def _inject_device(self, device: InterfaceDevice, *neuron_groups, **kwparams):
         if len(neuron_groups) == 0:
@@ -227,6 +230,9 @@ class CLSimulator:
         processing_loop : ProcessingLoop
         """
         self.proc_loop = processing_loop
+        # remove previous NetworkOperation
+        if self._processing_net_op is not None:
+            self.network.remove(self._processing_net_op)
 
         def communicate_with_proc_loop(t):
             if processing_loop.is_sampling_now(t / ms):
@@ -238,9 +244,10 @@ class CLSimulator:
         # decides when to sample and deliver results.
         if communication_period is None:
             communication_period = defaultclock.dt
-        self.network.add(
-            NetworkOperation(communicate_with_proc_loop, dt=communication_period)
+        self._processing_net_op = NetworkOperation(
+            communicate_with_proc_loop, dt=communication_period
         )
+        self.network.add(self._processing_net_op)
 
     def run(self, duration, **kwparams):
         """Run simulation.
