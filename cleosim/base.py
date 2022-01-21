@@ -233,6 +233,10 @@ class CLSimulator:
         # remove previous NetworkOperation
         if self._processing_net_op is not None:
             self.network.remove(self._processing_net_op)
+            self._processing_net_op = None
+        
+        if processing_loop is None:
+            return
 
         def communicate_with_proc_loop(t):
             if processing_loop.is_sampling_now(t / ms):
