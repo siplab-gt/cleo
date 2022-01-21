@@ -4,6 +4,7 @@ import numpy as np
 from brian2 import SpikeGeneratorGroup, ms, mm, Network
 from cleosim import CLSimulator
 from cleosim.electrodes import *
+from cleosim.processing import RecordOnlyProcessor
 
 
 def _spike_generator_group(z_coords_mm, indices=None, times_ms=None, **kwparams):
@@ -104,6 +105,10 @@ def test_MUS_multiple_groups():
     assert np.sum(mus.i == 1) == 60
 
 
+def test_MUS_reset():
+    _test_reset(MultiUnitSpiking)
+
+
 def test_SortedSpiking():
     np.random.seed(1918)
     # sgg0 neurons at i_eg 0 and 1 are in range, but have no spikes
@@ -148,3 +153,30 @@ def test_SortedSpiking():
 
     for i in (0, 1, 4):
         assert not i in ss.i
+
+
+def _test_reset(spike_signal_class):
+    sgg = _spike_generator_group([0], period=1 * ms)
+    net = Network(sgg)
+    sim = CLSimulator(net)
+    spike_signal = spike_signal_class(
+        "spikes",
+        perfect_detection_radius=0.3 * mm,
+        half_detection_radius=0.75 * mm,
+        save_history=True,
+    )
+    probe = Probe("probe", [[0, 0, 0]] * mm, [spike_signal])
+    sim.inject_recorder(probe, sgg)
+    sim.set_processing_loop(RecordOnlyProcessor(sampling_period_ms=1))
+    assert len(spike_signal.i) == 0
+    assert len(spike_signal.t_ms) == 0
+    sim.run(3.1 * ms)
+    assert len(spike_signal.i) == 3
+    assert len(spike_signal.t_ms) == 3
+    sim.reset()
+    assert len(spike_signal.i) == 0
+    assert len(spike_signal.t_ms) == 0
+
+
+def test_SortedSpiking_reset():
+    _test_reset(SortedSpiking)

@@ -27,7 +27,7 @@ neurons2 = neurons
 
 
 @pytest.fixture
-def opto():
+def opto() -> OptogeneticIntervention:
     return OptogeneticIntervention("opto", four_state, ChR2_four_state, default_blue)
 
 
@@ -128,3 +128,26 @@ def test_light_model(opto, neurons):
     )
     opto.connect_to_neuron_group(neurons2)
     assert all(np.greater(opsyn.T, opto.opto_syns[neurons2.name].T))
+
+
+def test_opto_reset(opto, neurons, neurons2):
+    sim = CLSimulator(Network(neurons, neurons2))
+    sim.inject_stimulator(opto, neurons, neurons2)
+    opsyn1 = opto.opto_syns[neurons.name]
+    opsyn2 = opto.opto_syns[neurons2.name]
+
+    init_values = {"Irr0": 0, "C1": 1, "O1": 0, "O2": 0}
+    for opsyn in [opsyn1, opsyn2]:
+        for varname, value in init_values.items():
+            assert np.all(getattr(opsyn, varname) == value)
+
+    opto.update(1)
+    sim.run(5*ms)
+    for opsyn in [opsyn1, opsyn2]:
+        for varname, value in init_values.items():
+            assert not np.all(getattr(opsyn, varname) == value)
+
+    opto.reset()
+    for opsyn in [opsyn1, opsyn2]:
+        for varname, value in init_values.items():
+            assert np.all(getattr(opsyn, varname) == value)

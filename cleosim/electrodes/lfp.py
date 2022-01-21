@@ -84,6 +84,20 @@ class TKLFPSignal(Signal):
             self.lfp_uV = np.vstack([self.lfp_uV, out])
         return out
 
+    def reset(self, **kwargs) -> None:
+        super().reset(**kwargs)
+        for i_mon in range(len(self._monitors)):
+            self._reset_buffer(i_mon)
+        if self.save_history:
+            self.lfp_uV = np.empty((0, self.probe.n))
+
+    def _reset_buffer(self, i_mon):
+        mon = self._monitors[i_mon]
+        buf_len = len(self._i_buffers[i_mon])
+        self._i_buffers[i_mon] = [np.array([], dtype=int, ndmin=1)] * buf_len
+        self._t_ms_buffers[i_mon] = [np.array([], dtype=float, ndmin=1)] * buf_len
+        self._buffer_positions[i_mon] = 0
+
     def _update_spike_buffer(self, i_mon):
         mon = self._monitors[i_mon]
         n_prev = self._mon_spikes_already_seen[i_mon]
@@ -108,9 +122,7 @@ class TKLFPSignal(Signal):
         sampling_period_ms = kwparams.get("sampling_period_ms", None)
         if sampling_period_ms is None:
             try:
-                sampling_period_ms = (
-                    self.probe.sim.proc_loop.sampling_period_ms
-                )
+                sampling_period_ms = self.probe.sim.proc_loop.sampling_period_ms
             except AttributeError:  # probably means sim doesn't have proc_loop
                 raise Exception(
                     "TKLFP needs to know the sampling period. Either set the simulator's "

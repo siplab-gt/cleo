@@ -42,6 +42,9 @@ class Signal(ABC):
     def get_state(self) -> Any:
         pass
 
+    def reset(self, **kwargs) -> None:
+        pass
+
 
 class Probe(Recorder):
     coords: Quantity
@@ -102,6 +105,10 @@ class Probe(Recorder):
     @property
     def zs(self):
         return self.coords[:, 2]
+
+    def reset(self, **kwargs):
+        for signal in self.signals:
+            signal.reset()
 
 
 def concat_coords(*coords: Quantity):

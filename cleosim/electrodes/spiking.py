@@ -116,8 +116,16 @@ class Spiking(Signal):
 
         return (i_probe, t_ms)
 
-    def _get_neuron_per_channel_probs(self, ng) -> npt.NDArray:
-        pass
+    def reset(self, **kwargs):
+        # crucial that this be called after network restore
+        # since that would reset monitors
+        for j in range(len(self._monitors)):
+            mon = self._monitors[j]
+            self._mon_spikes_already_seen[j] = mon.num_spikes
+        if self.save_history:
+            self.t_ms = np.array([], dtype=float)
+            self.i = np.array([], dtype=np.uint)
+            self.t_samp_ms = np.array([], dtype=float)
 
 
 class MultiUnitSpiking(Spiking):

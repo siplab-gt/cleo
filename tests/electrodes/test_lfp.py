@@ -6,7 +6,7 @@ from brian2.input.poissongroup import PoissonGroup
 
 import cleosim
 from cleosim.base import CLSimulator
-from cleosim.electrodes import linear_shank_coords,concat_coords, TKLFPSignal, Probe
+from cleosim.electrodes import linear_shank_coords, concat_coords, TKLFPSignal, Probe
 from cleosim.coordinates import assign_coords_rand_rect_prism
 
 
@@ -58,7 +58,7 @@ def test_TKLFPSignal(groups_and_types, signal_positive, rand_seed):
     net = Network(*[gt[0] for gt in groups_and_types])
     sim = CLSimulator(net)
 
-    tklfp = TKLFPSignal("tklfp")
+    tklfp = TKLFPSignal("tklfp", save_history=True)
     # One probe in middle and another further out.
     # Here we put coords for two probes in one EG.
     # Alternatively you could create two separate EGs
@@ -92,3 +92,11 @@ def test_TKLFPSignal(groups_and_types, signal_positive, rand_seed):
     assert np.all((lfp[:4] > 0) == signal_positive)
     # for second probe as well:
     assert np.all((lfp[4:] > 0) == signal_positive)
+
+    # reset should clear buffer, zeroing out the signal
+    assert tklfp.lfp_uV.shape == (1, 8)
+    sim.reset()
+    assert tklfp.lfp_uV.shape == (0, 8)
+    lfp_reset = tklfp.get_state()
+    assert np.all(lfp_reset == 0)
+    assert tklfp.lfp_uV.shape == (1, 8)

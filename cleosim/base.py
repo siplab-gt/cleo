@@ -103,6 +103,9 @@ class ProcessingLoop(ABC):
         """
         pass
 
+    def reset(self, **kwargs):
+        pass
+
 
 class Recorder(InterfaceDevice):
     """Device for taking measurements of the network."""
@@ -110,6 +113,10 @@ class Recorder(InterfaceDevice):
     @abstractmethod
     def get_state(self):
         """Return current measurement."""
+        pass
+
+    def reset(self, **kwargs):
+        """Reset the recording device to a neutral state"""
         pass
 
 
@@ -134,6 +141,10 @@ class Stimulator(InterfaceDevice):
         """
         self.value = ctrl_signal
 
+    def reset(self, **kwargs):
+        """Reset the stimulator device to a neutral state"""
+        pass
+
 
 class CLSimulator:
     """Integrates simulation components and runs."""
@@ -143,11 +154,13 @@ class CLSimulator:
     recorders = "set[Recorder]"
     stimulators = "set[Stimulator]"
     _processing_net_op: NetworkOperation
+    _net_store_name: str = "cleosim default"
 
     def __init__(self, brian_network: Network):
         self.network = brian_network
         self.stimulators = {}
         self.recorders = {}
+        self.proc_loop = None
         self._processing_net_op = None
 
     def _inject_device(self, device: InterfaceDevice, *neuron_groups, **kwparams):
@@ -169,6 +182,7 @@ class CLSimulator:
             device.connect_to_neuron_group(ng, **kwparams)
         for brian_object in device.brian_objects:
             self.network.add(brian_object)
+        self.network.store(self._net_store_name)
 
     def inject_stimulator(self, stimulator: Stimulator, *neuron_groups, **kwparams):
         """Inject stimulator into given neuron groups.
@@ -234,7 +248,7 @@ class CLSimulator:
         if self._processing_net_op is not None:
             self.network.remove(self._processing_net_op)
             self._processing_net_op = None
-        
+
         if processing_loop is None:
             return
 
@@ -252,6 +266,7 @@ class CLSimulator:
             communicate_with_proc_loop, dt=communication_period
         )
         self.network.add(self._processing_net_op)
+        self.network.store(self._net_store_name)
 
     def run(self, duration, **kwparams):
         """Run simulation.
@@ -266,3 +281,13 @@ class CLSimulator:
         level = kwparams.get("level", 1)
         kwparams["level"] = level
         self.network.run(duration, **kwparams)
+
+    def reset(self, **kwargs):
+        # kwargs passed to stimulators, recorders, and proc_loop reset
+        self.network.restore(self._net_store_name)
+        for stim in self.stimulators.values():
+            stim.reset(**kwargs)
+        for rec in self.recorders.values():
+            rec.reset(**kwargs)
+        if self.proc_loop is not None:
+            self.proc_loop.reset(**kwargs)

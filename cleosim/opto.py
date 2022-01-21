@@ -203,16 +203,17 @@ class OptogeneticIntervention(Stimulator):
             model=modified_opsin_model + light_model,
             namespace=self.opsin_params,
             name=f"synapses_{self.name}_{neuron_group.name}",
-            method='rk2',
+            method="rk2",
         )
-        opto_syn.namespace['Ephoton'] = E_photon
+        opto_syn.namespace["Ephoton"] = E_photon
 
         if p_expression == 1:
             opto_syn.connect(j="i")
         else:
             opto_syn.connect(condition="i==j", p=p_expression)
-        for k, v in {"C1": 1, "O1": 0, "O2": 0}.items():
-            setattr(opto_syn, k, v)
+
+        self._init_opto_syn_vars(opto_syn)
+
         # relative channel density
         opto_syn.rho_rel = kwparams.get("rho_rel", 1)
         # calculate transmittance coefficient for each point
@@ -267,6 +268,14 @@ class OptogeneticIntervention(Stimulator):
             raise ValueError(f"{self.name}: light intensity Irr0 must be nonnegative")
         for opto_syn in self.opto_syns.values():
             opto_syn.Irr0 = Irr0_mW_per_mm2 * mwatt / mm2
+
+    def _init_opto_syn_vars(self, opto_syn):
+        for varname, value in {"Irr0": 0, "C1": 1, "O1": 0, "O2": 0}.items():
+            setattr(opto_syn, varname, value)
+
+    def reset(self, **kwargs):
+        for opto_syn in self.opto_syns.values():
+            self._init_opto_syn_vars(opto_syn)
 
     def _alpha_cmap_for_wavelength(self):
         from matplotlib import colors
