@@ -106,6 +106,7 @@ class LatencyProcessingLoop(ProcessingLoop):
     def __init__(self, sampling_period_ms, **kwargs):
         self.out_buffer = deque([])
         self.sampling_period_ms = sampling_period_ms
+        # TODO: why in kwargs? also, move serial to components
         self.sampling = kwargs.get("sampling", "fixed")
         if self.sampling not in ["fixed", "when idle"]:
             raise ValueError("Invalid sampling scheme:", self.sampling)
@@ -180,8 +181,11 @@ class LatencyProcessingLoop(ProcessingLoop):
 
 class RecordOnlyProcessor(LatencyProcessingLoop):
     """Take samples without performing any control"""
+
     def __init__(self, sampling_period_ms, **kwargs):
         super().__init__(sampling_period_ms, **kwargs)
 
-    def compute_ctrl_signal(self, state_dict: dict, sample_time_ms: float) -> Tuple[dict, float]:
+    def compute_ctrl_signal(
+        self, state_dict: dict, sample_time_ms: float
+    ) -> Tuple[dict, float]:
         return ({}, sample_time_ms)
