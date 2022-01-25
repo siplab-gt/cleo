@@ -48,7 +48,6 @@ setup(
         "flake8-docstrings",
         "flake8-pytest-style",
         "nbmake",
-        "ipykernel",
     ],
     python_requires=">=3.7",
 )
