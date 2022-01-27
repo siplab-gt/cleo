@@ -69,7 +69,7 @@ jobs:
           key: venv-${{ runner.os }}-${{ matrix.python }}-${{ hashFiles('**/poetry.lock') }}
 
       - name: Install via Poetry
-        run: poetry install
+        run: poetry install --no-interaction
 
       - name: Test
         # TODO: add --flake8
