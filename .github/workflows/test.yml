@@ -37,7 +37,7 @@ jobs:
           poetry_cache: ~/.local
         - os: windows-latest
           pip_cache: ~\AppData\Local\pip\Cache
-          poetry_cache: ~/.local
+          poetry_cache: ~/.local  # doesn't seem to work, need a different path
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
