@@ -29,7 +29,6 @@ author = "Kyle Johnsen, Nathan Cruzado"
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 import sphinx_rtd_theme
-import sphinx_copybutton
 
 extensions = [
     "sphinx_rtd_theme",
