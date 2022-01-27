@@ -54,7 +54,7 @@ jobs:
         uses: actions/cache@v2
         with:
           path: ${{ matrix.poetry_cache }}
-          key: poetry-0  # increment to reset cache
+          key: poetry-${{ runner.os }}-${{ matrix.python }}-0  # increment to reset cache
 
       - name: Install Poetry
         uses: snok/install-poetry@v1
