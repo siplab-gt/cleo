@@ -73,4 +73,4 @@ jobs:
 
       - name: Test
         # TODO: add --flake8
-        run: pytest --ignore=examples/adaptive_ctrl_ldsctrlest.ipynb
+        run: poetry run pytest --ignore=examples/adaptive_ctrl_ldsctrlest.ipynb
