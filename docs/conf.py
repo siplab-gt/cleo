@@ -32,6 +32,10 @@ import sphinx_rtd_theme
 
 extensions = [
     "sphinx_rtd_theme",
+    "sphinx.ext.autodoc",
+    "sphinx.ext.autosectionlabel",
+    "sphinx.ext.napoleon",
+    "sphinx.ext.intersphinx",
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -41,6 +45,13 @@ templates_path = ["_templates"]
 # directories to ignore when looking for source files.
 # This pattern also affects html_static_path and html_extra_path.
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
+
+
+# -- Extension settings -------------------------------------------------------
+
+intersphinx_mapping = {"brian2": ("https://brian2.readthedocs.io/en/stable", None)}
+
+autosectionlabel_prefix_document = True
 
 
 # -- Options for HTML output -------------------------------------------------

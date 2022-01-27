@@ -10,6 +10,11 @@ Welcome to cleosim's documentation!
    :maxdepth: 2
    :caption: Contents:
 
+   basics
+   reference
+
+
+Hi. This is some introductory text. Here's a link to :class:`~cleosim.electrodes.TKLFPSignal`
 
 
 Indices and tables
