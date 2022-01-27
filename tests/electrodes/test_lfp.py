@@ -4,8 +4,7 @@ from brian2 import mm, Hz, ms, Network, seed
 import numpy as np
 from brian2.input.poissongroup import PoissonGroup
 
-import cleosim
-from cleosim.base import CLSimulator
+from cleosim import CLSimulator
 from cleosim.electrodes import linear_shank_coords, concat_coords, TKLFPSignal, Probe
 from cleosim.coordinates import assign_coords_rand_rect_prism
 

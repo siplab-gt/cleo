@@ -7,7 +7,7 @@ from brian2 import NeuronGroup, Quantity, SpikeMonitor, meter, ms
 import numpy as np
 import numpy.typing as npt
 
-from cleosim.electrodes import Signal
+from cleosim.electrodes.probes import Signal
 
 
 class Spiking(Signal):

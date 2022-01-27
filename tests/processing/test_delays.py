@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from cleosim.processing.delays import *
+from cleosim.processing import ConstantDelay, GaussianDelay
 
 
 def test_ConstantDelay():

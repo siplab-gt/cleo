@@ -47,14 +47,14 @@ class InterfaceDevice(ABC):
 
 
 class ProcessingLoop(ABC):
-    sampling_period_ms: float
-
     """Abstract class for implementing signal processing and control.
 
     This must be implemented by the user with their desired closed-loop
     use case, though most users will find the :func:`~processing:LatencyProcessingLoop`
     class more useful, since delay handling is already defined.
     """
+
+    sampling_period_ms: float
 
     @abstractmethod
     def is_sampling_now(self, time) -> bool:

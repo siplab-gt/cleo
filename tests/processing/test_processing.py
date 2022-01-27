@@ -3,9 +3,8 @@ from typing import Any, Tuple
 
 from brian2 import Network, PoissonGroup, ms, Hz
 
-from cleosim.base import CLSimulator
-from cleosim.processing import LatencyProcessingLoop, LoopComponent, RecordOnlyProcessor
-from cleosim.processing.delays import ConstantDelay, Delay
+from cleosim import CLSimulator
+from cleosim.processing import LatencyProcessingLoop, LoopComponent, ConstantDelay
 
 
 class MyLoopComponent(LoopComponent):
@@ -118,19 +117,22 @@ def test_LatencyProcessingLoop_wait_parallel():
 
 class SampleCounter(LatencyProcessingLoop):
     """Just count samples"""
+
     def __init__(self, sampling_period_ms, **kwargs):
         super().__init__(sampling_period_ms, **kwargs)
         self.count = 0
 
-    def compute_ctrl_signal(self, state_dict: dict, sample_time_ms: float) -> Tuple[dict, float]:
+    def compute_ctrl_signal(
+        self, state_dict: dict, sample_time_ms: float
+    ) -> Tuple[dict, float]:
         self.count += 1
         return ({}, sample_time_ms)
 
 
 def test_no_skip_sampling():
     sc = SampleCounter(1)
-    net = Network(PoissonGroup(1, 100*Hz))
+    net = Network(PoissonGroup(1, 100 * Hz))
     sim = CLSimulator(net)
     sim.set_processing_loop(sc)
-    sim.run(150*ms)
+    sim.run(150 * ms)
     assert sc.count == 150
