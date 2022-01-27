@@ -50,7 +50,7 @@ class ProcessingLoop(ABC):
     """Abstract class for implementing signal processing and control.
 
     This must be implemented by the user with their desired closed-loop
-    use case, though most users will find the :func:`~processing:LatencyProcessingLoop`
+    use case, though most users will find the :func:`~processing.LatencyProcessingLoop`
     class more useful, since delay handling is already defined.
     """
 
@@ -79,7 +79,7 @@ class ProcessingLoop(ABC):
         ----------
         state_dict : dict
             A dictionary of recorder measurements, as returned by
-            :func:`~base.CLSimulator.get_state()`
+            :func:`~cleosim.CLSimulator.get_state()`
         time : brian2 temporal Unit
             The current simulation timestep. Essential for simulating
             control latency and for time-varying control.

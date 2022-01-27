@@ -1,6 +1,5 @@
 from . import LoopComponent
 from typing import Any, Callable
-from nptyping import NDArray
 
 class Controller(LoopComponent):
     def __init__(self, **kwargs):

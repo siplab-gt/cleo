@@ -60,6 +60,7 @@ ChR2_four_state = {
 }
 
 # from Foutz et al. 2012
+"""from Foutz et al., 2012"""
 default_blue = {
     "R0": 0.1 * mm,  # optical fiber radius
     "NAfib": 0.37,  # optical fiber numerical aperture
