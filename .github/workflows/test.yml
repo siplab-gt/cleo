@@ -51,6 +51,13 @@ jobs:
 
       - name: Install Poetry
         uses: snok/install-poetry@v1
+      
+      - name: Update PATH
+        if: ${{ matrix.os != 'windows-latest' }}
+        run: echo "$HOME/.local/bin" >> $GITHUB_PATH
+      - name: Update Path for Windows
+        if: ${{ matrix.os == 'windows-latest' }}
+        run: echo "$APPDATA\Python\Scripts" >> $GITHUB_PATH
 
       # - name: Cache pip
       #   uses: actions/cache@v2
