@@ -12,5 +12,5 @@ from cleosim.base import (
     Recorder,
     Stimulator,
     InterfaceDevice,
-    ProcessingLoop,
+    IOProcessor,
 )

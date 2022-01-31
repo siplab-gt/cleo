@@ -122,11 +122,11 @@ class TKLFPSignal(Signal):
         sampling_period_ms = kwparams.get("sampling_period_ms", None)
         if sampling_period_ms is None:
             try:
-                sampling_period_ms = self.probe.sim.proc_loop.sampling_period_ms
+                sampling_period_ms = self.probe.sim.io_processor.sampling_period_ms
             except AttributeError:  # probably means sim doesn't have proc_loop
                 raise Exception(
                     "TKLFP needs to know the sampling period. Either set the simulator's "
-                    f"processing loop before injecting {self.probe.name} or "
+                    f"IO processor before injecting {self.probe.name} or "
                     f"specify it on injection: .inject_recorder({self.probe.name} "
                     ", tklfp_type=..., sampling_period_ms=...)"
                 )

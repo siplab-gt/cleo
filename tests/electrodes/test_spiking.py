@@ -66,7 +66,7 @@ def test_MUS_multiple_contacts():
 
     # skip to 6 ms
     sim.run(2 * ms)
-    # sim.get_state() nested dict is what will be passed to processing loop
+    # sim.get_state() nested dict is what will be passed to IO processor
     i, t, y = sim.get_state()["probe"]["mus"]
     assert (0 in i) and (1 in i) and len(i) >= 7
     assert all(t_i in t.round(2) for t_i in [4.1, 4.9, 5.1, 5.3, 5.5])
@@ -167,7 +167,7 @@ def _test_reset(spike_signal_class):
     )
     probe = Probe("probe", [[0, 0, 0]] * mm, [spike_signal])
     sim.inject_recorder(probe, sgg)
-    sim.set_processing_loop(RecordOnlyProcessor(sampling_period_ms=1))
+    sim.set_io_processor(RecordOnlyProcessor(sampling_period_ms=1))
     assert len(spike_signal.i) == 0
     assert len(spike_signal.t_ms) == 0
     sim.run(3.1 * ms)

@@ -5,15 +5,15 @@ from collections import deque
 
 import numpy as np
 
-from cleosim.base import ProcessingLoop
+from cleosim.base import IOProcessor
 from cleosim.processing.delays import Delay
 
 
-class LoopComponent(ABC):
+class ProcessingBlock(ABC):
     """Abstract signal processing stage or control block."""
 
     def __init__(self, **kwargs):
-        """Construct a `LoopComponent` object.
+        """Construct a `ProcessingBlock` object.
 
         It's important to use `super().__init__(kwargs)` in the base class
         to use the parent-class logic here.
@@ -65,14 +65,14 @@ class LoopComponent(ABC):
         """Computes output for given input.
 
         This is where the user will implement the desired functionality
-        of the `LoopComponent` without regard for latency.
+        of the `ProcessingBlock` without regard for latency.
 
         Parameters
         ----------
         input : Any
         **kwargs : optional key-value argument pairs passed from
         :func:`~process()`. Could be used to pass in such values as
-        the processing loop's walltime or the measurement time for time-
+        the IO processor's walltime or the measurement time for time-
         dependent functions.
 
         Returns
@@ -83,9 +83,9 @@ class LoopComponent(ABC):
         pass
 
 
-class LatencyProcessingLoop(ProcessingLoop):
+class LatencyIOProcessor(IOProcessor):
     """
-    The unit for keeping track of time in the processing loop is milliseconds.
+    The unit for keeping track of time in the IO processor is milliseconds.
     To deal in quantities relative to seconds (e.g., defining a target firing
     rate in Hz), the component involved must make the conversion.
 
@@ -178,7 +178,7 @@ class LatencyProcessingLoop(ProcessingLoop):
         pass
 
 
-class RecordOnlyProcessor(LatencyProcessingLoop):
+class RecordOnlyProcessor(LatencyIOProcessor):
     """Take samples without performing any control"""
 
     def __init__(self, sampling_period_ms, **kwargs):

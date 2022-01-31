@@ -1,7 +1,7 @@
-"""Classes and functions for constructing and configuring a :class:`~cleosim.ProcessingLoop`."""
+"""Classes and functions for constructing and configuring a :class:`~cleosim.IOProcessor`."""
 from cleosim.processing.base import (
-    LatencyProcessingLoop,
-    LoopComponent,
+    LatencyIOProcessor,
+    ProcessingBlock,
     RecordOnlyProcessor,
 )
 from cleosim.processing.controllers import Controller, PIController

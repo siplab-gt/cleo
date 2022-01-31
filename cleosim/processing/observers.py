@@ -1,23 +1,23 @@
-from . import LoopComponent
+from . import ProcessingBlock
 import numpy as np
 from typing import Any
 from .delays import Delay
 
 
-class FiringRateEstimator(LoopComponent):
+class FiringRateEstimator(ProcessingBlock):
     """Exponential filter to estimate firing rate.
 
     Requires `sample_time_ms` kwarg when process is called.
 
     Parameters
     ----------
-    LoopComponent : [type]
+    ProcessingBlock : [type]
         [description]
     """
 
     def __init__(self, tau_ms: float, sample_period_ms: float, **kwargs):
         """
-        See `LoopComponent` for `**kwargs` options
+        See `ProcessingBlock` for `**kwargs` options
         """
         super().__init__(**kwargs)
         self.tau_s = tau_ms / 1000

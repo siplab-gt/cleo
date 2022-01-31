@@ -1,9 +1,16 @@
 """Tests for base module"""
 
 import pytest
-from brian2 import NeuronGroup, Network, Synapses, PopulationRateMonitor, ms, BrianObjectException
+from brian2 import (
+    NeuronGroup,
+    Network,
+    Synapses,
+    PopulationRateMonitor,
+    ms,
+    BrianObjectException,
+)
 
-from cleosim import CLSimulator, ProcessingLoop, InterfaceDevice, Recorder, Stimulator
+from cleosim import CLSimulator, IOProcessor, Recorder, Stimulator
 
 
 class MyStim(Stimulator):
@@ -65,7 +72,7 @@ def test_recorder(sim, neurons):
     assert sim.get_state() == {"my_rec": -1}
 
 
-class MyProcLoop(ProcessingLoop):
+class MyProcLoop(IOProcessor):
     def put_state(self, state_dict: dict, time):
         mock_processing = {-1: "expected"}
         self.my_stim_out = mock_processing[state_dict["my_rec"]]
@@ -83,7 +90,7 @@ def test_proc_loop_in_sim(sim, neurons):
     my_stim = MyStim("my_stim", 42)
     sim.inject_stimulator(my_stim, neurons)
 
-    sim.set_processing_loop(MyProcLoop())
+    sim.set_io_processor(MyProcLoop())
     sim.run(0.1 * ms)
     assert my_stim.value == "expected"
 
@@ -92,8 +99,8 @@ def test_namespace_level():
     test_v = -5
     ng = NeuronGroup(1, "v = -70 + test_v: 1")
     sim = CLSimulator(Network(ng))
-    sim.run(0.1*ms)
+    sim.run(0.1 * ms)
     with pytest.raises(BrianObjectException):
-        sim.run(0.1*ms, level=0)
+        sim.run(0.1 * ms, level=0)
     with pytest.raises(BrianObjectException):
-        sim.run(0.1*ms, level=2)
+        sim.run(0.1 * ms, level=2)

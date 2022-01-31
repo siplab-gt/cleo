@@ -46,11 +46,11 @@ class InterfaceDevice(ABC):
         pass
 
 
-class ProcessingLoop(ABC):
+class IOProcessor(ABC):
     """Abstract class for implementing signal processing and control.
 
     This must be implemented by the user with their desired closed-loop
-    use case, though most users will find the :func:`~processing.LatencyProcessingLoop`
+    use case, though most users will find the :func:`~processing.LatencyIOProcessor`
     class more useful, since delay handling is already defined.
     """
 
@@ -58,7 +58,7 @@ class ProcessingLoop(ABC):
 
     @abstractmethod
     def is_sampling_now(self, time) -> bool:
-        """Whether the `ProcessingLoop` will take a sample at this timestep.
+        """Whether the `IOProcessor` will take a sample at this timestep.
 
         Parameters
         ----------
@@ -73,7 +73,7 @@ class ProcessingLoop(ABC):
 
     @abstractmethod
     def put_state(self, state_dict: dict, time):
-        """Deliver network state to the control loop.
+        """Deliver network state to the :class:`IOProcessor`.
 
         Parameters
         ----------
@@ -89,7 +89,7 @@ class ProcessingLoop(ABC):
     # The output should be a dictionary of {stimulator_name: value, ...}
     @abstractmethod
     def get_ctrl_signal(self, time) -> dict:
-        """Get per-stimulator control signal from the control loop.
+        """Get per-stimulator control signal from the :class:`IOProcessor`.
 
         Parameters
         ----------
@@ -149,7 +149,7 @@ class Stimulator(InterfaceDevice):
 class CLSimulator:
     """Integrates simulation components and runs."""
 
-    proc_loop: ProcessingLoop
+    io_processor: IOProcessor
     network: Network
     recorders = "set[Recorder]"
     stimulators = "set[Stimulator]"
@@ -160,7 +160,7 @@ class CLSimulator:
         self.network = brian_network
         self.stimulators = {}
         self.recorders = {}
-        self.proc_loop = None
+        self.io_processor = None
         self._processing_net_op = None
 
     def _inject_device(self, device: InterfaceDevice, *neuron_groups, **kwparams):
@@ -223,7 +223,7 @@ class CLSimulator:
         return state
 
     def update_stimulators(self, ctrl_signals):
-        """Update stimulators with output from control loop.
+        """Update stimulators with output from the :class:`IOProcessor`
 
         Parameters
         ----------
@@ -236,34 +236,34 @@ class CLSimulator:
         for name, signal in ctrl_signals.items():
             self.stimulators[name].update(signal)
 
-    def set_processing_loop(self, processing_loop, communication_period=None):
-        """Set simulator control loop.
+    def set_io_processor(self, io_processor, communication_period=None):
+        """Set simulator IO processor.
 
         Parameters
         ----------
-        processing_loop : ProcessingLoop
+        io_processor : IOProcessor
         """
-        self.proc_loop = processing_loop
+        self.io_processor = io_processor
         # remove previous NetworkOperation
         if self._processing_net_op is not None:
             self.network.remove(self._processing_net_op)
             self._processing_net_op = None
 
-        if processing_loop is None:
+        if io_processor is None:
             return
 
-        def communicate_with_proc_loop(t):
-            if processing_loop.is_sampling_now(t / ms):
-                processing_loop.put_state(self.get_state(), t / ms)
-            ctrl_signal = processing_loop.get_ctrl_signal(t / ms)
+        def communicate_with_io_proc(t):
+            if io_processor.is_sampling_now(t / ms):
+                io_processor.put_state(self.get_state(), t / ms)
+            ctrl_signal = io_processor.get_ctrl_signal(t / ms)
             self.update_stimulators(ctrl_signal)
 
-        # communication should be at every timestep. The ProcessingLoop
+        # communication should be at every timestep. The IOProcessor
         # decides when to sample and deliver results.
         if communication_period is None:
             communication_period = defaultclock.dt
         self._processing_net_op = NetworkOperation(
-            communicate_with_proc_loop, dt=communication_period
+            communicate_with_io_proc, dt=communication_period
         )
         self.network.add(self._processing_net_op)
         self.network.store(self._net_store_name)
@@ -289,5 +289,5 @@ class CLSimulator:
             stim.reset(**kwargs)
         for rec in self.recorders.values():
             rec.reset(**kwargs)
-        if self.proc_loop is not None:
-            self.proc_loop.reset(**kwargs)
+        if self.io_processor is not None:
+            self.io_processor.reset(**kwargs)
