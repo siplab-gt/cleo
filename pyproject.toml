@@ -53,5 +53,5 @@ addopts = [
 ]
 testpaths = [
     "tests",
-    "examples",
+    "docs/tutorials",
 ]
