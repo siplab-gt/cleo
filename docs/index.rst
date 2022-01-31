@@ -11,6 +11,7 @@ Welcome to cleosim's documentation!
    :caption: Contents:
 
    basics
+   tutorials
    reference
 
 

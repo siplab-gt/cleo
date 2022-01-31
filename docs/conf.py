@@ -37,6 +37,7 @@ extensions = [
     "sphinx.ext.napoleon",
     "sphinx.ext.intersphinx",
     "sphinx_copybutton",
+    "myst_nb",
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -54,6 +55,8 @@ intersphinx_mapping = {"brian2": ("https://brian2.readthedocs.io/en/stable", Non
 
 autosectionlabel_prefix_document = True
 
+jupyter_execute_notebooks = "off"
+execution_excludepatterns = ["*ldsctrlest*"]
 
 # -- Options for HTML output -------------------------------------------------
 
