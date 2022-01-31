@@ -1,4 +1,4 @@
-cleosim basics
+Basics
 ==============
 
 section 1
