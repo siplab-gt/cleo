@@ -123,7 +123,7 @@ class TKLFPSignal(Signal):
         if sample_period_ms is None:
             try:
                 sample_period_ms = self.probe.sim.io_processor.sample_period_ms
-            except AttributeError:  # probably means sim doesn't have proc_loop
+            except AttributeError:  # probably means sim doesn't have io_processor
                 raise Exception(
                     "TKLFP needs to know the sampling period. Either set the simulator's "
                     f"IO processor before injecting {self.probe.name} or "

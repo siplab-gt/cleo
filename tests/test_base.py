@@ -84,7 +84,7 @@ class MyProcLoop(IOProcessor):
         return True
 
 
-def test_proc_loop_in_sim(sim, neurons):
+def test_io_processor_in_sim(sim, neurons):
     my_rec = MyRec("my_rec")
     sim.inject_recorder(my_rec, neurons)
     my_stim = MyStim("my_stim", 42)

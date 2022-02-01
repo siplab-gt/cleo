@@ -283,7 +283,7 @@ class CLSimulator:
         self.network.run(duration, **kwparams)
 
     def reset(self, **kwargs):
-        # kwargs passed to stimulators, recorders, and proc_loop reset
+        # kwargs passed to stimulators, recorders, and io_processor reset
         self.network.restore(self._net_store_name)
         for stim in self.stimulators.values():
             stim.reset(**kwargs)
