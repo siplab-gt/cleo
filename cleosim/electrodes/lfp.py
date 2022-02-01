@@ -119,17 +119,17 @@ class TKLFPSignal(Signal):
 
     def _get_buffer_length(self, tklfp, **kwparams):
         # need sampling period
-        sampling_period_ms = kwparams.get("sampling_period_ms", None)
-        if sampling_period_ms is None:
+        sample_period_ms = kwparams.get("sample_period_ms", None)
+        if sample_period_ms is None:
             try:
-                sampling_period_ms = self.probe.sim.io_processor.sampling_period_ms
+                sample_period_ms = self.probe.sim.io_processor.sample_period_ms
             except AttributeError:  # probably means sim doesn't have proc_loop
                 raise Exception(
                     "TKLFP needs to know the sampling period. Either set the simulator's "
                     f"IO processor before injecting {self.probe.name} or "
                     f"specify it on injection: .inject_recorder({self.probe.name} "
-                    ", tklfp_type=..., sampling_period_ms=...)"
+                    ", tklfp_type=..., sample_period_ms=...)"
                 )
         return np.ceil(
-            tklfp.compute_min_window_ms(self.uLFP_threshold_uV) / sampling_period_ms
+            tklfp.compute_min_window_ms(self.uLFP_threshold_uV) / sample_period_ms
         ).astype(int)

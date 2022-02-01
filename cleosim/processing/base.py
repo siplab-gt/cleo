@@ -102,9 +102,9 @@ class LatencyIOProcessor(IOProcessor):
     one sample at a time to process.
     """
 
-    def __init__(self, sampling_period_ms, **kwargs):
+    def __init__(self, sample_period_ms, **kwargs):
         self.out_buffer = deque([])
-        self.sampling_period_ms = sampling_period_ms
+        self.sample_period_ms = sample_period_ms
         # TODO: why in kwargs? also, move serial to components
         self.sampling = kwargs.get("sampling", "fixed")
         if self.sampling not in ["fixed", "when idle"]:
@@ -114,7 +114,7 @@ class LatencyIOProcessor(IOProcessor):
             raise ValueError("Invalid processing scheme:", self.processing)
 
     def put_state(self, state_dict: dict, sample_time_ms):
-        out, out_time_ms = self.compute_ctrl_signal(state_dict, sample_time_ms)
+        out, out_time_ms = self.process(state_dict, sample_time_ms)
         if self.processing == "serial" and len(self.out_buffer) > 0:
             prev_out_time_ms = self.out_buffer[-1][1]
             # add delay onto the output time of the last computation
@@ -137,10 +137,10 @@ class LatencyIOProcessor(IOProcessor):
 
     def is_sampling_now(self, query_time_ms):
         if self.sampling == "fixed":
-            if np.isclose(query_time_ms % self.sampling_period_ms, 0):
+            if np.isclose(query_time_ms % self.sample_period_ms, 0):
                 return True
         elif self.sampling == "when idle":
-            if query_time_ms % self.sampling_period_ms == 0:
+            if query_time_ms % self.sample_period_ms == 0:
                 if self._is_currently_idle(query_time_ms):
                     self._needs_off_schedule_sample = False
                     return True
@@ -156,9 +156,7 @@ class LatencyIOProcessor(IOProcessor):
         return False
 
     @abstractmethod
-    def compute_ctrl_signal(
-        self, state_dict: dict, sample_time_ms: float
-    ) -> Tuple[dict, float]:
+    def process(self, state_dict: dict, sample_time_ms: float) -> Tuple[dict, float]:
         """Process network state to generate output to update stimulators.
 
         This is the function the user must implement to define the signal processing
@@ -181,10 +179,8 @@ class LatencyIOProcessor(IOProcessor):
 class RecordOnlyProcessor(LatencyIOProcessor):
     """Take samples without performing any control"""
 
-    def __init__(self, sampling_period_ms, **kwargs):
-        super().__init__(sampling_period_ms, **kwargs)
+    def __init__(self, sample_period_ms, **kwargs):
+        super().__init__(sample_period_ms, **kwargs)
 
-    def compute_ctrl_signal(
-        self, state_dict: dict, sample_time_ms: float
-    ) -> Tuple[dict, float]:
+    def process(self, state_dict: dict, sample_time_ms: float) -> Tuple[dict, float]:
         return ({}, sample_time_ms)

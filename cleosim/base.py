@@ -54,7 +54,7 @@ class IOProcessor(ABC):
     class more useful, since delay handling is already defined.
     """
 
-    sampling_period_ms: float
+    sample_period_ms: float
 
     @abstractmethod
     def is_sampling_now(self, time) -> bool:

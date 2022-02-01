@@ -48,14 +48,12 @@ def test_ProcessingBlock():
 
 
 class MyLIOP(LatencyIOProcessor):
-    def __init__(self, sampling_period_ms, **kwargs):
-        super().__init__(sampling_period_ms, **kwargs)
+    def __init__(self, sample_period_ms, **kwargs):
+        super().__init__(sample_period_ms, **kwargs)
         self.delay = 1.199
         self.component = MyProcessingBlock(delay=ConstantDelay(self.delay))
 
-    def compute_ctrl_signal(
-        self, state_dict: dict, sample_time_ms: float
-    ) -> Tuple[dict, float]:
+    def process(self, state_dict: dict, sample_time_ms: float) -> Tuple[dict, float]:
         input = state_dict["in"]
         out, out_t = self.component.process(
             input, sample_time_ms, measurement_time=sample_time_ms
@@ -116,13 +114,11 @@ def test_LatencyIOProcessor_wait_parallel():
 class SampleCounter(LatencyIOProcessor):
     """Just count samples"""
 
-    def __init__(self, sampling_period_ms, **kwargs):
-        super().__init__(sampling_period_ms, **kwargs)
+    def __init__(self, sample_period_ms, **kwargs):
+        super().__init__(sample_period_ms, **kwargs)
         self.count = 0
 
-    def compute_ctrl_signal(
-        self, state_dict: dict, sample_time_ms: float
-    ) -> Tuple[dict, float]:
+    def process(self, state_dict: dict, sample_time_ms: float) -> Tuple[dict, float]:
         self.count += 1
         return ({}, sample_time_ms)
 

@@ -70,11 +70,11 @@ def test_TKLFPSignal(groups_and_types, signal_positive, rand_seed):
     )
     probe = Probe("probe", contact_coords, signals=[tklfp])
     for group, tklfp_type in groups_and_types:
-        sim.inject_recorder(probe, group, tklfp_type=tklfp_type, sampling_period_ms=1)
+        sim.inject_recorder(probe, group, tklfp_type=tklfp_type, sample_period_ms=1)
 
     # doesn't specify tklfp_type:
     with pytest.raises(Exception):
-        sim.inject_recorder(probe, group, sampling_period_ms=1)
+        sim.inject_recorder(probe, group, sample_period_ms=1)
     # doesn't specify sampling period:
     with pytest.raises(Exception):
         sim.inject_recorder(probe, group, tklfp_type="inh")

@@ -167,7 +167,7 @@ def _test_reset(spike_signal_class):
     )
     probe = Probe("probe", [[0, 0, 0]] * mm, [spike_signal])
     sim.inject_recorder(probe, sgg)
-    sim.set_io_processor(RecordOnlyProcessor(sampling_period_ms=1))
+    sim.set_io_processor(RecordOnlyProcessor(sample_period_ms=1))
     assert len(spike_signal.i) == 0
     assert len(spike_signal.t_ms) == 0
     sim.run(3.1 * ms)
