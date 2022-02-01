@@ -1,7 +1,7 @@
 """Tests for base module"""
 
 import pytest
-from brian2 import NeuronGroup, Network, Synapses, PopulationRateMonitor, ms, prefs, BrianObjectException
+from brian2 import NeuronGroup, Network, Synapses, PopulationRateMonitor, ms, BrianObjectException
 
 from cleosim import CLSimulator, ProcessingLoop, InterfaceDevice, Recorder, Stimulator
 
@@ -84,7 +84,6 @@ def test_proc_loop_in_sim(sim, neurons):
     sim.inject_stimulator(my_stim, neurons)
 
     sim.set_processing_loop(MyProcLoop())
-    prefs.codegen.target = 'numpy'
     sim.run(0.1 * ms)
     assert my_stim.value == "expected"
 
@@ -93,7 +92,6 @@ def test_namespace_level():
     test_v = -5
     ng = NeuronGroup(1, "v = -70 + test_v: 1")
     sim = CLSimulator(Network(ng))
-    prefs.codegen.target = 'numpy'
     sim.run(0.1*ms)
     with pytest.raises(BrianObjectException):
         sim.run(0.1*ms, level=0)

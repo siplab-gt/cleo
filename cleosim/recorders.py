@@ -1,7 +1,7 @@
 from brian2 import PopulationRateMonitor, StateMonitor, SpikeMonitor
 import numpy as np
 
-from .. import Recorder
+from cleosim.base import Recorder
 
 
 class RateRecorder(Recorder):

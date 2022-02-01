@@ -9,9 +9,7 @@ import numpy as np
 import matplotlib
 
 from cleosim.utilities import wavelength_to_rgb
-
-from . import Stimulator
-from ..utilities import wavelength_to_rgb
+from cleosim.stimulators import Stimulator
 
 
 # from PyRhO: Evans et al. 2016
@@ -256,6 +254,7 @@ class OptogeneticIntervention(Stimulator):
             cmap=self._alpha_cmap_for_wavelength(),
             marker=",",
             edgecolors="none",
+            label=self.name,
         )
         handles = ax.get_legend().legendHandles
         c = wavelength_to_rgb(self.light_model_params["wavelength"] / nmeter)

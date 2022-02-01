@@ -1,10 +1,17 @@
+from __future__ import annotations
 from warnings import warn
 from typing import Tuple
+from collections.abc import Iterable
 
 from brian2 import mm, meter
+from brian2.groups.group import Group
+from brian2.groups.neurongroup import NeuronGroup
+from brian2.units.fundamentalunits import get_dimensions
 import numpy as np
 
-from .utilities import modify_model_with_eqs
+from cleosim.base import InterfaceDevice
+
+from .utilities import get_orth_vectors_for_v, modify_model_with_eqs
 
 
 def assign_coords_grid_rect_prism(
@@ -65,13 +72,8 @@ def assign_coords_rand_cylinder(neuron_group, xyz_start, xyz_end, radius, unit=m
     c = np.reshape(
         (xyz_end - xyz_start) / cyl_length, (-1, 1)
     )  # unit vector in direction of cylinder
-    from scipy import linalg
 
-    q, r = linalg.qr(
-        np.hstack([c, c, c])
-    )  # get two vectors orthogonal to c from QR decomp
-    r1 = np.reshape(q[:, 1], (1, 3))
-    r2 = np.reshape(q[:, 2], (1, 3))
+    r1, r2 = get_orth_vectors_for_v(c)
 
     def r_unit_vecs(thetas):
         r1s = np.repeat(r1, len(thetas), 0)
@@ -93,9 +95,9 @@ def plot_neuron_positions(
     xlim=None,
     ylim=None,
     zlim=None,
-    color=None,
+    colors: Iterable = None,
     axis_scale_unit=mm,
-    opto=None,
+    devices_to_plot: Iterable[InterfaceDevice] = [],
     invert_z=True,
 ):
     try:
@@ -112,22 +114,18 @@ def plot_neuron_positions(
 
     fig = plt.figure()
     ax = fig.add_subplot(111, projection="3d")
-    for ng in neuron_groups:
-        if color is not None:
-            ax.scatter(
-                ng.x / axis_scale_unit,
-                ng.y / axis_scale_unit,
-                ng.z / axis_scale_unit,
-                color=color,
-                label=ng.name,
-            )
-        else:
-            ax.scatter(
-                ng.x / axis_scale_unit, ng.y / axis_scale_unit, ng.z / axis_scale_unit
-            )
+    assert colors is None or len(colors) == len(neuron_groups)
+    for i in range(len(neuron_groups)):
+        ng = neuron_groups[i]
+        args = [ng.x / axis_scale_unit, ng.y / axis_scale_unit, ng.z / axis_scale_unit]
+        kwargs = {"label": ng.name, "alpha": 0.3}
+        if colors is not None:
+            kwargs["color"] = colors[i]
+        ax.scatter(*args, **kwargs)
         ax.set_xlabel(f"x ({axis_scale_unit._dispname})")
         ax.set_ylabel(f"y ({axis_scale_unit._dispname})")
         ax.set_zlabel(f"z ({axis_scale_unit._dispname})")
+
     if xlim is not None:
         ax.set_xlim(xlim)
     if ylim is not None:
@@ -141,15 +139,27 @@ def plot_neuron_positions(
 
     ax.legend()
 
-    if opto is not None:
-        opto.add_self_to_plot(ax, axis_scale_unit)
-
-    # return fig
+    for device in devices_to_plot:
+        device.add_self_to_plot(ax, axis_scale_unit)
 
 
-def _init_variables(neuron_group):
-    for dim in ["x", "y", "z"]:
-        if hasattr(neuron_group, dim):
-            setattr(neuron_group, dim, 0 * mm)
+def _init_variables(group: Group):
+    for dim_name in ["x", "y", "z"]:
+        if hasattr(group, dim_name):
+            setattr(group, dim_name, 0 * mm)
         else:
-            modify_model_with_eqs(neuron_group, f"{dim}: meter")
+            if type(group) == NeuronGroup:
+                modify_model_with_eqs(group, f"{dim_name}: meter")
+            elif issubclass(type(group), Group):
+                group.variables.add_array(
+                    dim_name,
+                    size=group._N,
+                    dimensions=get_dimensions(meter),
+                    dtype=float,
+                    constant=True,
+                    scalar=False,
+                )
+            else:
+                raise NotImplementedError(
+                    "Coordinate assignment only implemented for brian2.Group objects"
+                )

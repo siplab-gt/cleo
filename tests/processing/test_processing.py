@@ -1,7 +1,10 @@
 """Tests for cleosim/processing/__init__.py"""
 from typing import Any, Tuple
 
-from cleosim.processing import LatencyProcessingLoop, LoopComponent
+from brian2 import Network, PoissonGroup, ms, Hz
+
+from cleosim.base import CLSimulator
+from cleosim.processing import LatencyProcessingLoop, LoopComponent, RecordOnlyProcessor
 from cleosim.processing.delays import ConstantDelay, Delay
 
 
@@ -111,3 +114,23 @@ def test_LatencyProcessingLoop_wait_parallel():
     inputs = [42, -1, 66, -1, -1, -1, 1847]
     outputs = [None, None, 42, None, None, None, 67.2]  # input + measurement_time
     _test_LatencyProcessingLoop(myDCL, t, sampling, inputs, outputs)
+
+
+class SampleCounter(LatencyProcessingLoop):
+    """Just count samples"""
+    def __init__(self, sampling_period_ms, **kwargs):
+        super().__init__(sampling_period_ms, **kwargs)
+        self.count = 0
+
+    def compute_ctrl_signal(self, state_dict: dict, sample_time_ms: float) -> Tuple[dict, float]:
+        self.count += 1
+        return ({}, sample_time_ms)
+
+
+def test_no_skip_sampling():
+    sc = SampleCounter(1)
+    net = Network(PoissonGroup(1, 100*Hz))
+    sim = CLSimulator(net)
+    sim.set_processing_loop(sc)
+    sim.run(150*ms)
+    assert sc.count == 150

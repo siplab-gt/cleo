@@ -1,5 +1,7 @@
 .vscode/*
 *.html
+# don't know what program is creating this temp folder
+tmp/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

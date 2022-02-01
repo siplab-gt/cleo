@@ -4,8 +4,10 @@ from abc import ABC, abstractmethod
 from typing import Tuple, Any
 from collections import deque
 
-from .. import ProcessingLoop
-from .delays import Delay
+import numpy as np
+
+from cleosim.base import ProcessingLoop
+from cleosim.processing.delays import Delay
 
 
 class LoopComponent(ABC):
@@ -135,7 +137,7 @@ class LatencyProcessingLoop(ProcessingLoop):
 
     def is_sampling_now(self, query_time_ms):
         if self.sampling == "fixed":
-            if query_time_ms % self.sampling_period_ms == 0:
+            if np.isclose(query_time_ms % self.sampling_period_ms, 0):
                 return True
         elif self.sampling == "when idle":
             if query_time_ms % self.sampling_period_ms == 0:
@@ -174,3 +176,12 @@ class LatencyProcessingLoop(ProcessingLoop):
             {'stim_name`: `ctrl_signal`} dictionary and output time in milliseconds.
         """
         pass
+
+
+class RecordOnlyProcessor(LatencyProcessingLoop):
+    """Take samples without performing any control"""
+    def __init__(self, sampling_period_ms, **kwargs):
+        super().__init__(sampling_period_ms, **kwargs)
+
+    def compute_ctrl_signal(self, state_dict: dict, sample_time_ms: float) -> Tuple[dict, float]:
+        return ({}, sample_time_ms)
