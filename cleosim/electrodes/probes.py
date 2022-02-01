@@ -86,7 +86,7 @@ class Probe(Recorder):
             self.zs / axis_scale_unit,
             marker="x",
             s=40,
-            color="gray",
+            color="xkcd:dark gray",
             label=self.name,
             depthshade=False,
         )
