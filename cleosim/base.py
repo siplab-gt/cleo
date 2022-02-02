@@ -1,7 +1,8 @@
-"""Contains class definitions for essential, base classes."""
+"""Contains definitions for essential, base classes."""
 
 from __future__ import annotations
 from abc import ABC, abstractmethod
+from typing import Any
 
 from brian2 import (
     NeuronGroup,
@@ -11,23 +12,31 @@ from brian2 import (
     defaultclock,
     ms,
     Unit,
+    Quantity,
 )
 from matplotlib import pyplot as plt
 
 
 class InterfaceDevice(ABC):
-    """Base class for devices to be injected into the network."""
+    """Base class for devices to be injected into the network"""
 
     name: str
     brian_objects: set
     sim: CLSimulator
 
-    def __init__(self, name):
+    def __init__(self, name: str) -> None:
+        """Construct an InterfaceDevice
+
+        Parameters
+        ----------
+        name : str
+            Unique identifier for the device.
+        """
         self.name = name
         self.brian_objects = set()
 
     @abstractmethod
-    def connect_to_neuron_group(self, neuron_group: NeuronGroup, **kwparams):
+    def connect_to_neuron_group(self, neuron_group: NeuronGroup, **kwparams) -> None:
         """Connect device to given `neuron_group`.
 
         If your device introduces any objects which Brian must
@@ -42,12 +51,23 @@ class InterfaceDevice(ABC):
         """
         pass
 
-    def add_self_to_plot(self, ax: plt.Axes, axis_scale_unit: Unit):
+    def add_self_to_plot(self, ax: plt.Axes, axis_scale_unit: Unit) -> None:
+        """Add device to an existing plot
+
+        Should only be called by :func:`coordinates.plot_neuron_positions`.
+
+        Parameters
+        ----------
+        ax : plt.Axes
+            The existing matplotlib Axes object
+        axis_scale_unit : Unit
+            The unit used to label axes and define chart limits
+        """
         pass
 
 
 class IOProcessor(ABC):
-    """Abstract class for implementing signal processing and control.
+    """Abstract class for implementing sampling, signal processing and control
 
     This must be implemented by the user with their desired closed-loop
     use case, though most users will find the :func:`~processing.LatencyIOProcessor`
@@ -72,7 +92,7 @@ class IOProcessor(ABC):
         pass
 
     @abstractmethod
-    def put_state(self, state_dict: dict, time):
+    def put_state(self, state_dict: dict, time) -> None:
         """Deliver network state to the :class:`IOProcessor`.
 
         Parameters
@@ -86,7 +106,6 @@ class IOProcessor(ABC):
         """
         pass
 
-    # The output should be a dictionary of {stimulator_name: value, ...}
     @abstractmethod
     def get_ctrl_signal(self, time) -> dict:
         """Get per-stimulator control signal from the :class:`IOProcessor`.
@@ -99,11 +118,11 @@ class IOProcessor(ABC):
         Returns
         -------
         dict
-            A {`stimulator_name`: `value`} dictionary for updating stimulators.
+            A {'stimulator_name': value} dictionary for updating stimulators.
         """
         pass
 
-    def reset(self, **kwargs):
+    def reset(self, **kwargs) -> None:
         pass
 
 
@@ -111,11 +130,11 @@ class Recorder(InterfaceDevice):
     """Device for taking measurements of the network."""
 
     @abstractmethod
-    def get_state(self):
+    def get_state(self) -> Any:
         """Return current measurement."""
         pass
 
-    def reset(self, **kwargs):
+    def reset(self, **kwargs) -> None:
         """Reset the recording device to a neutral state"""
         pass
 
@@ -123,11 +142,20 @@ class Recorder(InterfaceDevice):
 class Stimulator(InterfaceDevice):
     """Device for manipulating the network."""
 
-    def __init__(self, name, start_value):
+    def __init__(self, name: str, start_value) -> None:
+        """Construct a stimulator device
+
+        Parameters
+        ----------
+        name : str
+            Unique device name used in :meth:`CLSimulator.update_stimulators`
+        start_value : any
+            The stimulator's default value
+        """
         super().__init__(name)
         self.value = start_value
 
-    def update(self, ctrl_signal):
+    def update(self, ctrl_signal) -> None:
         """Set the stimulator value.
 
         By default this simply sets `value` to `ctrl_signal`.
@@ -141,7 +169,7 @@ class Stimulator(InterfaceDevice):
         """
         self.value = ctrl_signal
 
-    def reset(self, **kwargs):
+    def reset(self, **kwargs) -> None:
         """Reset the stimulator device to a neutral state"""
         pass
 
@@ -156,14 +184,23 @@ class CLSimulator:
     _processing_net_op: NetworkOperation
     _net_store_name: str = "cleosim default"
 
-    def __init__(self, brian_network: Network):
+    def __init__(self, brian_network: Network) -> None:
+        """Construct a CLSimulator
+
+        Parameters
+        ----------
+        brian_network : Network
+            The Brian network forming the core model
+        """
         self.network = brian_network
         self.stimulators = {}
         self.recorders = {}
         self.io_processor = None
         self._processing_net_op = None
 
-    def _inject_device(self, device: InterfaceDevice, *neuron_groups, **kwparams):
+    def _inject_device(
+        self, device: InterfaceDevice, *neuron_groups, **kwparams
+    ) -> None:
         if len(neuron_groups) == 0:
             raise Exception("Injecting stimulator for no neuron groups is meaningless.")
         for ng in neuron_groups:
@@ -184,31 +221,49 @@ class CLSimulator:
             self.network.add(brian_object)
         self.network.store(self._net_store_name)
 
-    def inject_stimulator(self, stimulator: Stimulator, *neuron_groups, **kwparams):
+    def inject_stimulator(
+        self, stimulator: Stimulator, *neuron_groups: NeuronGroup, **kwparams
+    ) -> None:
         """Inject stimulator into given neuron groups.
 
-        `connect_to_neuron_group(group)` is called for each `group`.
+        :meth:`Stimulator.connect_to_neuron_group` is called for each `group`.
 
         Parameters
         ----------
         stimulator : Stimulator
+            The stimulator to inject
+        *neuron_groups : NeuronGroup
+            The groups to inject the stimulator into
+        **kwparams : any
+            Passed on to :meth:`Stimulator.connect_to_neuron_group` function.
+            Necessary for parameters that can vary by neuron group, such
+            as opsin expression levels.
         """
         self._inject_device(stimulator, *neuron_groups, **kwparams)
         self.stimulators[stimulator.name] = stimulator
 
-    def inject_recorder(self, recorder: Recorder, *neuron_groups, **kwparams):
+    def inject_recorder(
+        self, recorder: Recorder, *neuron_groups: NeuronGroup, **kwparams
+    ) -> None:
         """Inject recorder into given neuron groups.
 
-        `connect_to_neuron_group(group)` is called for each `group`.
+        :meth:`Recorder.connect_to_neuron_group` is called for each `group`.
 
         Parameters
         ----------
         recorder : Recorder
+            The recorder to inject into the simulation
+        *neuron_groups : NeuronGroup
+            The groups to inject the recorder into
+        **kwparams : any
+            Passed on to :meth:`Recorder.connect_to_neuron_group` function.
+            Necessary for parameters that can vary by neuron group, such
+            as inhibitory/excitatory cell type
         """
         self._inject_device(recorder, *neuron_groups, **kwparams)
         self.recorders[recorder.name] = recorder
 
-    def get_state(self):
+    def get_state(self) -> dict:
         """Return current recorder measurements.
 
         Returns
@@ -222,7 +277,7 @@ class CLSimulator:
             state[name] = recorder.get_state()
         return state
 
-    def update_stimulators(self, ctrl_signals):
+    def update_stimulators(self, ctrl_signals) -> None:
         """Update stimulators with output from the :class:`IOProcessor`
 
         Parameters
@@ -236,8 +291,12 @@ class CLSimulator:
         for name, signal in ctrl_signals.items():
             self.stimulators[name].update(signal)
 
-    def set_io_processor(self, io_processor, communication_period=None):
-        """Set simulator IO processor.
+    def set_io_processor(self, io_processor, communication_period=None) -> None:
+        """Set simulator IO processor
+
+        Will replace any previous IOProcessor so there is only one at a time.
+        A Brian NetworkOperation is created to govern communication between
+        the Network and the IOProcessor.
 
         Parameters
         ----------
@@ -268,12 +327,12 @@ class CLSimulator:
         self.network.add(self._processing_net_op)
         self.network.store(self._net_store_name)
 
-    def run(self, duration, **kwparams):
+    def run(self, duration: Quantity, **kwparams) -> None:
         """Run simulation.
 
         Parameters
         ----------
-        duration : brian2 temporal Unit
+        duration : brian2 temporal Quantity
             Length of simulation
         **kwparams : additional arguments passed to brian2.run()
             level has a default value of 1
@@ -283,6 +342,12 @@ class CLSimulator:
         self.network.run(duration, **kwparams)
 
     def reset(self, **kwargs):
+        """Reset the simulator to a neutral state
+
+        Restores the Brian Network to where it was when the
+        CLSimulator was last modified (last injection, IOProcessor change).
+        Calls reset() on stimulators, recorders, and IOProcessor.
+        """
         # kwargs passed to stimulators, recorders, and io_processor reset
         self.network.restore(self._net_store_name)
         for stim in self.stimulators.values():
