@@ -51,6 +51,7 @@ exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 
 # -- Extension settings -------------------------------------------------------
 
+autoclass_content = "init"
 intersphinx_mapping = {"brian2": ("https://brian2.readthedocs.io/en/stable", None)}
 
 autosectionlabel_prefix_document = True

@@ -18,14 +18,13 @@ from matplotlib import pyplot as plt
 
 
 class InterfaceDevice(ABC):
-    """Base class for devices to be injected into the network"""
 
     name: str
     brian_objects: set
     sim: CLSimulator
 
     def __init__(self, name: str) -> None:
-        """Construct an InterfaceDevice
+        """Base class for devices to be injected into the network
 
         Parameters
         ----------
@@ -140,10 +139,10 @@ class Recorder(InterfaceDevice):
 
 
 class Stimulator(InterfaceDevice):
-    """Device for manipulating the network."""
+    """Device for manipulating the network"""
 
     def __init__(self, name: str, start_value) -> None:
-        """Construct a stimulator device
+        """Device for manipulating the network
 
         Parameters
         ----------
@@ -175,7 +174,7 @@ class Stimulator(InterfaceDevice):
 
 
 class CLSimulator:
-    """Integrates simulation components and runs."""
+    """The centerpiece of cleosim. Integrates simulation components and runs."""
 
     io_processor: IOProcessor
     network: Network
@@ -185,7 +184,7 @@ class CLSimulator:
     _net_store_name: str = "cleosim default"
 
     def __init__(self, brian_network: Network) -> None:
-        """Construct a CLSimulator
+        """The centerpiece of cleosim. Integrates simulation components and runs.
 
         Parameters
         ----------

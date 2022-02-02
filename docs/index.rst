@@ -6,7 +6,7 @@
 Hello there!
 ============
 
-Welcome to cleosim's documentation. If you're not sure where to start, head to :doc:`basics` for an overview.
+Welcome to cleosim's documentation. If you're not sure where to start, head to :doc:`overview`.
 
 .. toctree::
    :maxdepth: 2

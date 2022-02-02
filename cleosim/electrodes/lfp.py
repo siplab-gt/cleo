@@ -33,8 +33,8 @@ class TKLFPSignal(Signal):
         self._t_ms_buffers = []
         self._buffer_positions = []
 
-    def init_for_electrode_group(self, probe: Probe):
-        super().init_for_electrode_group(probe)
+    def init_for_probe(self, probe: Probe):
+        super().init_for_probe(probe)
         self._elec_coords_mm = probe.coords / mm
         # need to invert z coords since cleosim uses an inverted z axis and
         # tklfp does not

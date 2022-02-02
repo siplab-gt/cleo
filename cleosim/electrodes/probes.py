@@ -1,3 +1,4 @@
+"""Contains Probe and Signal classes and electrode coordinate functions"""
 from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
@@ -5,9 +6,7 @@ from operator import concat
 from typing import Any, Tuple
 
 import numpy as np
-import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d.axes3d import Axes3D
-from numpy.core import numeric
 import numpy.typing as npt
 from brian2 import NeuronGroup, mm, Unit, Quantity, umeter
 
@@ -16,23 +15,47 @@ from cleosim.utilities import get_orth_vectors_for_v
 
 
 class Signal(ABC):
+    """Base class representing an electrode can record"""
+
     name: str
     brian_objects: set
     probe: Probe
 
     def __init__(self, name: str) -> None:
+        """Signal constructor--must call at beginning of children constructors.
+
+        Parameters
+        ----------
+        name : str
+            [description]
+        """
         self.name = name
         self.brian_objects = set()
         self.probe = None
 
-    def init_for_electrode_group(self, eg: Probe):
-        if self.probe is not None and self.probe is not eg:
+    def init_for_probe(self, probe: Probe) -> None:
+        """Called when attached to a probe.
+
+        Ensures signal can access probe and is only attached
+        to one
+
+        Parameters
+        ----------
+        probe : Probe
+            Probe to attach to
+
+        Raises
+        ------
+        ValueError
+            When signal already attached to another probe
+        """
+        if self.probe is not None and self.probe is not probe:
             raise ValueError(
                 f"Signal {self.name} has already been initialized "
-                f"for ElectrodeGroup {self.probe.name} "
+                f"for Probe {self.probe.name} "
                 f"and cannot be used with another."
             )
-        self.probe = eg
+        self.probe = probe
 
     @abstractmethod
     def connect_to_neuron_group(self, neuron_group: NeuronGroup, **kwparams):
@@ -43,15 +66,38 @@ class Signal(ABC):
         pass
 
     def reset(self, **kwargs) -> None:
+        """Reset signal to a neutral state"""
         pass
 
 
 class Probe(Recorder):
+    """Picks up specified signals across an array of electrodes"""
+
     coords: Quantity
     signals: list[Signal]
     n: int
 
-    def __init__(self, name: str, coords: Quantity, signals: Iterable[Signal] = []):
+    def __init__(
+        self, name: str, coords: Quantity, signals: Iterable[Signal] = []
+    ) -> None:
+        """Construct a Probe
+
+        Parameters
+        ----------
+        name : str
+            Unique identifier for device
+        coords : Quantity
+            Coordinates of n electrodes. Must be an n x 3 array (with unit)
+            where columns represent x, y, and z
+        signals : Iterable[Signal], optional
+            signals to record with probe, by default [].
+            Can be specified later with :meth:`add_signals`.
+
+        Raises
+        ------
+        ValueError
+            [description]
+        """
         super().__init__(name)
         self.coords = coords.reshape((-1, 3))
         if len(self.coords.shape) != 2 or self.coords.shape[1] != 3:
@@ -65,7 +111,7 @@ class Probe(Recorder):
 
     def add_signals(self, *signals: Signal):
         for signal in signals:
-            signal.init_for_electrode_group(self)
+            signal.init_for_probe(self)
             self.signals.append(signal)
 
     def connect_to_neuron_group(self, neuron_group: NeuronGroup, **kwparams):
