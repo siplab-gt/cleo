@@ -3,19 +3,18 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to cleosim's documentation!
-===================================
+Hello there!
+============
+
+Welcome to cleosim's documentation. If you're not sure where to start, head to :doc:`basics` for an overview.
 
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
 
-   basics
+   overview
    tutorials
    reference
-
-
-Hi. This is some introductory text. Here's a link to :class:`~cleosim.electrodes.TKLFPSignal`
 
 
 Indices and tables
