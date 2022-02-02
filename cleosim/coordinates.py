@@ -1,30 +1,53 @@
+"""Coordinates module: assign neuron coordinates and visualize"""
+
 from __future__ import annotations
 from warnings import warn
 from typing import Tuple
 from collections.abc import Iterable
 
-from brian2 import mm, meter
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+from brian2 import mm, meter, Unit
 from brian2.groups.group import Group
 from brian2.groups.neurongroup import NeuronGroup
 from brian2.units.fundamentalunits import get_dimensions
 import numpy as np
 
 from cleosim.base import InterfaceDevice
-
-from .utilities import get_orth_vectors_for_v, modify_model_with_eqs
+from cleosim.utilities import get_orth_vectors_for_v, modify_model_with_eqs
 
 
 def assign_coords_grid_rect_prism(
-    neuron_group,
+    neuron_group: NeuronGroup,
     xlim: Tuple[float, float],
     ylim: Tuple[float, float],
     zlim: Tuple[float, float],
     shape: Tuple[int, int, int],
-    unit=mm,
-):
+    unit: Unit = mm,
+) -> None:
+    """Assign grid coordinates to neurons in a rectangular grid
+
+    Parameters
+    ----------
+    neuron_group : NeuronGroup
+        The neuron group to assign coordinates to
+    xlim : Tuple[float, float]
+        xmin, xmax, with no unit
+    ylim : Tuple[float, float]
+        ymin, ymax, with no unit
+    zlim : Tuple[float, float]
+        zmin, zmax with no unit
+    shape : Tuple[int, int, int]
+        n_x, n_y, n_z tuple representing the shape of the resulting grid
+    unit : Unit, optional
+        Brian unit determining what scale to use for coordinates, by default mm
+
+    Raises
+    ------
+    ValueError
+        When the shape is incompatible with the number of neurons in the group
+    """
     _init_variables(neuron_group)
-    if shape is None:
-        raise ValueError("xyz_grid_shape argument is required for grid distribution.")
     num_grid_elements = np.product(shape)
     if num_grid_elements != len(neuron_group):
         raise ValueError(
@@ -44,12 +67,27 @@ def assign_coords_grid_rect_prism(
 
 
 def assign_coords_rand_rect_prism(
-    neuron_group,
+    neuron_group: NeuronGroup,
     xlim: Tuple[float, float],
     ylim: Tuple[float, float],
     zlim: Tuple[float, float],
-    unit=mm,
+    unit: Unit = mm,
 ):
+    """Assign random coordinates to neurons within a rectangular prism
+
+    Parameters
+    ----------
+    neuron_group : NeuronGroup
+        neurons to assign coordinates to
+    xlim : Tuple[float, float]
+        xmin, xmax without unit
+    ylim : Tuple[float, float]
+        ymin, ymax without unit
+    zlim : Tuple[float, float]
+        zmin, zmax without unit
+    unit : Unit, optional
+        Brian unit to specify scale implied in limits, by default mm
+    """
     _init_variables(neuron_group)
     x = (xlim[1] - xlim[0]) * np.random.random(len(neuron_group)) + xlim[0]
     y = (ylim[1] - ylim[0]) * np.random.random(len(neuron_group)) + ylim[0]
@@ -60,7 +98,32 @@ def assign_coords_rand_rect_prism(
     neuron_group.z = z.flatten() * unit
 
 
-def assign_coords_rand_cylinder(neuron_group, xyz_start, xyz_end, radius, unit=mm):
+def assign_coords_rand_cylinder(
+    neuron_group: NeuronGroup,
+    xyz_start: Tuple[float, float, float],
+    xyz_end: Tuple[float, float, float],
+    radius: float,
+    unit: Unit = mm,
+) -> None:
+    """Assign random coordinates within a cylinder.
+
+    *DON'T USE YET*: spacing isn't uniform, clustering around
+    the center since a random height and radius is chosen for
+    each neuron
+
+    Parameters
+    ----------
+    neuron_group : NeuronGroup
+        neurons to assign coordinates to
+    xyz_start : Tuple[float, float, float]
+        starting position of cylinder without unit
+    xyz_end : Tuple[float, float, float]
+        ending position of cylinder without unit
+    radius : float
+        radius of cylinder without unit
+    unit : Unit, optional
+        Brian unit to scale other params, by default mm
+    """
     _init_variables(neuron_group)
     xyz_start = np.array(xyz_start)
     xyz_end = np.array(xyz_end)
@@ -91,22 +154,41 @@ def assign_coords_rand_cylinder(neuron_group, xyz_start, xyz_end, radius, unit=m
 
 
 def plot_neuron_positions(
-    *neuron_groups,
-    xlim=None,
-    ylim=None,
-    zlim=None,
+    *neuron_groups: NeuronGroup,
+    xlim: Tuple[float, float] = None,
+    ylim: Tuple[float, float] = None,
+    zlim: Tuple[float, float] = None,
     colors: Iterable = None,
-    axis_scale_unit=mm,
+    axis_scale_unit: Unit = mm,
     devices_to_plot: Iterable[InterfaceDevice] = [],
-    invert_z=True,
-):
-    try:
-        from matplotlib import pyplot as plt
-        from mpl_toolkits.mplot3d import Axes3D
-    except ImportError:
-        raise ImportError(
-            "matplotlib and mpl_toolkits modules required for this feature."
-        )
+    invert_z: bool = True,
+) -> None:
+    """Visualize neurons and interface devices
+
+    Parameters
+    ----------
+    xlim : Tuple[float, float], optional
+        xlim for plot, determined automatically by default
+    ylim : Tuple[float, float], optional
+        ylim for plot, determined automatically by default
+    zlim : Tuple[float, float], optional
+        zlim for plot, determined automatically by default
+    colors : Iterable, optional
+        colors, one for each neuron group, automatically determined by default
+    axis_scale_unit : Unit, optional
+        Brian unit to scale lim params, by default mm
+    devices_to_plot : Iterable[InterfaceDevice], optional
+        devices to add to the plot; add_self_to_plot is called
+        for each. By default []
+    invert_z : bool, optional
+        whether to invert z-axis, by default True to reflect the convention
+        that +z represents depth from cortex surface
+
+    Raises
+    ------
+    ValueError
+        When neuron group doesn't have x, y, and z already defined
+    """
     for ng in neuron_groups:
         for dim in ["x", "y", "z"]:
             if not hasattr(ng, dim):
