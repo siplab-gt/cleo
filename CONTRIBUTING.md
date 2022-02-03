@@ -40,6 +40,9 @@ my_function(a, b='B'):
 We will use Black formatting. The easiest way is to enable Black as the formatter in 
 your IDE with auto-formatting on save.
 
+## Linting
+I was going to lint using flake8 but then I realized, this is a small research code package! We don't need super pretty, consistent code. Just try to follow Python conventions and use Black.
+
 ## Structure
 Originally, the intention was for opto and electrodes to live under stimulators and recorders, respectively. This made `opto_stim = cleosim.opto.OptogeneticIntervention(...)` possible but not for importing from that second-level shortcut (`from cleosim.opto import ...`). Thus, they were moved up a level. 
 

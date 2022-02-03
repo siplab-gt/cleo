@@ -1,4 +1,4 @@
-"""Electrodes  module"""
+"""Contains probes, coordinate convenience functions, signals, spiking, and LFP"""
 from cleosim.electrodes.lfp import TKLFPSignal
 from cleosim.electrodes.spiking import MultiUnitSpiking, SortedSpiking, Spiking
 from cleosim.electrodes.probes import (

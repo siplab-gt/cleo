@@ -1,27 +1,46 @@
 """Contains multi-unit and sorted spiking signals"""
 from __future__ import annotations
+from abc import abstractmethod
 from typing import Any, Tuple
 
 from bidict import bidict
 from brian2 import NeuronGroup, Quantity, SpikeMonitor, meter, ms
 import numpy as np
-import numpy.typing as npt
+
+# import numpy.typing as npt
+from nptyping import NDArray
 
 from cleosim.electrodes.probes import Signal
 
 
 class Spiking(Signal):
+    """Base class for probabilistically detecting spikes"""
+
     perfect_detection_radius: Quantity
+    """Radius (with Brian unit) within which all spikes
+    are detected"""
     half_detection_radius: Quantity
+    """Radius (with Brian unit) within which half of all spikes
+    are detected"""
     cutoff_probability: float
+    """Spike detection probability below which neurons will not be
+    considered. For computational efficiency."""
     save_history: bool
-    t_ms: npt.NDArray
-    i: npt.NDArray[np.uint]
-    t_samp_ms: Quantity
+    """Determines whether :attr:`t_ms`, :attr:`i`, and :attr:`t_samp_ms` are recorded"""
+    t_ms: NDArray[(Any,), float]
+    """Spike times in ms, stored if :attr:`save_history`"""
+    i: NDArray[(Any,), np.uint]
+    """Channel (for multi-unit) or neuron (for sorted) indices
+    of spikes, stored if :attr:`save_history`"""
+    t_samp_ms: NDArray[(Any,), float]
+    """Sample times in ms when each spike was recorded, stored 
+    if :attr:`save_history`"""
+    i_probe_by_i_ng: bidict
+    """(neuron_group, i_ng) keys,  i_probe values. bidict for converting between
+    neuron group indices and the indices the probe uses"""
     _monitors: list[SpikeMonitor]
     _mon_spikes_already_seen: list[int]
-    _dtct_prob_array: npt.NDArray
-    i_probe_by_i_ng: bidict
+    _dtct_prob_array: NDArray[(Any, Any), float]
 
     def __init__(
         self,
@@ -31,6 +50,25 @@ class Spiking(Signal):
         cutoff_probability: float = 0.01,
         save_history: bool = False,
     ) -> None:
+        """
+        Parameters
+        ----------
+        name : str
+            Unique identifier for signal
+        perfect_detection_radius : Quantity
+            Radius (with Brian unit) within which all spikes
+            are detected
+        half_detection_radius : Quantity, optional
+            Radius (with Brian unit) within which half of all spikes
+            are detected
+        cutoff_probability : float, optional
+            Spike detection probability below which neurons will not be
+            considered, by default 0.01. For computational efficiency.
+        save_history : bool, optional
+            If True, will save t_ms (spike times), i (neuron or
+            channel index), and t_samp_ms (sample times) as attributes.
+            By default False
+        """
         super().__init__(name)
         self.perfect_detection_radius = perfect_detection_radius
         self.half_detection_radius = half_detection_radius
@@ -45,8 +83,24 @@ class Spiking(Signal):
         self._dtct_prob_array = None
         self.i_probe_by_i_ng = bidict()
 
-    def connect_to_neuron_group(self, neuron_group: NeuronGroup, **kwparams):
+    def connect_to_neuron_group(
+        self, neuron_group: NeuronGroup, **kwparams
+    ) -> np.ndarray:
+        """Configure signal to record from specified neuron group
+
+        Parameters
+        ----------
+        neuron_group : NeuronGroup
+            Neuron group to record from
+
+        Returns
+        -------
+        np.ndarray
+            num_neurons_to_consider x num_channels array of spike
+            detection probabilities, for use in subclasses
+        """
         super().connect_to_neuron_group(neuron_group, **kwparams)
+        # could support separate detection probabilities per group using kwparams
         # n_neurons X n_channels X 3
         dist2 = np.zeros((len(neuron_group), self.probe.n))
         for dim in ["x", "y", "z"]:
@@ -83,7 +137,23 @@ class Spiking(Signal):
         # return neuron-channel detection probabilities array for use in subclass
         return probs[i_ng_to_keep]
 
-    def _detection_prob_for_distance(self, r) -> float:
+    @abstractmethod
+    def get_state(
+        self,
+    ) -> tuple[NDArray[np.uint], NDArray[float], NDArray[np.uint]]:
+        """Return spikes since method was last called (i, t_ms, y)
+
+        Returns
+        -------
+        tuple[NDArray[np.uint], NDArray[float], NDArray[np.uint]]
+            (i, t_ms, y) where i is channel (for multi-unit) or neuron (for sorted) spike
+            indices, t_ms is spike times, and y is a spike count vector suitable for control-
+            theoretic uses---i.e., a 0 for every channel/neuron that hasn't spiked and a 1
+            for a single spike.
+        """
+        pass
+
+    def _detection_prob_for_distance(self, r: Quantity) -> float:
         # p(d) = h/(r-c)
         a = self.perfect_detection_radius
         b = self.half_detection_radius
@@ -116,7 +186,7 @@ class Spiking(Signal):
 
         return (i_probe, t_ms)
 
-    def reset(self, **kwargs):
+    def reset(self, **kwargs) -> None:
         # crucial that this be called after network restore
         # since that would reset monitors
         for j in range(len(self._monitors)):
@@ -129,7 +199,16 @@ class Spiking(Signal):
 
 
 class MultiUnitSpiking(Spiking):
-    def connect_to_neuron_group(self, neuron_group: NeuronGroup, **kwparams):
+    """Detects spikes per channel, that is, unsorted."""
+
+    def connect_to_neuron_group(self, neuron_group: NeuronGroup, **kwparams) -> None:
+        """Configure signal to record from specified neuron group
+
+        Parameters
+        ----------
+        neuron_group : NeuronGroup
+            group to record from
+        """
         neuron_channel_dtct_probs = super().connect_to_neuron_group(
             neuron_group, **kwparams
         )
@@ -142,7 +221,8 @@ class MultiUnitSpiking(Spiking):
 
     def get_state(
         self,
-    ) -> tuple[npt.NDArray[np.uint], npt.NDArray, npt.NDArray[np.uint]]:
+    ) -> tuple[NDArray[np.uint], NDArray[float], NDArray[np.uint]]:
+        # inherit docstring
         i_probe, t_ms = self._get_new_spikes()
         i_c, t_ms, y = self._noisily_detect_spikes_per_channel(i_probe, t_ms)
         if self.save_history:
@@ -152,7 +232,7 @@ class MultiUnitSpiking(Spiking):
 
     def _noisily_detect_spikes_per_channel(
         self, i_probe, t
-    ) -> Tuple[npt.NDArray, npt.NDArray, npt.NDArray]:
+    ) -> Tuple[NDArray, NDArray, NDArray]:
         probs_for_spikes = self._dtct_prob_array[i_probe]
         detected_spikes = np.random.random(probs_for_spikes.shape) < probs_for_spikes
         y = np.sum(detected_spikes, axis=0)
@@ -163,7 +243,21 @@ class MultiUnitSpiking(Spiking):
 
 
 class SortedSpiking(Spiking):
-    def connect_to_neuron_group(self, neuron_group: NeuronGroup, **kwparams):
+    """Detect spikes identified by neuron indices.
+
+    The indices used by the probe do not correspond to those
+    coming from neuron groups, since the probe must consider
+    multiple potential groups and within a group ignores those
+    neurons that are too far away to be easily detected."""
+
+    def connect_to_neuron_group(self, neuron_group: NeuronGroup, **kwparams) -> None:
+        """Configure sorted spiking signal to record from given neuron group
+
+        Parameters
+        ----------
+        neuron_group : NeuronGroup
+            group to record from
+        """
         neuron_channel_dtct_probs = super().connect_to_neuron_group(
             neuron_group, **kwparams
         )
@@ -177,7 +271,7 @@ class SortedSpiking(Spiking):
                 (self._dtct_prob_array, neuron_multi_channel_probs)
             )
 
-    def _combine_channel_probs(self, neuron_channel_dtct_probs: np.array) -> np.array:
+    def _combine_channel_probs(self, neuron_channel_dtct_probs: NDArray) -> NDArray:
         # combine probabilities for each neuron to get just one representing
         # when a spike is detected on at least 1 channel
         # p(at least one detected) = 1 - p(none detected) = 1 - q1*q2*q3...
@@ -185,7 +279,8 @@ class SortedSpiking(Spiking):
 
     def get_state(
         self,
-    ) -> tuple[npt.NDArray[np.uint], npt.NDArray, npt.NDArray[np.uint]]:
+    ) -> tuple[NDArray[np.uint], NDArray[float], NDArray[np.uint]]:
+        # inherit docstring
         i_probe, t_ms = self._get_new_spikes()
         i_probe, t_ms = self._noisily_detect_spikes(i_probe, t_ms)
         y = np.zeros(len(self.i_probe_by_i_ng), dtype=bool)
@@ -195,7 +290,7 @@ class SortedSpiking(Spiking):
             self.t_ms = np.concatenate((self.t_ms, t_ms))
         return (i_probe, t_ms, y)
 
-    def _noisily_detect_spikes(self, i_probe, t) -> Tuple[npt.NDArray, npt.NDArray]:
+    def _noisily_detect_spikes(self, i_probe, t) -> Tuple[NDArray, NDArray]:
         probs_for_spikes = self._dtct_prob_array[i_probe]
         detected_spikes = np.random.random(probs_for_spikes.shape) < probs_for_spikes
         i_spike_detected = detected_spikes.nonzero()

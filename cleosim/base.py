@@ -18,14 +18,24 @@ from matplotlib import pyplot as plt
 
 
 class InterfaceDevice(ABC):
+    """Base class for devices to be injected into the network"""
 
     name: str
+    """Unique identifier for device.
+    Used as a key in output/input dicts
+    """
     brian_objects: set
+    """All the Brian objects added to the network by this device.
+    Must be kept up-to-date in :meth:`connect_to_neuron_group` and
+    other functions so that those objects can be automatically added
+    to the network when the device is injected.
+    """
     sim: CLSimulator
+    """The simulator the device is injected into
+    """
 
     def __init__(self, name: str) -> None:
-        """Base class for devices to be injected into the network
-
+        """
         Parameters
         ----------
         name : str
@@ -53,7 +63,7 @@ class InterfaceDevice(ABC):
     def add_self_to_plot(self, ax: plt.Axes, axis_scale_unit: Unit) -> None:
         """Add device to an existing plot
 
-        Should only be called by :func:`coordinates.plot_neuron_positions`.
+        Should only be called by :func:`~cleosim.coordinates.plot_neuron_positions`.
 
         Parameters
         ----------
@@ -142,8 +152,7 @@ class Stimulator(InterfaceDevice):
     """Device for manipulating the network"""
 
     def __init__(self, name: str, start_value) -> None:
-        """Device for manipulating the network
-
+        """
         Parameters
         ----------
         name : str
@@ -184,8 +193,7 @@ class CLSimulator:
     _net_store_name: str = "cleosim default"
 
     def __init__(self, brian_network: Network) -> None:
-        """The centerpiece of cleosim. Integrates simulation components and runs.
-
+        """
         Parameters
         ----------
         brian_network : Network

@@ -17,12 +17,15 @@ class Signal(ABC):
     """Base class representing something an electrode can record"""
 
     name: str
+    """Unique identifier used to organize probe output"""
     brian_objects: set
+    """All Brian objects created by the signal.
+    Must be kept up-to-date for automatic injection into the network"""
     probe: Probe
+    """The probe the signal is configured to record for."""
 
     def __init__(self, name: str) -> None:
-        """Base class representing something an electrode can record
-
+        """
         Constructor must be called at beginning of children constructors.
 
         Parameters
@@ -60,10 +63,18 @@ class Signal(ABC):
 
     @abstractmethod
     def connect_to_neuron_group(self, neuron_group: NeuronGroup, **kwparams):
+        """Configure signal to record from specified neuron group
+
+        Parameters
+        ----------
+        neuron_group : NeuronGroup
+            group to record from
+        """
         pass
 
     @abstractmethod
     def get_state(self) -> Any:
+        """Get the signal's current value"""
         pass
 
     def reset(self, **kwargs) -> None:
@@ -75,14 +86,16 @@ class Probe(Recorder):
     """Picks up specified signals across an array of electrodes"""
 
     coords: Quantity
+    """n x 3 array (with Brian length unit) specifying contact locations"""
     signals: list[Signal]
+    """Signals recorded by the probe"""
     n: int
+    """Number of electrode contacts in the probe"""
 
     def __init__(
         self, name: str, coords: Quantity, signals: Iterable[Signal] = []
     ) -> None:
-        """Picks up specified signals across an array of electrodes
-
+        """
         Parameters
         ----------
         name : str

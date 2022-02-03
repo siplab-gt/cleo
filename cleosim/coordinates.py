@@ -1,4 +1,4 @@
-"""Coordinates module: assign neuron coordinates and visualize"""
+"""Contains functions for assigning neuron coordinates and visualizing"""
 
 from __future__ import annotations
 from warnings import warn
@@ -72,7 +72,7 @@ def assign_coords_rand_rect_prism(
     ylim: Tuple[float, float],
     zlim: Tuple[float, float],
     unit: Unit = mm,
-):
+) -> None:
     """Assign random coordinates to neurons within a rectangular prism
 
     Parameters
