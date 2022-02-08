@@ -1,4 +1,4 @@
-"""Classes and functions for constructing and configuring a :class:`~cleosim.IOProcessor`."""
+"""Classes and functions for constructing and configuring an :class:`~cleosim.IOProcessor`."""
 from cleosim.processing.base import (
     LatencyIOProcessor,
     ProcessingBlock,

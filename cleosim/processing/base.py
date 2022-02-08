@@ -1,4 +1,5 @@
-"""Basic processor and component definitions"""
+"""Basic processor and processing block definitions"""
+from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Tuple, Any
 from collections import deque
@@ -12,11 +13,31 @@ from cleosim.processing.delays import Delay
 class ProcessingBlock(ABC):
     """Abstract signal processing stage or control block."""
 
+    delay: Delay
+    """The delay object determining compute latency for the block"""
+    save_history: bool
+    """Whether to record :attr:`t_in_ms`, :attr:`t_out_ms`, 
+    and :attr:`values` with every timestep"""
+    t_in_ms: list[float]
+    """The walltime the block received each input.
+    Only recorded if :attr:`save_history`"""
+    t_out_ms: list[float]
+    """The walltime of each of the block's outputs.
+    Only recorded if :attr:`save_history`"""
+    values: list[Any]
+    """Each of the block's outputs.
+    Only recorded if :attr:`save_history`"""
+
     def __init__(self, **kwargs):
         """Construct a `ProcessingBlock` object.
 
-        It's important to use `super().__init__(kwargs)` in the base class
+        It's important to use `super().__init__(**kwargs)` in the base class
         to use the parent-class logic here.
+
+        Keyword args
+        ------------
+        delay : Delay
+            Delay object which adds to the compute time
 
         Raises
         ------
@@ -71,7 +92,7 @@ class ProcessingBlock(ABC):
         ----------
         input : Any
         **kwargs : optional key-value argument pairs passed from
-        :func:`~process()`. Could be used to pass in such values as
+        :func:`process`. Could be used to pass in such values as
         the IO processor's walltime or the measurement time for time-
         dependent functions.
 
@@ -84,32 +105,65 @@ class ProcessingBlock(ABC):
 
 
 class LatencyIOProcessor(IOProcessor):
-    """
-    The unit for keeping track of time in the IO processor is milliseconds.
-    To deal in quantities relative to seconds (e.g., defining a target firing
-    rate in Hz), the component involved must make the conversion.
+    """IOProcessor capable of delivering stimulation some time after measurement.
 
-    For non-serial processing, the order of input/output is preserved even
-    if the computed output time for a sample is sooner than that for a previous
-    sample.
-
-    Fixed sampling: on a fixed schedule no matter what
-    `when idle` sampling: Can't sample during computation. Samples ASAP
-    after an over-period computation: otherwise remains on schedule.
-
-    Note: it doesn't make much sense to combine parallel computation
-    with "wait" sampling, because "wait" sampling would only produce
-    one sample at a time to process.
+    For non-serial processing,
     """
 
-    def __init__(self, sample_period_ms, **kwargs):
+    def __init__(self, sample_period_ms: float, **kwargs):
+        """
+        Parameters
+        ----------
+        sample_period_ms : float
+            Determines how frequently samples are taken from the network.
+
+        Keyword args
+        ------------
+        sampling : str
+            "fixed" or "when idle"; "fixed" by default
+
+            "fixed" sampling means samples are taken on a fixed schedule,
+            with no exceptions.
+
+            "when idle" sampling means no samples are taken before the previous
+            sample's output has been delivered. A sample is taken ASAP
+            after an over-period computation: otherwise remains on schedule.
+        processing : str
+            "parallel" or "serial"; "parallel" by default
+
+            "parallel" computes the output time by adding the delay for a sample
+            onto the sample time, so if the delay is 2 ms, for example, while the
+            sample period is only 1 ms, some of the processing is happening in
+            parallel. Output order matches input order even if the computed
+            output time for a sample is sooner than that for a previous
+            sample.
+
+            "serial" computes the output time by adding the delay for a sample
+            onto the output time of the previous sample, rather than the sampling
+            time. Note this may be of limited
+            utility because it essentially means the *entire* round trip
+            cannot be in parallel at all. More realistic is that simply
+            each block or phase of computation must be serial. If anyone
+            cares enough about this, it will have to be implemented in the
+            future.
+
+        Note
+        ----
+        Note: it doesn't make much sense to combine parallel computation
+        with "when idle" sampling, because "when idle" sampling only produces
+        one sample at a time to process.
+
+        Raises
+        ------
+        ValueError
+            For invalid `sampling` or `processing` kwargs
+        """
         self.out_buffer = deque([])
         self.sample_period_ms = sample_period_ms
-        # TODO: why in kwargs? also, move serial to components
         self.sampling = kwargs.get("sampling", "fixed")
         if self.sampling not in ["fixed", "when idle"]:
             raise ValueError("Invalid sampling scheme:", self.sampling)
-        self.processing = kwargs.get("processing", "serial")
+        self.processing = kwargs.get("processing", "parallel")
         if self.processing not in ["serial", "parallel"]:
             raise ValueError("Invalid processing scheme:", self.processing)
 
@@ -165,19 +219,21 @@ class LatencyIOProcessor(IOProcessor):
         Parameters
         ----------
         state_dict : dict
-            {`recorder_name`: `state`} dictionary from :func:`~base.CLSimulator.get_state()`
+            {`recorder_name`: `state`} dictionary from :func:`~cleosim.CLSimulator.get_state()`
         time_ms : float
 
         Returns
         -------
         Tuple[dict, float]
-            {'stim_name`: `ctrl_signal`} dictionary and output time in milliseconds.
+            {'stim_name': `ctrl_signal`} dictionary and output time in milliseconds.
         """
         pass
 
 
 class RecordOnlyProcessor(LatencyIOProcessor):
-    """Take samples without performing any control"""
+    """Take samples without performing any control.
+
+    Use this if all you are doing is recording."""
 
     def __init__(self, sample_period_ms, **kwargs):
         super().__init__(sample_period_ms, **kwargs)

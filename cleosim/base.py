@@ -84,10 +84,11 @@ class IOProcessor(ABC):
     """
 
     sample_period_ms: float
+    """Determines how frequently the processor takes samples"""
 
     @abstractmethod
     def is_sampling_now(self, time) -> bool:
-        """Whether the `IOProcessor` will take a sample at this timestep.
+        """Determines whether the processor will take a sample at this timestep.
 
         Parameters
         ----------
@@ -117,7 +118,7 @@ class IOProcessor(ABC):
 
     @abstractmethod
     def get_ctrl_signal(self, time) -> dict:
-        """Get per-stimulator control signal from the :class:`IOProcessor`.
+        """Get per-stimulator control signal from the :class:`~cleosim.IOProcessor`.
 
         Parameters
         ----------
