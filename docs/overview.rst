@@ -15,7 +15,7 @@ Who is this package for?
     
     In short, determining the inputs to deliver to a system from its outputs. In neuroscience terms, making the stimulation parameters a function of the data recorded in real time.
 
-cleosim (Closed Loop, Electrophysiology, and Optogenetics Simulator) is developed primarily for those who want to prototype closed-loop control of neural activity *in silico*. Animal experiments are costly to set up and debug, especially with the added complexity of real-time intervention---our aim is to enable researchers, given a decent spiking model of the system of interest, to assess whether the type of control they desire is feasible and/or what configuration(s) would be most conducive to their goals.
+cleosim (Closed Loop, Electrophysiology, and Optogenetics Simulator) is a Python package developed primarily for those who want to prototype closed-loop control of neural activity *in silico*. Animal experiments are costly to set up and debug, especially with the added complexity of real-time intervention---our aim is to enable researchers, given a decent spiking model of the system of interest, to assess whether the type of control they desire is feasible and/or what configuration(s) would be most conducive to their goals.
 
 Because cleosim is built around the `Brian simulator <https://brian2.rtfd.io>`_, another potential user base for the package would be Brian users who for whatever reason would like a convenient way to inject recorders (e.g., electrodes) or stimulators (e.g., optogenetics) into the core network simulation.
 
@@ -55,7 +55,7 @@ In the end, we chose Brian since our priority was to model circuit/population-le
 
 Installation
 ------------
-Use pip: ``pip install cleosim``
+Make sure you have Python >=3.7, then use pip: ``pip install cleosim``
 
 Or, if you're a developer, `install poetry <https://python-poetry.org/docs/>`_ and run ``poetry install`` from the repository root.
 
@@ -181,7 +181,7 @@ Future development
 ------------------
 Here are some features which are missing but could be useful to add:
 
-* Better support for mulitple opsins simultaneously. At present the user would have to include a separate variable for each new opsin current, making changing the number of different opsins inconvenient
+* Better support for mulitple opsins simultaneously. At present the user would have to include a separate variable for each new opsin current, which makes changing the number of different opsins inconvenient
 * Support for multiple light sources affecting a single opsin transfection---whether the light sources have the same or different wavelengths
 * Electrode microstimulation
 * A more accurate LFP signal (only usable for morphological neurons) based on the volume conductor forward model as in `LFPy <https://lfpy.readthedocs.io/en/latest/index.html>`_ or `Vertex <https://github.com/haeste/Vertex_2>`_
