@@ -11,7 +11,7 @@ class MyProcessingBlock(ProcessingBlock):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    def _process(self, input: Any, **kwargs) -> Any:
+    def compute_output(self, input: Any, **kwargs) -> Any:
         measurement_time = kwargs["measurement_time"]
         return input + measurement_time
 
@@ -21,8 +21,8 @@ def test_ProcessingBlock():
     my_block = MyProcessingBlock(delay=ConstantDelay(const_delay), save_history=True)
 
     # blank history to start
-    assert len(my_block.t) == 0
-    assert len(my_block.out_t) == 0
+    assert len(my_block.t_in_ms) == 0
+    assert len(my_block.t_out_ms) == 0
     assert len(my_block.values) == 0
 
     meas_time = [1, 8]
@@ -34,7 +34,7 @@ def test_ProcessingBlock():
     for i in [0, 1]:
         out, out_time = my_block.process(
             inputs[i],
-            in_time_ms=in_time[i],
+            t_in_ms=in_time[i],
             measurement_time=meas_time[i],
         )
         # process with extra arg
@@ -42,8 +42,8 @@ def test_ProcessingBlock():
         # delay
         assert out_time == out_times[i]
         # save history
-        assert len(my_block.t) == i + 1
-        assert len(my_block.out_t) == i + 1
+        assert len(my_block.t_in_ms) == i + 1
+        assert len(my_block.t_out_ms) == i + 1
         assert len(my_block.values) == i + 1
 
 

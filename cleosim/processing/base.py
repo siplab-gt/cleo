@@ -29,8 +29,7 @@ class ProcessingBlock(ABC):
     Only recorded if :attr:`save_history`"""
 
     def __init__(self, **kwargs):
-        """Construct a `ProcessingBlock` object.
-
+        """
         It's important to use `super().__init__(**kwargs)` in the base class
         to use the parent-class logic here.
 
@@ -49,40 +48,44 @@ class ProcessingBlock(ABC):
             raise TypeError("delay must be of the Delay class")
         self.save_history = kwargs.get("save_history", False)
         if self.save_history is True:
-            self.t = []
-            self.out_t = []
+            self.t_in_ms = []
+            self.t_out_ms = []
             self.values = []
 
-    def process(self, input: Any, in_time_ms: float, **kwargs) -> Tuple[Any, float]:
-        """Compute output and output time given input and input time.
+    def process(self, input: Any, t_in_ms: float, **kwargs) -> Tuple[Any, float]:
+        """Computes and saves output and output time given input and input time.
 
-        The user should implement :func:`~_process()`, which performs the
-        computation itself without regards for the delay.
+        The user should implement :meth:`~compute_output()` for their child
+        classes, which performs the computation itself without regards for
+        timing or saving variables.
 
         Parameters
         ----------
         input : Any
-        in_time_ms : float
-        **kwargs : key-value list of arguments passed to :func:`~_process()`
+            Data to be processed
+        t_in_ms : float
+            Time the block receives the input data
+        **kwargs : Any
+            Key-value list of arguments passed to :func:`~compute_output()`
 
         Returns
         -------
         Tuple[Any, float]
-            output, out time
+            output, out time in milliseconds
         """
-        out = self._process(input, **kwargs)
+        out = self.compute_output(input, **kwargs)
         if self.delay is not None:
-            out_time_ms = in_time_ms + self.delay.compute()
+            t_out_ms = t_in_ms + self.delay.compute()
         else:
-            out_time_ms = in_time_ms
+            t_out_ms = t_in_ms
         if self.save_history:
-            self.t.append(in_time_ms)
-            self.out_t.append(out_time_ms)
+            self.t_in_ms.append(t_in_ms)
+            self.t_out_ms.append(t_out_ms)
             self.values.append(out)
-        return (out, out_time_ms)
+        return (out, t_out_ms)
 
     @abstractmethod
-    def _process(self, input: Any, **kwargs) -> Any:
+    def compute_output(self, input: Any, **kwargs) -> Any:
         """Computes output for given input.
 
         This is where the user will implement the desired functionality
@@ -91,24 +94,23 @@ class ProcessingBlock(ABC):
         Parameters
         ----------
         input : Any
-        **kwargs : optional key-value argument pairs passed from
-        :func:`process`. Could be used to pass in such values as
-        the IO processor's walltime or the measurement time for time-
-        dependent functions.
+            Data to be processed. Passed in from :meth:`process`.
+        **kwargs : Any
+            optional key-value argument pairs passed from
+            :meth:`process`. Could be used to pass in such values as
+            the IO processor's walltime or the measurement time for time-
+            dependent functions.
 
         Returns
         -------
         Any
-            output.
+            output
         """
         pass
 
 
 class LatencyIOProcessor(IOProcessor):
-    """IOProcessor capable of delivering stimulation some time after measurement.
-
-    For non-serial processing,
-    """
+    """IOProcessor capable of delivering stimulation some time after measurement."""
 
     def __init__(self, sample_period_ms: float, **kwargs):
         """
@@ -128,6 +130,7 @@ class LatencyIOProcessor(IOProcessor):
             "when idle" sampling means no samples are taken before the previous
             sample's output has been delivered. A sample is taken ASAP
             after an over-period computation: otherwise remains on schedule.
+
         processing : str
             "parallel" or "serial"; "parallel" by default
 
@@ -149,7 +152,7 @@ class LatencyIOProcessor(IOProcessor):
 
         Note
         ----
-        Note: it doesn't make much sense to combine parallel computation
+        It doesn't make much sense to combine parallel computation
         with "when idle" sampling, because "when idle" sampling only produces
         one sample at a time to process.
 
@@ -168,19 +171,19 @@ class LatencyIOProcessor(IOProcessor):
             raise ValueError("Invalid processing scheme:", self.processing)
 
     def put_state(self, state_dict: dict, sample_time_ms):
-        out, out_time_ms = self.process(state_dict, sample_time_ms)
+        out, t_out_ms = self.process(state_dict, sample_time_ms)
         if self.processing == "serial" and len(self.out_buffer) > 0:
-            prev_out_time_ms = self.out_buffer[-1][1]
+            prev_t_out_ms = self.out_buffer[-1][1]
             # add delay onto the output time of the last computation
-            out_time_ms = prev_out_time_ms + out_time_ms - sample_time_ms
-        self.out_buffer.append((out, out_time_ms))
+            t_out_ms = prev_t_out_ms + t_out_ms - sample_time_ms
+        self.out_buffer.append((out, t_out_ms))
         self._needs_off_schedule_sample = False
 
     def get_ctrl_signal(self, query_time_ms):
         if len(self.out_buffer) == 0:
             return None
-        next_out_signal, next_out_time_ms = self.out_buffer[0]
-        if query_time_ms >= next_out_time_ms:
+        next_out_signal, next_t_out_ms = self.out_buffer[0]
+        if query_time_ms >= next_t_out_ms:
             self.out_buffer.popleft()
             return next_out_signal
         else:

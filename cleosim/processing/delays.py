@@ -1,20 +1,29 @@
+"""Classes facilitating adding latency to :class:`~cleosim.processing.ProcessingBlock` computations"""
 from abc import ABC, abstractmethod
 import warnings
 
 import numpy as np
 
-"""Delays should all assume the unit of milliseconds.
-"""
-
 
 class Delay(ABC):
+    """Abstract base class for computing delays."""
+
     @abstractmethod
     def compute(self) -> float:
+        """Compute delay."""
         pass
 
 
 class ConstantDelay(Delay):
-    def __init__(self, delay_ms):
+    """Simply adds a constant delay to the computation"""
+
+    def __init__(self, delay_ms: float):
+        """
+        Parameters
+        ----------
+        delay_ms : float
+            Desired delay in milliseconds
+        """
         self.delay = delay_ms
 
     def compute(self):
@@ -25,14 +34,17 @@ class GaussianDelay(Delay):
     """Generates normal-distributed delay.
 
     Will return 0 when a negative value is sampled.
-
-    Parameters
-    ----------
-    Delay : [type]
-        [description]
     """
 
-    def __init__(self, loc, scale):
+    def __init__(self, loc: float, scale: float):
+        """
+        Parameters
+        ----------
+        loc : float
+            Center of distribution
+        scale : float
+            Standard deviation of delay distribution
+        """
         self.loc = loc
         self.scale = scale
 

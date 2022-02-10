@@ -4,6 +4,6 @@ from cleosim.processing.base import (
     ProcessingBlock,
     RecordOnlyProcessor,
 )
-from cleosim.processing.controllers import Controller, PIController
+from cleosim.processing.controllers import PIController
 from cleosim.processing.observers import FiringRateEstimator
 from cleosim.processing.delays import Delay, ConstantDelay, GaussianDelay

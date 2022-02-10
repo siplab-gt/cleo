@@ -4,18 +4,16 @@ from cleosim.processing import ProcessingBlock
 from typing import Any
 
 
-class Controller(ProcessingBlock):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
-
-class PIController(Controller):
+class PIController(ProcessingBlock):
     """Simple PI controller.
 
-    :meth:`_process` requires a ``sample_time_ms`` keyword argument."""
+    :meth:`compute_output` requires a ``sample_time_ms`` keyword argument.
+    Only tested on controlling scalar values, but could be easily adapted
+    to controlling a multi-dimensional state.
+    """
 
     ref_signal: callable[[float], Any]
-    """"Callable returning the target as a function of time in ms"""
+    """Callable returning the target as a function of time in ms"""
 
     def __init__(
         self,
@@ -46,7 +44,19 @@ class PIController(Controller):
         self.integrated_error = 0
         self.prev_time_ms = None
 
-    def _process(self, input, **kwargs):
+    def compute_output(self, input: float, **kwargs) -> float:
+        """Compute control input to the system using previously specified gains.
+
+        Parameters
+        ----------
+        input : Any
+            Current system state
+
+        Returns
+        -------
+        float
+            Control signal
+        """
         time_ms = kwargs["sample_time_ms"]
         if self.prev_time_ms is None:
             self.prev_time_ms = time_ms - self.sample_period_ms

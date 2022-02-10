@@ -1,23 +1,23 @@
-from . import ProcessingBlock
-import numpy as np
 from typing import Any
-from .delays import Delay
+import numpy as np
+from nptyping import NDArray
+from cleosim.processing.base import ProcessingBlock
 
 
 class FiringRateEstimator(ProcessingBlock):
     """Exponential filter to estimate firing rate.
 
     Requires `sample_time_ms` kwarg when process is called.
-
-    Parameters
-    ----------
-    ProcessingBlock : [type]
-        [description]
     """
 
     def __init__(self, tau_ms: float, sample_period_ms: float, **kwargs):
         """
-        See `ProcessingBlock` for `**kwargs` options
+        Parameters
+        ----------
+        tau_ms : float
+            Time constant of filter
+        sample_period_ms : float
+            Sampling period in milliseconds
         """
         super().__init__(**kwargs)
         self.tau_s = tau_ms / 1000
@@ -26,9 +26,25 @@ class FiringRateEstimator(ProcessingBlock):
         self.prev_rate = None
         self.prev_time_ms = None
 
-    def _process(self, input: np.ndarray, **kwargs) -> np.ndarray:
-        """
-        `input` should be a vector of spike counts.
+    def compute_output(
+        self, input: NDArray[(Any,), np.uint], **kwargs
+    ) -> NDArray[(Any,), float]:
+        """Estimate firing rate given past and current spikes.
+
+        Parameters
+        ----------
+        input: NDArray[(n,), np.uint]
+            n-length vector of spike counts
+
+        Keyword args
+        ------------
+        sample_time_ms: float
+            Time measurement was taken in milliseconds
+
+        Returns
+        -------
+        NDArray[(n,), float]
+            n-length vector of firing rates
         """
         time_ms = kwargs["sample_time_ms"]
         if self.prev_rate is None:
