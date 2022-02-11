@@ -35,11 +35,13 @@ cleosim also orchestrates communication between the simulator and a user-configu
 
 Why not prototype with more abstract models?
 """"""""""""""""""""""""""""""""""""""""""""
-Of course, neuroscience is studied at many spatial and temporal scales. While other projects may be better suited for larger segments of the brain and/or longer timescales (such as `HNN <https://elifesciences.org/articles/51214>`_ or BMTK's `PopNet <https://alleninstitute.github.io/bmtk/popnet.html>`_ or `FilterNet <https://alleninstitute.github.io/bmtk/filternet.html>`_), this project caters to systems of a smaller scale where it is feasible and often desirable to model individual neurons, such as the thalamocortical circuit of a single column. At this level, many neuroscientists care about the functions of individual spikes and synapses or at least their relation to larger-scale population activity.
+cleosim aims to be practical, and as such provides models at the level of abstraction corresponding to the variables the experimenter has available to manipulate. This means models of spatially defined, spiking neural networks.
 
-An abstract dynamical system model of a neural circuit can be useful in many cases, where a transfer function might be used to model optogenetic stimulation and individual spikes are ignored in favor of LFP or other population-level measures of neural activity. But how would the model change when swapping one opsin for another, using mutliple opsins simultaneously, or with heterogeneous expression? How does recording or stimulating one cell type vs. another affect the experiment? Would using a more sophisticated control algorithm be worth the extra compute time, and thus later stimulus delivery, compared to a simpler controller? Fine-grained questions like these, while irrelevant in some research programs, are important in designing a closed-loop control experiment at the afore-mentioned level of neurons and circuits.
+Of course, neuroscience is studied at many spatial and temporal scales. While other projects may be better suited for larger segments of the brain and/or longer timescales (such as `HNN <https://elifesciences.org/articles/51214>`_ or BMTK's `PopNet <https://alleninstitute.github.io/bmtk/popnet.html>`_ or `FilterNet <https://alleninstitute.github.io/bmtk/filternet.html>`_), this project caters to finer-grained models because they can directly simulate the effects of alternate experimental configurations. For example, how would the model change when swapping one opsin for another, using mutliple opsins simultaneously, or with heterogeneous expression? How does recording or stimulating one cell type vs. another affect the experiment? Would using a more sophisticated control algorithm be worth the extra compute time, and thus later stimulus delivery, compared to a simpler controller? 
 
-Thus, we decided to build cleosim around spatially defined spiking neural network simulations, since it is at that level that models of recording and stimulation can be relatively directly defined; thus, it becomes easy to simulate the results of different experimental configurations. However, to achieve this, we did not deem it necessary to work with hyperrealstic models in every case, which brings us to the next point...
+Questions like these could be answered using an abstract dynamical system model of a neural circuit, but they would require the extra step of mapping the afore-mentioned details to a suitable abstraction---e.g., estimating a transfer function to model optogenetic stimulation for a given opsin and light configuration. Thus, we haven't emphasized these sorts of models so far in our development of cleosim, though they should be possible to implement in Brian if you are interested. For example, one could develop a Poisson linear dynamical system (PLDS), record spiking output, and configure stimulation to act directly on the system's latent state.
+
+And just as experiment prototyping could be done on a more abstract level, it could also be done on an even more realistic level, which we did not deem necessary. That brings us to the next point...
 
 Why Brian?
 """"""""""
@@ -151,9 +153,9 @@ If you are only recording, you may want to use the :class:`~cleosim.processing.R
             foo = state_dict['foo_recorder']
             out = ... # do something with sampled spikes
             delay_ms = 3
-            out_time_ms = sample_time_ms + delay_ms
+            t_out_ms = sample_time_ms + delay_ms
             # output must be a {'stimulator_name': value} dict setting stimulator values
-            return {'stim': out}, out_time_ms
+            return {'stim': out}, t_out_ms
     
     my_proc = MyProcessor(sample_period_ms=1)
     sim.set_io_processor(my_proc)
