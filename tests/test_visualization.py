@@ -37,4 +37,4 @@ def test_VideoVisualizer():
     sim.inject_device(vv, ng)
 
     sim.run(2 * ms)
-    ani = vv.generate_Animation()
+    ani = vv.generate_Animation({})

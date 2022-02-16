@@ -1,7 +1,7 @@
 """Tools for visualization models and simulations"""
 from __future__ import annotations
 from warnings import warn
-from typing import Tuple
+from typing import Tuple, Any
 from collections.abc import Iterable
 from matplotlib.artist import Artist
 
@@ -15,22 +15,22 @@ from cleosim.base import CLSimulator, InterfaceDevice
 
 
 class VideoVisualizer(InterfaceDevice):
+    """TODO"""
+
     def __init__(
         self,
         name: str,
         devices_to_plot="all",
         dt: Quantity = 1 * ms,
     ) -> None:
+        """TODO"""
         super().__init__(name)
         self.neuron_groups = []
         self._spike_mons = []
         self._num_old_spikes = []
         self.devices_to_plot = devices_to_plot
-        # self.fig = plt.figure(figsize=figsize)
-        # self.ax = self.fig.add_subplot(111, projection="3d")
         self.dt = dt
         # store data to generate video
-        # self.artists_per_frame = []
         self._value_per_device_per_frame = []
         self._i_spikes_per_ng_per_frame: list[list[np.ndarray]] = []
 
@@ -63,13 +63,26 @@ class VideoVisualizer(InterfaceDevice):
         self._num_old_spikes.append(0)
 
     def generate_Animation(
-        self, save_name=None, figsize=(8, 6), slowdown_factor=10, **plotargs
+        self, plotargs: dict, slowdown_factor: float = 10, **figargs
     ) -> anim.FuncAnimation:
+        """TODO
+
+        Parameters
+        ----------
+        save_name : _type_, optional
+            _description_, by default None
+        figsize : tuple, optional
+            _description_, by default (8, 6)
+        slowdown_factor : int, optional
+            _description_, by default 10
+
+        Returns
+        -------
+        anim.FuncAnimation
+            _description_
+        """
         interval_ms = self.dt / ms * slowdown_factor
-        # ani = anim.ArtistAnimation(
-        #     self.fig, self.artists_per_frame, interval=interval_ms, blit=True
-        # )
-        self.fig = plt.figure(figsize=figsize)
+        self.fig = plt.figure(**figargs)
         self.ax = self.fig.add_subplot(111, projection="3d")
         neuron_artists, device_artists = _plot(
             self.ax,
@@ -89,16 +102,13 @@ class VideoVisualizer(InterfaceDevice):
             self._update_neuron_artists_for_frame(neuron_artists, i)
             return updated_artists + neuron_artists
 
-        ani = anim.FuncAnimation(
+        return anim.FuncAnimation(
             self.fig,
             update,
             range(len(self._value_per_device_per_frame)),
             interval=interval_ms,
             blit=True,
         )
-        if save_name is not None:
-            ani.save(save_name)
-        return ani
 
     def _update_neuron_artists_for_frame(self, artists, i_frame):
         i_spikes_per_ng = self._i_spikes_per_ng_per_frame[i_frame]
@@ -110,12 +120,6 @@ class VideoVisualizer(InterfaceDevice):
             alpha[spike_counts > 0] = 1
             artist.set_alpha(alpha)
 
-    # def _new_spike_counts_for_ng(self, i):
-    #     new_spikes_indices = self._new_spikes_for_ng(i)
-    #     ng = self.neuron_groups[i]
-    #     counts = np.zeros(ng.N)
-    #     counts[new_spikes_indices] = 1
-    #     return counts
     def _spikes_i_to_count_for_ng(self, i_spikes, ng):
         counts = np.zeros(ng.N)
         counts[i_spikes] = 1
@@ -163,17 +167,6 @@ def _plot(
     zlim = ax.get_zlim() if zlim is None else zlim
 
     ax.set(xlim=xlim, ylim=ylim, zlim=zlim)
-    # if xlim is not None:
-    # ax.set_xlim(xlim)
-    # if ylim is not None:
-    #     ax.set_ylim(ylim)
-    # if zlim is None:
-    #     zlim = ax.get_zlim()
-    # if invert_z:
-    #     ax.set_zlim(zlim[1], zlim[0])
-    # else:
-    #     ax.set_zlim(zlim)
-    # negative value for z aspect inverts:
     ax.set_box_aspect(
         (xlim[1] - xlim[0], ylim[1] - ylim[0], int(invert_z) * (zlim[0] - zlim[1]))
     )
@@ -196,6 +189,7 @@ def plot(
     axis_scale_unit: Unit = mm,
     devices_to_plot: Iterable[InterfaceDevice] = [],
     invert_z: bool = True,
+    **figargs: Any,
 ) -> None:
     """Visualize neurons and interface devices
 
@@ -217,13 +211,15 @@ def plot(
     invert_z : bool, optional
         whether to invert z-axis, by default True to reflect the convention
         that +z represents depth from cortex surface
+    **figargs : Any, optional
+        arguments passed to plt.figure(), such as figsize
 
     Raises
     ------
     ValueError
         When neuron group doesn't have x, y, and z already defined
     """
-    fig = plt.figure()
+    fig = plt.figure(**figargs)
     ax = fig.add_subplot(111, projection="3d")
     _plot(
         ax,
