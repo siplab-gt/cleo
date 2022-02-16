@@ -1,7 +1,16 @@
 # How to contribute
 
+## Installation
+[Install poetry](https://python-poetry.org/docs/) and run `poetry install` from the repository root.
+
+
 ## Testing
-We use `pytest` and place tests in the `tests` directory parallel to the source package in the repository root. We will also use doctests when possible in the docstrings (in the `Examples` section, [see below](#Documentation)).
+We use `pytest` and place tests in the `tests` directory parallel to the source package in the repository root.
+
+For a fast test suite, run `pytest tests -m 'not slow'` and make sure to mark any new tests that run slowly with `@pytest.mark.slow`.
+
+To run the tutorial notebooks as integration tests, you will probably want to use the parallel feature provided by pytest-xdist. Add `-n 5` to the pytest command to run on 5 threads, for example.
+You may want to avoid some of the tutorials: the adaptive control tutorial requires `ldsctrlest` which can be hard to install and the video visualization tutorial takes about 3 minutes to run.
 
 ## Documentation
 

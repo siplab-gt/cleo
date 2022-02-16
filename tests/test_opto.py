@@ -64,21 +64,42 @@ def test_inject_opto(opto, neurons, neurons2):
 #     sim.inject_stimulator(opto2, neurons)
 
 
-def test_v_and_Iopto_in_model(opto):
-    ng = NeuronGroup(1, "v = -70*mV : volt")
+def test_v_and_Iopto_in_model(opto, opto2):
+    ng = NeuronGroup(
+        1,
+        """v = -70*mV : volt
+        I_wumbo : amp""",
+    )
     sim = CLSimulator(Network(ng))
     with pytest.raises(BrianObjectException):
         sim.inject_stimulator(opto, ng)
+    # ok when Iopto name specified
+    # ...but missing coords
+    with pytest.raises(AttributeError):
+        sim.inject_stimulator(opto, ng, Iopto_var_name="I_wumbo")
+    # now it should work
+    assign_coords_grid_rect_prism(ng, (0, 0), (0, 0), (0, 0), (1, 1, 1))
+    sim.inject_stimulator(opto, ng, Iopto_var_name="I_wumbo")
+
     ng = NeuronGroup(
         1,
         """du/dt = (-70*mV + 100*Mohm*Iopto) / (10*ms) : volt
         Iopto : amp""",
     )
+    assign_coords_grid_rect_prism(ng, (0, 0), (0, 0), (0, 0), (1, 1, 1))
     sim = CLSimulator(Network(ng))
+    # can't inject device into different simulator
+    with pytest.raises(Exception):
+        sim.inject_stimulator(opto, ng, v_var_name="u")
+    # so use different device, opto2
+    # missing v in model
     with pytest.raises(BrianObjectException):
-        sim.inject_stimulator(opto, ng)
+        sim.inject_stimulator(opto2, ng)
+    # should work with new, un-injected opto
+    sim.inject_stimulator(opto2, ng, v_var_name="u")
 
 
+@pytest.mark.slow
 def test_opsin_model(opto, neurons):
     sim = CLSimulator(Network(neurons))
     sim.inject_stimulator(opto, neurons)
@@ -103,7 +124,7 @@ def test_opsin_model(opto, neurons):
     opto.update(0)
     sim.run(49 * ms)
     assert all(neurons.Iopto > -100 * pamp)
-    assert all(np.abs(neurons.v + 70 * mV) < 2 * mV)  # within 2 mV of -70
+    assert np.allclose(neurons.v, -70 * mV, atol=2 * mV)  # within 2 mV of -70
     assert all(opsyn.C1 > 0.99)
     assert all(opsyn.O1 < 0.01)
     assert all(opsyn.C2 < 0.01)
@@ -130,6 +151,7 @@ def test_light_model(opto, neurons):
     assert all(np.greater(opsyn.T, opto.opto_syns[neurons2.name].T))
 
 
+@pytest.mark.slow
 def test_opto_reset(opto, neurons, neurons2):
     sim = CLSimulator(Network(neurons, neurons2))
     sim.inject_stimulator(opto, neurons, neurons2)
@@ -142,7 +164,7 @@ def test_opto_reset(opto, neurons, neurons2):
             assert np.all(getattr(opsyn, varname) == value)
 
     opto.update(1)
-    sim.run(5*ms)
+    sim.run(5 * ms)
     for opsyn in [opsyn1, opsyn2]:
         for varname, value in init_values.items():
             assert not np.all(getattr(opsyn, varname) == value)

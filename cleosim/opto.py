@@ -9,6 +9,9 @@ import brian2.units.unitsafefunctions as usf
 from brian2.core.base import BrianObjectException
 import numpy as np
 import matplotlib
+from matplotlib import colors
+from matplotlib.artist import Artist
+from matplotlib.collections import PathCollection
 
 from cleosim.utilities import wavelength_to_rgb
 from cleosim.stimulators import Stimulator
@@ -100,6 +103,12 @@ class OptogeneticIntervention(Stimulator):
     """Stores the synapse objects implementing the opsin model,
     with NeuronGroup name keys and Synapse values."""
 
+    max_Irr0_mW_per_mm2: float
+    """TODO"""
+
+    max_Irr0_mW_per_mm2_viz: float
+    """TODO"""
+
     def __init__(
         self,
         name: str,
@@ -108,7 +117,7 @@ class OptogeneticIntervention(Stimulator):
         light_model_params: dict,
         location: Quantity = (0, 0, 0) * mm,
         direction: Tuple[float, float, float] = (0, 0, 1),
-        start_value: Quantity = 0 * mwatt / mm2,
+        max_Irr0_mW_per_mm2: float = None,
     ):
         """
         Parameters
@@ -130,10 +139,8 @@ class OptogeneticIntervention(Stimulator):
         direction : Tuple[float, float, float], optional
             (x, y, z) vector specifying direction in which light
             source is pointing, by default (0, 0, 1)
-        start_value : Quantity, optional
-            Initial light intensity value (with Brian units), by default 0*mwatt/mm2
         """
-        super().__init__(name, start_value)
+        super().__init__(name, 0)
         self.opsin_model = opsin_model
         self.opsin_params = opsin_params
         self.light_model_params = light_model_params
@@ -141,6 +148,8 @@ class OptogeneticIntervention(Stimulator):
         # direction unit vector
         self.dir_uvec = (direction / np.linalg.norm(direction)).reshape((3, 1))
         self.opto_syns = {}
+        self.max_Irr0_mW_per_mm2 = max_Irr0_mW_per_mm2
+        self.max_Irr0_mW_per_mm2_viz = None
 
     def _Foutz12_transmittance(self, r, z, scatter=True, spread=True, gaussian=True):
         """Foutz et al. 2012 transmittance model: Gaussian cone with Kubelka-Munk propagation"""
@@ -293,7 +302,7 @@ class OptogeneticIntervention(Stimulator):
         self.opto_syns[neuron_group.name] = opto_syn
         self.brian_objects.add(opto_syn)
 
-    def add_self_to_plot(self, ax, axis_scale_unit):
+    def add_self_to_plot(self, ax, axis_scale_unit) -> PathCollection:
         # show light with point field, assigning r and z coordinates
         # to all points
         xlim = ax.get_xlim()
@@ -313,7 +322,7 @@ class OptogeneticIntervention(Stimulator):
         y = y.flatten()[idx_to_plot]
         z = z.flatten()[idx_to_plot]
         T = T[idx_to_plot, 0]
-        ax.scatter(
+        point_cloud = ax.scatter(
             x / axis_scale_unit,
             y / axis_scale_unit,
             z / axis_scale_unit,
@@ -328,6 +337,34 @@ class OptogeneticIntervention(Stimulator):
         opto_patch = matplotlib.patches.Patch(color=c, label=self.name)
         handles.append(opto_patch)
         ax.legend(handles=handles)
+        return [point_cloud]
+
+    def update_artists(
+        self, artists: list[Artist], value, *args, **kwargs
+    ) -> list[Artist]:
+        """TODO"""
+
+        self._prev_value = getattr(self, "_prev_value", None)
+        if value == self._prev_value:
+            return []
+
+        assert len(artists) == 1
+        point_cloud = artists[0]
+
+        if self.max_Irr0_mW_per_mm2_viz is not None:
+            max_Irr0 = self.max_Irr0_mW_per_mm2_viz
+        elif self.max_Irr0_mW_per_mm2 is not None:
+            max_Irr0 = self.max_Irr0_mW_per_mm2
+        else:
+            raise Exception(
+                f"OptogeneticIntervention '{self.name}' needs max_Irr0_mW_per_mm2_viz "
+                "or max_Irr0_mW_per_mm2 "
+                "set to visualize light intensity."
+            )
+
+        intensity = value / max_Irr0 if value <= max_Irr0 else max_Irr0
+        point_cloud.set_cmap(self._alpha_cmap_for_wavelength(intensity))
+        return [point_cloud]
 
     def update(self, Irr0_mW_per_mm2: float):
         """Set the light intensity, in mW/mm2 (without unit)
@@ -344,6 +381,12 @@ class OptogeneticIntervention(Stimulator):
         """
         if Irr0_mW_per_mm2 < 0:
             raise ValueError(f"{self.name}: light intensity Irr0 must be nonnegative")
+        if (
+            self.max_Irr0_mW_per_mm2 is not None
+            and Irr0_mW_per_mm2 > self.max_Irr0_mW_per_mm2
+        ):
+            Irr0_mW_per_mm2 = self.max_Irr0_mW_per_mm2
+        super().update(Irr0_mW_per_mm2)
         for opto_syn in self.opto_syns.values():
             opto_syn.Irr0 = Irr0_mW_per_mm2 * mwatt / mm2
 
@@ -355,12 +398,10 @@ class OptogeneticIntervention(Stimulator):
         for opto_syn in self.opto_syns.values():
             self._init_opto_syn_vars(opto_syn)
 
-    def _alpha_cmap_for_wavelength(self):
-        from matplotlib import colors
-
+    def _alpha_cmap_for_wavelength(self, intensity=0.5):
         c = wavelength_to_rgb(self.light_model_params["wavelength"] / nmeter)
         c_clear = (*c, 0)
-        c_opaque = (*c, 0.3)
+        c_opaque = (*c, 0.6 * intensity)
         return colors.LinearSegmentedColormap.from_list(
             "incr_alpha", [(0, c_clear), (1, c_opaque)]
         )

@@ -45,11 +45,15 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.pytest.ini_options]
 addopts = [
-    "--doctest-modules",
+    # "--doctest-modules",
     "--nbmake",
     # "--flake8",
     # will want to call this on CI where ldsctrlest is not installed
     # "--ignore=examples/adaptive_ctrl_ldsctrlest.ipynb"
+    "--ignore=docs/tutorials/video_visualization.ipynb"
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
 ]
 testpaths = [
     "tests",

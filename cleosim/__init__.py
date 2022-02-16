@@ -6,6 +6,7 @@ import cleosim.stimulators
 import cleosim.recorders
 import cleosim.processing
 import cleosim.utilities
+import cleosim.visualization
 
 from cleosim.base import (
     CLSimulator,

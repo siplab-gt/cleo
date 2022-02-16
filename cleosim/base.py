@@ -15,6 +15,8 @@ from brian2 import (
     Quantity,
 )
 from matplotlib import pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+from matplotlib.artist import Artist
 
 
 class InterfaceDevice(ABC):
@@ -43,6 +45,11 @@ class InterfaceDevice(ABC):
         """
         self.name = name
         self.brian_objects = set()
+        self.sim = None
+
+    def init_for_simulator(self, simulator: CLSimulator) -> None:
+        """TODO"""
+        pass
 
     @abstractmethod
     def connect_to_neuron_group(self, neuron_group: NeuronGroup, **kwparams) -> None:
@@ -60,19 +67,29 @@ class InterfaceDevice(ABC):
         """
         pass
 
-    def add_self_to_plot(self, ax: plt.Axes, axis_scale_unit: Unit) -> None:
+    def add_self_to_plot(self, ax: Axes3D, axis_scale_unit: Unit) -> list[Artist]:
         """Add device to an existing plot
 
-        Should only be called by :func:`~cleosim.coordinates.plot_neuron_positions`.
+        Should only be called by :func:`~cleosim.coordinates.plot`.
 
         Parameters
         ----------
-        ax : plt.Axes
+        ax : Axes3D
             The existing matplotlib Axes object
         axis_scale_unit : Unit
             The unit used to label axes and define chart limits
+
+        Returns
+        -------
+        list[Artist]
+            A list of artists used to render the device. Needed for use
+            in conjunction with :class:`~cleosim.visualization.VideoVisualizer`.
         """
-        pass
+        return []
+
+    def update_artists(artists: list[Artist], *args, **kwargs) -> list[Artist]:
+        """TODO"""
+        return []
 
 
 class IOProcessor(ABC):
@@ -169,7 +186,8 @@ class Stimulator(InterfaceDevice):
 
         By default this simply sets `value` to `ctrl_signal`.
         You will want to implement this method if your
-        stimulator requires additional logic.
+        stimulator requires additional logic. Use super.update(self, value)
+        to preserve the self.value attribute logic
 
         Parameters
         ----------
@@ -206,24 +224,47 @@ class CLSimulator:
         self.io_processor = None
         self._processing_net_op = None
 
-    def _inject_device(
-        self, device: InterfaceDevice, *neuron_groups, **kwparams
+    def inject_device(
+        self, device: InterfaceDevice, *neuron_groups: NeuronGroup, **kwparams: Any
     ) -> None:
+        """Inject InterfaceDevice into the network, connecting to specified neurons.
+
+        Calls :meth:`~InterfaceDevice.connect_to_neuron_group` for each group with
+        kwparams and adds the device's :attr:`~InterfaceDevice.brian_objects`
+        to the simulator's :attr:`network`.
+
+        Automatically called by :meth:`inject_recorder` and :meth:`inject_stimulator`.
+
+        Parameters
+        ----------
+        device : InterfaceDevice
+            Device to inject
+        """
         if len(neuron_groups) == 0:
             raise Exception("Injecting stimulator for no neuron groups is meaningless.")
         for ng in neuron_groups:
             if type(ng) == NeuronGroup:
                 if ng not in self.network.objects:
                     raise Exception(
-                        f"Attempted to connect device {device.name} to neuron group {ng.name}, which is not part of the simulator's network."
+                        f"Attempted to connect device {device.name} to neuron group "
+                        f"{ng.name}, which is not part of the simulator's network."
                     )
             elif type(ng) == Subgroup:
                 # must look at sorted_objects because ng.source is unhashable
                 if ng.source not in self.network.sorted_objects:
                     raise Exception(
-                        f"Attempted to connect device {device.name} to neuron group {ng.source.name}, which is not part of the simulator's network."
+                        f"Attempted to connect device {device.name} to neuron group "
+                        f"{ng.source.name}, which is not part of the simulator's network."
                     )
-            device.sim = self
+            if device.sim not in [None, self]:
+                raise Exception(
+                    f"Attempted to inject device {device.name} into {self}, "
+                    f"but it was previously injected into {device.sim}. "
+                    "Each device can only be injected into one CLSimulator."
+                )
+            if device.sim is None:
+                device.sim = self
+                device.init_for_simulator(self)
             device.connect_to_neuron_group(ng, **kwparams)
         for brian_object in device.brian_objects:
             self.network.add(brian_object)
@@ -247,7 +288,7 @@ class CLSimulator:
             Necessary for parameters that can vary by neuron group, such
             as opsin expression levels.
         """
-        self._inject_device(stimulator, *neuron_groups, **kwparams)
+        self.inject_device(stimulator, *neuron_groups, **kwparams)
         self.stimulators[stimulator.name] = stimulator
 
     def inject_recorder(
@@ -268,7 +309,7 @@ class CLSimulator:
             Necessary for parameters that can vary by neuron group, such
             as inhibitory/excitatory cell type
         """
-        self._inject_device(recorder, *neuron_groups, **kwparams)
+        self.inject_device(recorder, *neuron_groups, **kwparams)
         self.recorders[recorder.name] = recorder
 
     def get_state(self) -> dict:

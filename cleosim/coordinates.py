@@ -1,19 +1,14 @@
 """Contains functions for assigning neuron coordinates and visualizing"""
 
 from __future__ import annotations
-from warnings import warn
 from typing import Tuple
-from collections.abc import Iterable
 
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 from brian2 import mm, meter, Unit
 from brian2.groups.group import Group
 from brian2.groups.neurongroup import NeuronGroup
 from brian2.units.fundamentalunits import get_dimensions
 import numpy as np
 
-from cleosim.base import InterfaceDevice
 from cleosim.utilities import get_orth_vectors_for_v, modify_model_with_eqs
 
 
@@ -151,78 +146,6 @@ def assign_coords_rand_cylinder(
     neuron_group.x = points[:, 0] * unit
     neuron_group.y = points[:, 1] * unit
     neuron_group.z = points[:, 2] * unit
-
-
-def plot_neuron_positions(
-    *neuron_groups: NeuronGroup,
-    xlim: Tuple[float, float] = None,
-    ylim: Tuple[float, float] = None,
-    zlim: Tuple[float, float] = None,
-    colors: Iterable = None,
-    axis_scale_unit: Unit = mm,
-    devices_to_plot: Iterable[InterfaceDevice] = [],
-    invert_z: bool = True,
-) -> None:
-    """Visualize neurons and interface devices
-
-    Parameters
-    ----------
-    xlim : Tuple[float, float], optional
-        xlim for plot, determined automatically by default
-    ylim : Tuple[float, float], optional
-        ylim for plot, determined automatically by default
-    zlim : Tuple[float, float], optional
-        zlim for plot, determined automatically by default
-    colors : Iterable, optional
-        colors, one for each neuron group, automatically determined by default
-    axis_scale_unit : Unit, optional
-        Brian unit to scale lim params, by default mm
-    devices_to_plot : Iterable[InterfaceDevice], optional
-        devices to add to the plot; add_self_to_plot is called
-        for each. By default []
-    invert_z : bool, optional
-        whether to invert z-axis, by default True to reflect the convention
-        that +z represents depth from cortex surface
-
-    Raises
-    ------
-    ValueError
-        When neuron group doesn't have x, y, and z already defined
-    """
-    for ng in neuron_groups:
-        for dim in ["x", "y", "z"]:
-            if not hasattr(ng, dim):
-                raise ValueError(f"{ng.name} does not have dimension {dim} defined.")
-
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection="3d")
-    assert colors is None or len(colors) == len(neuron_groups)
-    for i in range(len(neuron_groups)):
-        ng = neuron_groups[i]
-        args = [ng.x / axis_scale_unit, ng.y / axis_scale_unit, ng.z / axis_scale_unit]
-        kwargs = {"label": ng.name, "alpha": 0.3}
-        if colors is not None:
-            kwargs["color"] = colors[i]
-        ax.scatter(*args, **kwargs)
-        ax.set_xlabel(f"x ({axis_scale_unit._dispname})")
-        ax.set_ylabel(f"y ({axis_scale_unit._dispname})")
-        ax.set_zlabel(f"z ({axis_scale_unit._dispname})")
-
-    if xlim is not None:
-        ax.set_xlim(xlim)
-    if ylim is not None:
-        ax.set_ylim(ylim)
-    if zlim is None:
-        zlim = ax.get_zlim()
-    if invert_z:
-        ax.set_zlim(zlim[1], zlim[0])
-    else:
-        ax.set_zlim(zlim)
-
-    ax.legend()
-
-    for device in devices_to_plot:
-        device.add_self_to_plot(ax, axis_scale_unit)
 
 
 def _init_variables(group: Group):

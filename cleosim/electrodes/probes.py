@@ -5,9 +5,9 @@ from collections.abc import Iterable
 from operator import concat
 from typing import Any, Tuple
 
-import numpy as np
 from mpl_toolkits.mplot3d.axes3d import Axes3D
-from brian2 import NeuronGroup, mm, Unit, Quantity, umeter
+from matplotlib.artist import Artist
+from brian2 import NeuronGroup, mm, Unit, Quantity, umeter, np
 
 from cleosim.base import Recorder
 from cleosim.utilities import get_orth_vectors_for_v
@@ -166,7 +166,7 @@ class Probe(Recorder):
             state_dict[signal.name] = signal.get_state()
         return state_dict
 
-    def add_self_to_plot(self, ax: Axes3D, axis_scale_unit: Unit) -> None:
+    def add_self_to_plot(self, ax: Axes3D, axis_scale_unit: Unit) -> list[Artist]:
         # docstring inherited from InterfaceDevice
         marker = ax.scatter(
             self.xs / axis_scale_unit,
@@ -181,6 +181,7 @@ class Probe(Recorder):
         handles = ax.get_legend().legendHandles
         handles.append(marker)
         ax.legend(handles=handles)
+        return [marker]
 
     @property
     def xs(self) -> Quantity:
