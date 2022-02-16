@@ -1,7 +1,6 @@
-"""Tools for visualization models and simulations"""
+"""Tools for visualizing models and simulations"""
 from __future__ import annotations
-from warnings import warn
-from typing import Tuple, Any
+from typing import Tuple, Any, Union
 from collections.abc import Iterable
 from matplotlib.artist import Artist
 
@@ -15,16 +14,29 @@ from cleosim.base import CLSimulator, InterfaceDevice
 
 
 class VideoVisualizer(InterfaceDevice):
-    """TODO"""
+    """Device for visualizing a simulation.
+
+    Must be injected after all other devices and before the simulation
+    is run."""
 
     def __init__(
         self,
-        name: str,
-        devices_to_plot="all",
+        devices_to_plot: list[InterfaceDevice] = "all",
         dt: Quantity = 1 * ms,
     ) -> None:
-        """TODO"""
-        super().__init__(name)
+        """
+        Parameters
+        ----------
+        devices_to_plot : list[InterfaceDevice], optional
+            list of devices to include in the plot, just as in the :func:`plot`
+            function, by default "all", which will include all recorders and
+            stimulators currently injected when this visualizer is injected into
+            the simulator
+        dt : Brian 2 temporal Quantity, optional
+            length of each frame---that is, every `dt` the visualizer takes a
+            snapshot of the network, by default 1*ms
+        """
+        super().__init__("video_visualizer")
         self.neuron_groups = []
         self._spike_mons = []
         self._num_old_spikes = []
@@ -64,22 +76,22 @@ class VideoVisualizer(InterfaceDevice):
 
     def generate_Animation(
         self, plotargs: dict, slowdown_factor: float = 10, **figargs
-    ) -> anim.FuncAnimation:
-        """TODO
+    ) -> anim.Animation:
+        """Create a matplotlib Animation object from the recorded simulation
 
         Parameters
         ----------
-        save_name : _type_, optional
-            _description_, by default None
-        figsize : tuple, optional
-            _description_, by default (8, 6)
-        slowdown_factor : int, optional
-            _description_, by default 10
+        plotargs : dict
+            dictionary of arguments as taken by :func:`plot`
+        slowdown_factor : float, optional
+            how much slower the animation will be rendered, as a multiple of
+            real-time, by default 10
 
         Returns
         -------
-        anim.FuncAnimation
-            _description_
+        :class:`matplotlib.animation.Animation`
+            An Animation object capturing the desired visualization.
+            See matplotlib's docs for saving and rendering options.
         """
         interval_ms = self.dt / ms * slowdown_factor
         self.fig = plt.figure(**figargs)

@@ -104,10 +104,16 @@ class OptogeneticIntervention(Stimulator):
     with NeuronGroup name keys and Synapse values."""
 
     max_Irr0_mW_per_mm2: float
-    """TODO"""
+    """The maximum irradiance the light source can emit.
+    
+    Usually determined by hardware in a real experiment."""
 
     max_Irr0_mW_per_mm2_viz: float
-    """TODO"""
+    """Maximum irradiance for visualization purposes. 
+    
+    i.e., the level at or above which the light appears maximally bright.
+    Only relevant in video visualization.
+    """
 
     def __init__(
         self,
@@ -342,8 +348,6 @@ class OptogeneticIntervention(Stimulator):
     def update_artists(
         self, artists: list[Artist], value, *args, **kwargs
     ) -> list[Artist]:
-        """TODO"""
-
         self._prev_value = getattr(self, "_prev_value", None)
         if value == self._prev_value:
             return []

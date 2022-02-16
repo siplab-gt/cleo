@@ -48,7 +48,18 @@ class InterfaceDevice(ABC):
         self.sim = None
 
     def init_for_simulator(self, simulator: CLSimulator) -> None:
-        """TODO"""
+        """Initialize device for simulator on initial injection
+
+        This function is called only the first time a device is
+        injected into a simulator and performs any operations
+        that are independent of the individual neuron groups it
+        is connected to.
+
+        Parameters
+        ----------
+        simulator : CLSimulator
+            simulator being injected into
+        """
         pass
 
     @abstractmethod
@@ -70,7 +81,7 @@ class InterfaceDevice(ABC):
     def add_self_to_plot(self, ax: Axes3D, axis_scale_unit: Unit) -> list[Artist]:
         """Add device to an existing plot
 
-        Should only be called by :func:`~cleosim.coordinates.plot`.
+        Should only be called by :func:`~cleosim.visualization.plot`.
 
         Parameters
         ----------
@@ -88,7 +99,23 @@ class InterfaceDevice(ABC):
         return []
 
     def update_artists(artists: list[Artist], *args, **kwargs) -> list[Artist]:
-        """TODO"""
+        """Update the artists used to render the device
+
+        Used to set the artists' state at every frame of a video visualization.
+        The current state would be passed in `*args` or `**kwargs`
+
+        Parameters
+        ----------
+        artists : list[Artist]
+            the artists used to render the device originally, i.e.,
+            which were returned from the first :meth:`add_self_to_plot` call.
+
+        Returns
+        -------
+        list[Artist]
+            The artists that were actually updated. Needed for efficient
+            blit rendering, where only updated artists are re-rendered.
+        """
         return []
 
 

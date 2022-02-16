@@ -33,7 +33,7 @@ def test_VideoVisualizer():
     sim.inject_stimulator(opto, ng)
     sim.inject_recorder(probe, ng)
 
-    vv = VideoVisualizer("vv")
+    vv = VideoVisualizer()
     sim.inject_device(vv, ng)
 
     sim.run(2 * ms)

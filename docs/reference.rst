@@ -47,6 +47,14 @@ cleosim.processing module
    :undoc-members:
    :show-inheritance:
 
+cleosim.visualization module
+----------------------------
+
+.. automodule:: cleosim.visualization
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 cleosim.recorders module
 ------------------------
 
