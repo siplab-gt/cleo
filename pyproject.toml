@@ -1,0 +1,61 @@
+[tool.poetry]
+name = "cleosim"
+version = "0.1.0"
+description = "Closed Loop, Electrophysiology, and Optogenetics Simulator: testbed and prototyping kit"
+authors = [
+    "Kyle Johnsen <kyle@kjohnsen.org>",
+    "Nathan Cruzado <ncruzado3@gatech.edu>",
+]
+license = "MIT"
+homepage = "https://cleosim.readthedocs.io"
+repository = "https://github.com/kjohnsen/cleosim"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+]
+
+[tool.poetry.dependencies]
+python = "^3.7"
+brian2 = "^2.4, !=2.5.0.2"
+matplotlib = "^3.4"
+numpy = "^1.16"
+scipy = "*"
+tklfp = "^0.1"
+bidict = "*"
+nptyping = "^1.4.4"
+
+[tool.poetry.dev-dependencies]
+black = "^21.12b0"
+flake8 = "^4.0.1"
+pytest = "^6.2.5"
+pytest-flake8 = "^1.0.7"
+pep8-naming = "^0.12.1"
+flake8-docstrings = "^1.6.0"
+flake8-pytest-style = "^1.6.0"
+nbmake = "^1.2"
+Sphinx = "^4.0"
+sphinx-rtd-theme = "^1.0.0"
+sphinx-copybutton = "^0.4.0"
+myst-nb = "^0.13.1"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+addopts = [
+    # "--doctest-modules",
+    "--nbmake",
+    # "--flake8",
+    # will want to call this on CI where ldsctrlest is not installed
+    # "--ignore=examples/adaptive_ctrl_ldsctrlest.ipynb"
+    "--ignore=docs/tutorials/video_visualization.ipynb"
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+]
+testpaths = [
+    "tests",
+    "docs/tutorials",
+]

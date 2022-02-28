@@ -4,6 +4,7 @@ import numpy as np
 from brian2 import SpikeGeneratorGroup, ms, mm, Network
 from cleosim import CLSimulator
 from cleosim.electrodes import *
+from cleosim.processing import RecordOnlyProcessor
 
 
 def _spike_generator_group(z_coords_mm, indices=None, times_ms=None, **kwparams):
@@ -65,7 +66,7 @@ def test_MUS_multiple_contacts():
 
     # skip to 6 ms
     sim.run(2 * ms)
-    # sim.get_state() nested dict is what will be passed to processing loop
+    # sim.get_state() nested dict is what will be passed to IO processor
     i, t, y = sim.get_state()["probe"]["mus"]
     assert (0 in i) and (1 in i) and len(i) >= 7
     assert all(t_i in t.round(2) for t_i in [4.1, 4.9, 5.1, 5.3, 5.5])
@@ -102,6 +103,10 @@ def test_MUS_multiple_groups():
     assert 20 < np.sum(mus.i == 0) < 60
     # second channel would have caught all spikes from sgg1 and sgg2
     assert np.sum(mus.i == 1) == 60
+
+
+def test_MUS_reset():
+    _test_reset(MultiUnitSpiking)
 
 
 def test_SortedSpiking():
@@ -148,3 +153,30 @@ def test_SortedSpiking():
 
     for i in (0, 1, 4):
         assert not i in ss.i
+
+
+def _test_reset(spike_signal_class):
+    sgg = _spike_generator_group([0], period=1 * ms)
+    net = Network(sgg)
+    sim = CLSimulator(net)
+    spike_signal = spike_signal_class(
+        "spikes",
+        perfect_detection_radius=0.3 * mm,
+        half_detection_radius=0.75 * mm,
+        save_history=True,
+    )
+    probe = Probe("probe", [[0, 0, 0]] * mm, [spike_signal])
+    sim.inject_recorder(probe, sgg)
+    sim.set_io_processor(RecordOnlyProcessor(sample_period_ms=1))
+    assert len(spike_signal.i) == 0
+    assert len(spike_signal.t_ms) == 0
+    sim.run(3.1 * ms)
+    assert len(spike_signal.i) == 3
+    assert len(spike_signal.t_ms) == 3
+    sim.reset()
+    assert len(spike_signal.i) == 0
+    assert len(spike_signal.t_ms) == 0
+
+
+def test_SortedSpiking_reset():
+    _test_reset(SortedSpiking)

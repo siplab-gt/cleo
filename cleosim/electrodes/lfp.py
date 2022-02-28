@@ -10,9 +10,23 @@ from cleosim.electrodes.probes import Signal, Probe
 
 
 class TKLFPSignal(Signal):
+    """Records the Teleńczuk kernel LFP approximation.
+
+    Requires ``tklfp_type='exc'|'inh'`` to specify cell type
+    on injection.
+
+    TKLFP is computed from spikes using the tklfp package"""
+
     uLFP_threshold_uV: float
+    """Threshold, in microvolts, above which the uLFP for a single
+    spike is guaranteed to be considered. This determines the buffer
+    length of past spikes, since the uLFP from a long-past spike
+    becomes negligible and is ignored."""
     save_history: bool
+    """Whether to record output from every timestep in :attr:`lfp_uV`
+    Output is stored every time :meth:`get_state` is called."""
     lfp_uV: np.ndarray
+    """Approximated LFP from every timstep, recorded if :attr:`save_history`"""
     _elec_coords_mm: np.ndarray
     _tklfps: list[TKLFP]
     _monitors: list[SpikeMonitor]
@@ -23,6 +37,16 @@ class TKLFPSignal(Signal):
     def __init__(
         self, name: str, uLFP_threshold_uV: float = 1e-3, save_history: bool = False
     ) -> None:
+        """
+        Parameters
+        ----------
+        name : str
+            Unique identifier for signal, used to identify signal output in :meth:`Probe.get_state`
+        uLFP_threshold_uV : float, optional
+            Sets :attr:`uLFP_threshold_uV`, by default 1e-3
+        save_history : bool, optional
+            Sets :attr:`save_history` to determine whether output is recorded, by default False
+        """
         super().__init__(name)
         self.uLFP_threshold_uV = uLFP_threshold_uV
         self.save_history = save_history
@@ -33,8 +57,9 @@ class TKLFPSignal(Signal):
         self._t_ms_buffers = []
         self._buffer_positions = []
 
-    def init_for_electrode_group(self, probe: Probe):
-        super().init_for_electrode_group(probe)
+    def init_for_probe(self, probe: Probe):
+        # inherit docstring
+        super().init_for_probe(probe)
         self._elec_coords_mm = probe.coords / mm
         # need to invert z coords since cleosim uses an inverted z axis and
         # tklfp does not
@@ -43,6 +68,7 @@ class TKLFPSignal(Signal):
             self.lfp_uV = np.empty((0, self.probe.n))
 
     def connect_to_neuron_group(self, neuron_group: NeuronGroup, **kwparams):
+        # inherit docstring
         # prep tklfp object
         tklfp_type = kwparams.get("tklfp_type", "not given")
         if tklfp_type not in ["exc", "inh"]:
@@ -84,6 +110,20 @@ class TKLFPSignal(Signal):
             self.lfp_uV = np.vstack([self.lfp_uV, out])
         return out
 
+    def reset(self, **kwargs) -> None:
+        super().reset(**kwargs)
+        for i_mon in range(len(self._monitors)):
+            self._reset_buffer(i_mon)
+        if self.save_history:
+            self.lfp_uV = np.empty((0, self.probe.n))
+
+    def _reset_buffer(self, i_mon):
+        mon = self._monitors[i_mon]
+        buf_len = len(self._i_buffers[i_mon])
+        self._i_buffers[i_mon] = [np.array([], dtype=int, ndmin=1)] * buf_len
+        self._t_ms_buffers[i_mon] = [np.array([], dtype=float, ndmin=1)] * buf_len
+        self._buffer_positions[i_mon] = 0
+
     def _update_spike_buffer(self, i_mon):
         mon = self._monitors[i_mon]
         n_prev = self._mon_spikes_already_seen[i_mon]
@@ -105,19 +145,17 @@ class TKLFPSignal(Signal):
 
     def _get_buffer_length(self, tklfp, **kwparams):
         # need sampling period
-        sampling_period_ms = kwparams.get("sampling_period_ms", None)
-        if sampling_period_ms is None:
+        sample_period_ms = kwparams.get("sample_period_ms", None)
+        if sample_period_ms is None:
             try:
-                sampling_period_ms = (
-                    self.probe.sim.proc_loop.sampling_period_ms
-                )
-            except AttributeError:  # probably means sim doesn't have proc_loop
+                sample_period_ms = self.probe.sim.io_processor.sample_period_ms
+            except AttributeError:  # probably means sim doesn't have io_processor
                 raise Exception(
                     "TKLFP needs to know the sampling period. Either set the simulator's "
-                    f"processing loop before injecting {self.probe.name} or "
+                    f"IO processor before injecting {self.probe.name} or "
                     f"specify it on injection: .inject_recorder({self.probe.name} "
-                    ", tklfp_type=..., sampling_period_ms=...)"
+                    ", tklfp_type=..., sample_period_ms=...)"
                 )
         return np.ceil(
-            tklfp.compute_min_window_ms(self.uLFP_threshold_uV) / sampling_period_ms
+            tklfp.compute_min_window_ms(self.uLFP_threshold_uV) / sample_period_ms
         ).astype(int)

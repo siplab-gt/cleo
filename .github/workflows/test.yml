@@ -1,15 +1,20 @@
 name: Test and lint
 
-# Controls when the action will run. 
+# Controls when the action will run.
 on:
   # Triggers the workflow on push or pull request events for master
   push:
-    branches: [ master ]
+    branches: [master]
   pull_request:
-    branches: [ master ]
+    branches: [master]
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
+    inputs:
+      debug_enabled:
+        description: "Run the build with tmate debugging enabled (https://github.com/marketplace/actions/debugging-with-tmate)"
+        required: false
+        default: false
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
@@ -20,14 +25,19 @@ jobs:
     strategy:
       matrix:
         os: [macos-latest, windows-latest, ubuntu-latest]
-        python: [3.7, 3.x]
+        # os: [macos-latest]
+        python: [3.7, 3.9]
+        # python: [3.9]
         include:
-        - os: ubuntu-latest
-          cache_path: ~/.cache/pip
-        - os: macos-latest
-          cache_path: ~/Library/Caches/pip
-        - os: windows-latest
-          cache_path: ~\AppData\Local\pip\Cache
+          - os: ubuntu-latest
+            pip_cache: ~/.cache/pip
+            poetry_cache: ~/.local
+          - os: macos-latest
+            pip_cache: ~/Library/Caches/pip
+            poetry_cache: ~/.local
+          - os: windows-latest
+            pip_cache: ~\AppData\Local\pip\Cache
+            poetry_cache: ~/.local # doesn't seem to work, need a different path
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
@@ -40,20 +50,38 @@ jobs:
           # Version range or exact version of a Python version to use, using SemVer's version range syntax.
           python-version: ${{ matrix.python }} # optional, default is 3.x
 
-      - name: Cache pip
+      - name: Load cached Poetry installation
         uses: actions/cache@v2
         with:
-          path: ${{ matrix.cache_path }}
-          # Look to see if there is a cache hit for the corresponding setup.py file (where dependencies are defined)
-          key: ${{ runner.os }}-pip-${{ hashFiles('setup.py') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-            ${{ runner.os }}-
+          path: ${{ matrix.poetry_cache }}
+          key: poetry-${{ runner.os }}-${{ matrix.python }}-0 # increment to reset cache
 
-      - name: Install package, dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e .
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
 
-      - name: Test as in setup.py (includes linting)
-        run: python setup.py test
+      - name: Setup tmate session # for optional debugging
+        uses: mxschmitt/action-tmate@v3
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.debug_enabled }}
+
+      # - name: Cache pip
+      #   uses: actions/cache@v2
+      #   with:
+      #     path: ${{ matrix.pip_cache }}
+      #     # Look to see if there is a cache hit for the corresponding pyproject.toml file (where dependencies are defined)
+      #     key: ${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
+      #     restore-keys: |
+      #       ${{ runner.os }}-pip-
+      #       ${{ runner.os }}-
+
+      - name: Load cached venv
+        uses: actions/cache@v2
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-${{ matrix.python }}-${{ hashFiles('**/poetry.lock') }}
+
+      - name: Install via Poetry
+        run: poetry install --no-interaction
+
+      - name: Test
+        # TODO: add --flake8
+        run: poetry run pytest --ignore=docs/tutorials/adaptive_ctrl_ldsctrlest.ipynb --ignore=docs/tutorials/video_visualization.ipynb

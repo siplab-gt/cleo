@@ -7,7 +7,7 @@ from brian2 import NeuronGroup, mm, Network, StateMonitor, umeter, np
 
 import cleosim
 from cleosim import CLSimulator
-from cleosim.electrodes.probes import (
+from cleosim.electrodes import (
     Probe,
     linear_shank_coords,
     Signal,
@@ -32,14 +32,18 @@ def test_Probe():
         Probe("probe", [[0, 0], [1, 1], [2, 2], [3, 3]] * mm)
 
 
-def test_electrode_injection():
+def test_Probe_injection():
     class DummySignal(Signal):
         def connect_to_neuron_group(self, neuron_group: NeuronGroup, **kwparams):
             self.ng = neuron_group
+            self.value = 1
             self.brian_objects.add(StateMonitor(ng, "v", record=True))
 
         def get_state(self) -> Any:
             return self.ng.name
+
+        def reset(self):
+            self.value = 0
 
     ng = NeuronGroup(1, "v : 1")
     sim = CLSimulator(Network(ng))
@@ -58,6 +62,10 @@ def test_electrode_injection():
     with pytest.raises(ValueError):
         # cannot use same signal object for two electrodes
         Probe("probe2", [0, 0, 0] * mm, signals=[dumb])
+
+    assert dumb.value == dumber.value == 1
+    probe.reset()
+    assert dumb.value == dumber.value == 0
 
 
 def _dist(c1, c2):
@@ -86,7 +94,7 @@ def test_linear_shank_coords():
 
 
 def test_tetrode_shank_coords():
-    tetr_width = 30*umeter  # default is 25 um
+    tetr_width = 30 * umeter  # default is 25 um
     coords = tetrode_shank_coords(
         start_location=(0, 0, 0.1) * mm,
         direction=(0, 0, 0.01),
@@ -98,7 +106,7 @@ def test_tetrode_shank_coords():
     # check length (length + tiny bit for contacts above and below tetrode centers)
     assert _dist(coords[0], coords[-1]) == 1.5 * mm + tetr_width * np.sqrt(2)
     # check contact spacing (tetrode width)
-    assert np.allclose(_dist(coords[0], coords[1])/umeter, tetr_width/umeter)
+    assert np.allclose(_dist(coords[0], coords[1]) / umeter, tetr_width / umeter)
 
     coords2 = tetrode_shank_coords(
         start_location=(1, 1, 0.1) * mm,
