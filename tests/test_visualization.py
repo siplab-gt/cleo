@@ -5,7 +5,7 @@ from cleosim import CLSimulator
 from cleosim.visualization import VideoVisualizer
 from cleosim.opto import (
     OptogeneticIntervention,
-    four_state,
+    FourStateModel,
     ChR2_four_state,
     default_blue,
 )
@@ -25,7 +25,7 @@ def test_VideoVisualizer():
     )
     assign_coords_rand_rect_prism(ng, (0, 0), (0, 0), (0, 0))
     opto = OptogeneticIntervention(
-        "opto", four_state, ChR2_four_state, default_blue, max_Irr0_mW_per_mm2=20
+        "opto", FourStateModel(ChR2_four_state), default_blue, max_Irr0_mW_per_mm2=20
     )
     probe = Probe("probe", [(0, 0, 0.1)] * mm)
 
