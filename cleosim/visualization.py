@@ -75,17 +75,22 @@ class VideoVisualizer(InterfaceDevice):
         self._num_old_spikes.append(0)
 
     def generate_Animation(
-        self, plotargs: dict, slowdown_factor: float = 10, **figargs
+        self, plotargs: dict, slowdown_factor: float = 10, **figargs: Any
     ) -> anim.Animation:
         """Create a matplotlib Animation object from the recorded simulation
 
         Parameters
         ----------
         plotargs : dict
-            dictionary of arguments as taken by :func:`plot`
+            dictionary of arguments as taken by :func:`plot`. can include
+            `xlim`, `ylim`, `zlim`, `colors`, `axis_scale_unit`, `invert_z`,
+            and/or `scatterargs`. neuron groups and devices are
+            automatically added and **figargs are specified separately.
         slowdown_factor : float, optional
             how much slower the animation will be rendered, as a multiple of
             real-time, by default 10
+        **figargs : Any, optional
+            keyword arguments passed to plt.figure(), such as figsize
 
         Returns
         -------
@@ -155,6 +160,7 @@ def _plot(
     axis_scale_unit: Unit = mm,
     devices_to_plot: Iterable[InterfaceDevice] = [],
     invert_z: bool = True,
+    scatterargs: dict = {},
 ) -> list[Artist]:
     for ng in neuron_groups:
         for dim in ["x", "y", "z"]:
@@ -169,6 +175,7 @@ def _plot(
         kwargs = {"label": ng.name, "alpha": 0.3}
         if colors is not None:
             kwargs["color"] = colors[i]
+        kwargs.update(scatterargs)
         neuron_artists.append(ax.scatter(*args, **kwargs))
         ax.set_xlabel(f"x ({axis_scale_unit._dispname})")
         ax.set_ylabel(f"y ({axis_scale_unit._dispname})")
@@ -201,6 +208,7 @@ def plot(
     axis_scale_unit: Unit = mm,
     devices_to_plot: Iterable[InterfaceDevice] = [],
     invert_z: bool = True,
+    scatterargs: dict = {},
     **figargs: Any,
 ) -> None:
     """Visualize neurons and interface devices
@@ -223,8 +231,10 @@ def plot(
     invert_z : bool, optional
         whether to invert z-axis, by default True to reflect the convention
         that +z represents depth from cortex surface
+    scatterargs : dict, optional
+        arguments passed to plt.scatter() for each neuron group, such as marker
     **figargs : Any, optional
-        arguments passed to plt.figure(), such as figsize
+        keyword arguments passed to plt.figure(), such as figsize
 
     Raises
     ------
@@ -243,4 +253,5 @@ def plot(
         axis_scale_unit,
         devices_to_plot,
         invert_z,
+        scatterargs,
     )
