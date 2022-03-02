@@ -10,9 +10,9 @@ from cleosim.opto import *
 from cleosim.coordinates import assign_coords_grid_rect_prism
 
 model = """
-        dv/dt = (-(v - -70*mV) - 100*Mohm*Iopto) / (10*ms) : volt
-        Iopto : amp
-        """
+    dv/dt = (-(v - -70*mV) + 100*Mohm*Iopto) / (10*ms) : volt
+    Iopto : amp
+"""
 
 
 @pytest.fixture
@@ -28,7 +28,9 @@ neurons2 = neurons
 
 @pytest.fixture
 def opto() -> OptogeneticIntervention:
-    return OptogeneticIntervention("opto", four_state, ChR2_four_state, default_blue)
+    return OptogeneticIntervention(
+        "opto", FourStateModel(ChR2_four_state), default_blue
+    )
 
 
 opto2 = opto
@@ -114,7 +116,7 @@ def test_opsin_model(opto, neurons):
     opto.update(1)
     sim.run(1 * ms)
     # current flowing, channels opened
-    assert all(neurons.Iopto < 0)
+    assert all(neurons.Iopto > 0)
     assert all(neurons.v > -70 * mV)  # depolarized
     assert all(opsyn.C1 < 1)
     assert all(opsyn.O1 > 0)
@@ -173,3 +175,41 @@ def test_opto_reset(opto, neurons, neurons2):
     for opsyn in [opsyn1, opsyn2]:
         for varname, value in init_values.items():
             assert np.all(getattr(opsyn, varname) == value)
+
+
+def _prep_simple_opto(ng_model, gain):
+    ng = NeuronGroup(1, ng_model)
+    assign_coords_grid_rect_prism(ng, (0, 0), (0, 0), (0, 0), shape=(1, 1, 1))
+    # assuming 0 starting voltage
+    opto = OptogeneticIntervention("opto", ProportionalCurrentModel(gain), default_blue)
+    sim = CLSimulator(Network(ng))
+    sim.inject_stimulator(opto, ng)
+    return ng, opto, sim
+
+
+@pytest.mark.slow
+def test_simple_opto_unitless():
+    ng_model = "dv/dt = (-v + Iopto) / (10*ms) : 1"
+    # since Iopto not in model
+    with pytest.raises(BrianObjectException):
+        ng, opto, sim = _prep_simple_opto(ng_model, 1)
+
+    ng_model += "\n Iopto : 1"
+    ng, opto, sim = _prep_simple_opto(ng_model, 1)
+    opto.update(1)
+    sim.run(1 * ms)
+    assert ng.v > 0
+
+
+@pytest.mark.slow
+def test_simple_opto_amps():
+    ng_model = "dv/dt = (-v + 50*Mohm * Iopto) / (10*ms) : volt"
+    # since Iopto not in model
+    with pytest.raises(BrianObjectException):
+        ng, opto, sim = _prep_simple_opto(ng_model, 1 * namp)
+
+    ng_model += "\n Iopto : ampere"
+    ng, opto, sim = _prep_simple_opto(ng_model, 1 * namp)
+    opto.update(1)
+    sim.run(1 * ms)
+    assert ng.v > 0 * volt

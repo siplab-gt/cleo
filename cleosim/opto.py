@@ -1,10 +1,11 @@
-"""Contains opsin model, parameters, and OptogeneticIntervention device"""
+"""Contains opsin models, parameters, and OptogeneticIntervention device"""
 from __future__ import annotations
+from abc import ABC, abstractmethod
 from typing import Tuple, Any
 
 from brian2 import Synapses, NeuronGroup
 from brian2.units import *
-from brian2.units.allunits import meter2
+from brian2.units.allunits import meter2, radian
 import brian2.units.unitsafefunctions as usf
 from brian2.core.base import BrianObjectException
 import numpy as np
@@ -16,36 +17,6 @@ from matplotlib.collections import PathCollection
 from cleosim.utilities import wavelength_to_rgb
 from cleosim.stimulators import Stimulator
 
-
-four_state = """
-    dC1/dt = Gd1*O1 + Gr0*C2 - Ga1*C1 : 1 (clock-driven)
-    dO1/dt = Ga1*C1 + Gb*O2 - (Gd1+Gf)*O1 : 1 (clock-driven)
-    dO2/dt = Ga2*C2 + Gf*O1 - (Gd2+Gb)*O2 : 1 (clock-driven)
-    C2 = 1 - C1 - O1 - O2 : 1
-    # dC2/dt = Gd2*O2 - (Gr0+Ga2)*C2 : 1 (clock-driven)
-
-    Theta = int(phi > 0*phi) : 1
-    Hp = Theta * phi**p/(phi**p + phim**p) : 1
-    Ga1 = k1*Hp : hertz
-    Ga2 = k2*Hp : hertz
-    Hq = Theta * phi**q/(phi**q + phim**q) : 1
-    Gf = kf*Hq + Gf0 : hertz
-    Gb = kb*Hq + Gb0 : hertz
-
-    fphi = O1 + gamma*O2 : 1
-    fv = (1 - exp(-(V_VAR_NAME_post-E)/v0)) / -2 : 1
-
-    IOPTO_VAR_NAME_post = g0*fphi*fv*(V_VAR_NAME_post-E)*rho_rel : ampere (summed)
-    rho_rel : 1
-"""
-"""Equations for the 4-state model from PyRhO (Evans et al. 2016).
-
-Assuming this model is defined on "synapses" influencing a post-synaptic
-target population. rho_rel is channel density relative to standard model fit;
-modifying it post-injection allows for heterogeneous opsin expression.
-
-IOPTO_VAR_NAME and V_VAR_NAME are substituted on injection
-"""
 
 ChR2_four_state = {
     "g0": 114000 * psiemens,
@@ -71,6 +42,182 @@ ChR2_four_state = {
 Taken from try.projectpyrho.org's default 4-state params.
 """
 
+
+class OpsinModel(ABC):
+    """Base class for opsin model"""
+
+    model: str
+    """Basic Brian model equations string.
+    
+    Should contain a `rho_rel` term reflecting relative expression 
+    levels. Will likely also contain special NeuronGroup-dependent
+    symbols such as V_VAR_NAME to be replaced on injection in 
+    :meth:`get_modified_model_for_ng`."""
+
+    params: dict
+    """Parameter values for model, passed in as a namespace dict"""
+
+    @abstractmethod
+    def get_modified_model_for_ng(
+        self, neuron_group: NeuronGroup, injct_params: dict
+    ) -> str:
+        """Adapt model for given neuron group on injection
+
+        This is mainly to enable the specification of variable names
+        differently for each neuron group.
+
+        Parameters
+        ----------
+        neuron_group : NeuronGroup
+            NeuronGroup this opsin model is being connected to
+        injct_params : dict
+            kwargs passed in on injection, could contain variable
+            names to plug into the model
+
+        Returns
+        -------
+        str
+            A string containing modified model equations for use
+            in :attr:`~cleosim.opto.OptogeneticIntervention.opto_syns`
+        """
+        pass
+
+    def init_opto_syn_vars(self, opto_syn: Synapses) -> None:
+        """Initializes appropriate variables in Synapses implementing the model
+
+        Can also be used to reset the variables.
+
+        Parameters
+        ----------
+        opto_syn : Synapses
+            The synapses object implementing this model
+        """
+        pass
+
+
+class MarkovModel(OpsinModel):
+    """Base class for Markov state models à la Evans et al., 2016"""
+
+    def __init__(self, params: dict) -> None:
+        """
+        Parameters
+        ----------
+        params : dict
+            dict defining params in the :attr:`model`
+        """
+        super().__init__()
+        self.params = params
+
+    def _check_vars_on_injection(self, neuron_group, injct_params):
+        Iopto_var_name = injct_params.get("Iopto_var_name", "Iopto")
+        v_var_name = injct_params.get("v_var_name", "v")
+        for variable, unit in zip([v_var_name, Iopto_var_name], [volt, amp]):
+            if (
+                variable not in neuron_group.variables
+                or neuron_group.variables[variable].unit != unit
+            ):
+                raise BrianObjectException(
+                    (
+                        f"{variable} : {unit.name} needed in the model of NeuronGroup"
+                        f"{neuron_group.name} to connect OptogeneticIntervention."
+                    ),
+                    neuron_group,
+                )
+
+    def get_modified_model_for_ng(
+        self, neuron_group: NeuronGroup, injct_params: dict
+    ) -> str:
+        self._check_vars_on_injection(neuron_group, injct_params)
+        Iopto_var_name = injct_params.get("Iopto_var_name", "Iopto")
+        v_var_name = injct_params.get("v_var_name", "v")
+        # opsin synapse model needs modified names
+        return self.model.replace("IOPTO_VAR_NAME", Iopto_var_name).replace(
+            "V_VAR_NAME", v_var_name
+        )
+
+
+class FourStateModel(MarkovModel):
+    """4-state model from PyRhO (Evans et al. 2016).
+
+    rho_rel is channel density relative to standard model fit;
+    modifying it post-injection allows for heterogeneous opsin expression.
+
+    IOPTO_VAR_NAME and V_VAR_NAME are substituted on injection.
+    """
+
+    model: str = """
+        dC1/dt = Gd1*O1 + Gr0*C2 - Ga1*C1 : 1 (clock-driven)
+        dO1/dt = Ga1*C1 + Gb*O2 - (Gd1+Gf)*O1 : 1 (clock-driven)
+        dO2/dt = Ga2*C2 + Gf*O1 - (Gd2+Gb)*O2 : 1 (clock-driven)
+        C2 = 1 - C1 - O1 - O2 : 1
+        # dC2/dt = Gd2*O2 - (Gr0+Ga2)*C2 : 1 (clock-driven)
+
+        Theta = int(phi > 0*phi) : 1
+        Hp = Theta * phi**p/(phi**p + phim**p) : 1
+        Ga1 = k1*Hp : hertz
+        Ga2 = k2*Hp : hertz
+        Hq = Theta * phi**q/(phi**q + phim**q) : 1
+        Gf = kf*Hq + Gf0 : hertz
+        Gb = kb*Hq + Gb0 : hertz
+
+        fphi = O1 + gamma*O2 : 1
+        fv = (1 - exp(-(V_VAR_NAME_post-E)/v0)) / -2 : 1
+
+        IOPTO_VAR_NAME_post = -g0*fphi*fv*(V_VAR_NAME_post-E)*rho_rel : ampere (summed)
+        rho_rel : 1
+    """
+
+    def init_opto_syn_vars(self, opto_syn: Synapses) -> None:
+        for varname, value in {"Irr0": 0, "C1": 1, "O1": 0, "O2": 0}.items():
+            setattr(opto_syn, varname, value)
+
+
+class ProportionalCurrentModel(OpsinModel):
+    """A simple model delivering current proportional to light intensity"""
+
+    model: str = """
+        IOPTO_VAR_NAME_post = gain * Irr * rho_rel : IOPTO_UNIT (summed)
+        rho_rel : 1
+    """
+
+    def __init__(self, Iopto_per_mW_per_mm2: Quantity) -> None:
+        """
+        Parameters
+        ----------
+        Iopto_per_mW_per_mm2 : Quantity
+            How much current (in amps or unitless, depending on neuron model) to
+            deliver per mW/mm2
+        """
+        self.params = {"gain": Iopto_per_mW_per_mm2 / (mwatt / mm2)}
+        if isinstance(Iopto_per_mW_per_mm2, Quantity):
+            self._Iopto_dim = Iopto_per_mW_per_mm2.get_best_unit().dim
+            self._Iopto_dim_name = self._Iopto_dim._str_representation(python_code=True)
+        else:
+            self._Iopto_dim = radian.dim
+            self._Iopto_dim_name = self._Iopto_dim._str_representation(
+                python_code=False
+            )
+
+    def get_modified_model_for_ng(
+        self, neuron_group: NeuronGroup, injct_params: dict
+    ) -> str:
+        Iopto_var_name = injct_params.get("Iopto_var_name", "Iopto")
+        if (
+            Iopto_var_name not in neuron_group.variables
+            or neuron_group.variables[Iopto_var_name].dim != self._Iopto_dim
+        ):
+            raise BrianObjectException(
+                (
+                    f"{Iopto_var_name} : {self._Iopto_dim_name} needed in the model of NeuronGroup"
+                    f"{neuron_group.name} to connect OptogeneticIntervention."
+                ),
+                neuron_group,
+            )
+        return self.model.replace("IOPTO_VAR_NAME", Iopto_var_name).replace(
+            "IOPTO_UNIT", self._Iopto_dim_name
+        )
+
+
 default_blue = {
     "R0": 0.1 * mm,  # optical fiber radius
     "NAfib": 0.37,  # optical fiber numerical aperture
@@ -88,11 +235,15 @@ From Foutz et al., 2012"""
 class OptogeneticIntervention(Stimulator):
     """Enables optogenetic stimulation of the network.
 
-    Essentially "transfects" neurons and provides a light source
+    Essentially "transfects" neurons and provides a light source.
+    Under the hood, it delivers current via a Brian :class:`~brian2.synapses.synapses.Synapses`
+    object.
 
     Requires neurons to have 3D spatial coordinates already assigned.
-    Will deliver current via a Brian :class:`~brian2.synapses.synapses.Synapses`
-    object.
+    Also requires that the neuron model has a current term
+    (by default Iopto) which is assumed to be positive (unlike the
+    convention in many opsin modeling papers, where the current is
+    described as negative).
 
     See :meth:`connect_to_neuron_group` for optional keyword parameters
     that can be specified when calling
@@ -118,8 +269,7 @@ class OptogeneticIntervention(Stimulator):
     def __init__(
         self,
         name: str,
-        opsin_model: str,
-        opsin_params: dict,
+        opsin_model: OpsinModel,
         light_model_params: dict,
         location: Quantity = (0, 0, 0) * mm,
         direction: Tuple[float, float, float] = (0, 0, 1),
@@ -130,12 +280,10 @@ class OptogeneticIntervention(Stimulator):
         ----------
         name : str
             Unique identifier for stimulator
-        opsin_model : str
-            Brian equation string to use for the opsin model.
-            See :attr:`four_state` for an example.
-        opsin_params : dict
-            Parameters in the form of a namespace dict for the Brian equations.
-            See :attr:`ChR2_four_state` for an example.
+        opsin_model : OpsinModel
+            OpsinModel object defining how light affects target
+            neurons. See :class:`FourStateModel` and :class:`ProportionalCurrentModel`
+            for examples.
         light_model_params : dict
             Parameters for the light propagation model in Foutz et al., 2012.
             See :attr:`default_blue` for an example.
@@ -145,10 +293,11 @@ class OptogeneticIntervention(Stimulator):
         direction : Tuple[float, float, float], optional
             (x, y, z) vector specifying direction in which light
             source is pointing, by default (0, 0, 1)
+        max_Irr0_mW_per_mm2 : float, optional
+            Set :attr:`max_Irr0_mW_per_mm2`.
         """
         super().__init__(name, 0)
         self.opsin_model = opsin_model
-        self.opsin_params = opsin_params
         self.light_model_params = light_model_params
         self.location = location
         # direction unit vector
@@ -243,25 +392,10 @@ class OptogeneticIntervention(Stimulator):
             The name of the variable in the neuron group model representing
             membrane potential
         """
-        p_expression = kwparams.get("p_expression", 1)
-        Iopto_var_name = kwparams.get("Iopto_var_name", "Iopto")
-        v_var_name = kwparams.get("v_var_name", "v")
-        for variable, unit in zip([v_var_name, Iopto_var_name], [volt, amp]):
-            if (
-                variable not in neuron_group.variables
-                or neuron_group.variables[variable].unit != unit
-            ):
-                raise BrianObjectException(
-                    (
-                        f"{variable} : {unit.name} needed in the model of NeuronGroup"
-                        f"{neuron_group.name} to connect OptogeneticIntervention."
-                    ),
-                    neuron_group,
-                )
-        # opsin synapse model needs modified names
-        modified_opsin_model = self.opsin_model.replace(
-            "IOPTO_VAR_NAME", Iopto_var_name
-        ).replace("V_VAR_NAME", v_var_name)
+        # get modified opsin model string (i.e., with names/units specified)
+        modified_opsin_model = self.opsin_model.get_modified_model_for_ng(
+            neuron_group, kwparams
+        )
 
         # fmt: off
         # Ephoton = h*c/lambda
@@ -282,18 +416,19 @@ class OptogeneticIntervention(Stimulator):
         opto_syn = Synapses(
             neuron_group,
             model=modified_opsin_model + light_model,
-            namespace=self.opsin_params,
+            namespace=self.opsin_model.params,
             name=f"synapses_{self.name}_{neuron_group.name}",
             method="rk2",
         )
         opto_syn.namespace["Ephoton"] = E_photon
 
+        p_expression = kwparams.get("p_expression", 1)
         if p_expression == 1:
             opto_syn.connect(j="i")
         else:
             opto_syn.connect(condition="i==j", p=p_expression)
 
-        self._init_opto_syn_vars(opto_syn)
+        self.opsin_model.init_opto_syn_vars(opto_syn)
 
         # relative channel density
         opto_syn.rho_rel = kwparams.get("rho_rel", 1)
@@ -394,13 +529,9 @@ class OptogeneticIntervention(Stimulator):
         for opto_syn in self.opto_syns.values():
             opto_syn.Irr0 = Irr0_mW_per_mm2 * mwatt / mm2
 
-    def _init_opto_syn_vars(self, opto_syn):
-        for varname, value in {"Irr0": 0, "C1": 1, "O1": 0, "O2": 0}.items():
-            setattr(opto_syn, varname, value)
-
     def reset(self, **kwargs):
         for opto_syn in self.opto_syns.values():
-            self._init_opto_syn_vars(opto_syn)
+            self.opsin_model.init_opto_syn_vars(opto_syn)
 
     def _alpha_cmap_for_wavelength(self, intensity=0.5):
         c = wavelength_to_rgb(self.light_model_params["wavelength"] / nmeter)

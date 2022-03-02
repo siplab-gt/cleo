@@ -37,7 +37,7 @@ Why not prototype with more abstract models?
 """"""""""""""""""""""""""""""""""""""""""""
 cleosim aims to be practical, and as such provides models at the level of abstraction corresponding to the variables the experimenter has available to manipulate. This means models of spatially defined, spiking neural networks.
 
-Of course, neuroscience is studied at many spatial and temporal scales. While other projects may be better suited for larger segments of the brain and/or longer timescales (such as `HNN <https://elifesciences.org/articles/51214>`_ or BMTK's `PopNet <https://alleninstitute.github.io/bmtk/popnet.html>`_ or `FilterNet <https://alleninstitute.github.io/bmtk/filternet.html>`_), this project caters to finer-grained models because they can directly simulate the effects of alternate experimental configurations. For example, how would the model change when swapping one opsin for another, using mutliple opsins simultaneously, or with heterogeneous expression? How does recording or stimulating one cell type vs. another affect the experiment? Would using a more sophisticated control algorithm be worth the extra compute time, and thus later stimulus delivery, compared to a simpler controller? 
+Of course, neuroscience is studied at many spatial and temporal scales. While other projects may be better suited for larger segments of the brain and/or longer timescales (such as `HNN <https://elifesciences.org/articles/51214>`_ or BMTK's `PopNet <https://alleninstitute.github.io/bmtk/popnet.html>`_ or `FilterNet <https://alleninstitute.github.io/bmtk/filternet.html>`_), this project caters to finer-grained models because they can directly simulate the effects of alternate experimental configurations. For example, how would the model change when swapping one opsin for another, using multiple opsins simultaneously, or with heterogeneous expression? How does recording or stimulating one cell type vs. another affect the experiment? Would using a more sophisticated control algorithm be worth the extra compute time, and thus later stimulus delivery, compared to a simpler controller? 
 
 Questions like these could be answered using an abstract dynamical system model of a neural circuit, but they would require the extra step of mapping the afore-mentioned details to a suitable abstraction---e.g., estimating a transfer function to model optogenetic stimulation for a given opsin and light configuration. Thus, we haven't emphasized these sorts of models so far in our development of cleosim, though they should be possible to implement in Brian if you are interested. For example, one could develop a Poisson linear dynamical system (PLDS), record spiking output, and configure stimulation to act directly on the system's latent state.
 
@@ -45,7 +45,7 @@ And just as experiment prototyping could be done on a more abstract level, it co
 
 Why Brian?
 """"""""""
-Brian is a relatively new spiking neural network simulator written in Python. Here are some of is advantages:
+Brian is a relatively new spiking neural network simulator written in Python. Here are some of its advantages:
 
 * Flexibility: allowing (and requiring!) the user to define models mathematically rather than selecting from a pre-defined library of cell types and features. This enables us to define arbitrary models for recorders and stimulators and easily interface with the simulation
 * Ease of use: it's all just Python
@@ -81,7 +81,7 @@ Once you have a network model, you can construct a :class:`~cleosim.CLSimulator`
 
     sim = cleosim.CLSimulator(net)
 
-The simulator object wraps the Brian network and coordinates device injection, processing input and ouput, and running the simulation.
+The simulator object wraps the Brian network and coordinates device injection, processing input and output, and running the simulation.
 
 Recording
 ^^^^^^^^^
@@ -123,18 +123,19 @@ As with recorders, you can inject stimulators per neuron group to produce a targ
 
 Optogenetics
 """"""""""""
-Optogenetics is the main stimulator device currently implemented by cleosim. This take the form of an :class:`~cleosim.opto.OptogeneticIntervention`, which, on injection, adds a light source at the specified location and transfects the neurons (via Brian "synapses" that deliver current according to an opsin kinetics model, leaving the neuron model equations untouched).
+Optogenetics is the main stimulator device currently implemented by cleosim. This take the form of an :class:`~cleosim.opto.OptogeneticIntervention`, which, on injection, adds a light source at the specified location and transfects the neurons (via Brian "synapses" that deliver current according to an opsin model, leaving the neuron model equations untouched).
 
 Out of the box you can access a four-state Markov model of channelrhodopsin-2 (ChR2) and parameters for a 473-nm blue optic fiber light source.::
 
     from cleosim.opto import *
     opto = OptogeneticIntervention(
-        name="opto",
-        opsin_model=four_state,
-        opsin_params=ChR2_four_state,
+        name="...",
+        opsin_model=FourStateModel(params=ChR2_four_state),
         light_model_params=default_blue,
         location=(0, 0, 0.5) * mm,
     )
+
+Note, however, that for Markov models of opsin dynamics to be realistic, the target neurons must have membrane potentials in realistic ranges, including an upswing during spiking. If you need to interface with a model without these features, you may want to use the simplified :class:`~cleosim.opto.ProportionalCurrentModel`. You can find more details, including a comparison between the two model types, in the :ref:`optogenetics tutorial <tutorials/optogenetics:Appendix: simplified opsin model>`
     
 These model and parameter settings were designed to be flexible enough that an interested user should be able to imitate and replace them with other opsins, light sources, etc. See the :doc:`tutorials/optogenetics` tutorial for more detail.
 
@@ -144,7 +145,7 @@ Just as in a real experiment where the experiment hardware must be connected to 
 
     sim.set_io_processor(...)
 
-If you are only recording, you may want to use the :class:`~cleosim.processing.RecordOnlyProcessor`. Otherwise you will want to implement the :class:`~cleosim.processing.LatencyIOProcessor`, which not only takes samples at the specfied rate, but processes the data and delivers it to the network after a user-defined delay, emulating the latency inherent in real experiments. You define your processor by creating a subclass and defining the :meth:`~cleosim.processing.LatencyIOProcessor.process` function::
+If you are only recording, you may want to use the :class:`~cleosim.processing.RecordOnlyProcessor`. Otherwise you will want to implement the :class:`~cleosim.processing.LatencyIOProcessor`, which not only takes samples at the specified rate, but processes the data and delivers it to the network after a user-defined delay, emulating the latency inherent in real experiments. You define your processor by creating a subclass and defining the :meth:`~cleosim.processing.LatencyIOProcessor.process` function::
 
     class MyProcessor(LatencyIOProcessor):
 
@@ -183,7 +184,7 @@ Future development
 ------------------
 Here are some features which are missing but could be useful to add:
 
-* Better support for mulitple opsins simultaneously. At present the user would have to include a separate variable for each new opsin current, which makes changing the number of different opsins inconvenient
+* Better support for multiple opsins simultaneously. At present the user would have to include a separate variable for each new opsin current, which makes changing the number of different opsins inconvenient
 * Support for multiple light sources affecting a single opsin transfection---whether the light sources have the same or different wavelengths
 * Electrode microstimulation
 * A more accurate LFP signal (only usable for morphological neurons) based on the volume conductor forward model as in `LFPy <https://lfpy.readthedocs.io/en/latest/index.html>`_ or `Vertex <https://github.com/haeste/Vertex_2>`_
