@@ -155,7 +155,7 @@ def _plot(
     axis_scale_unit: Unit = mm,
     devices_to_plot: Iterable[InterfaceDevice] = [],
     invert_z: bool = True,
-) -> list[Artist]:
+) -> tuple[list[Artist], list[Artist]]:
     for ng in neuron_groups:
         for dim in ["x", "y", "z"]:
             if not hasattr(ng, dim):
