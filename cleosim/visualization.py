@@ -12,6 +12,8 @@ from brian2 import mm, Unit, NeuronGroup, ms, NetworkOperation, Quantity, SpikeM
 
 from cleosim.base import CLSimulator, InterfaceDevice
 
+_neuron_alpha = 0.2
+
 
 class VideoVisualizer(InterfaceDevice):
     """Device for visualizing a simulation.
@@ -75,17 +77,22 @@ class VideoVisualizer(InterfaceDevice):
         self._num_old_spikes.append(0)
 
     def generate_Animation(
-        self, plotargs: dict, slowdown_factor: float = 10, **figargs
+        self, plotargs: dict, slowdown_factor: float = 10, **figargs: Any
     ) -> anim.Animation:
         """Create a matplotlib Animation object from the recorded simulation
 
         Parameters
         ----------
         plotargs : dict
-            dictionary of arguments as taken by :func:`plot`
+            dictionary of arguments as taken by :func:`plot`. can include
+            `xlim`, `ylim`, `zlim`, `colors`, `axis_scale_unit`, `invert_z`,
+            and/or `scatterargs`. neuron groups and devices are
+            automatically added and **figargs are specified separately.
         slowdown_factor : float, optional
             how much slower the animation will be rendered, as a multiple of
             real-time, by default 10
+        **figargs : Any, optional
+            keyword arguments passed to plt.figure(), such as figsize
 
         Returns
         -------
@@ -127,10 +134,14 @@ class VideoVisualizer(InterfaceDevice):
         # loop over neuron groups/artists
         for i_spikes, ng, artist in zip(i_spikes_per_ng, self.neuron_groups, artists):
             spike_counts = self._spikes_i_to_count_for_ng(i_spikes, ng)
-            alpha = np.zeros_like(spike_counts)
-            alpha[spike_counts == 0] = 0.2
+            artist.set_alpha(None)  # remove alpha defined at collection level
+            rgba = artist.get_edgecolor()
+            alpha = np.zeros(ng.N)
+            alpha[spike_counts == 0] = _neuron_alpha
             alpha[spike_counts > 0] = 1
-            artist.set_alpha(alpha)
+            rgba[:, 3] = alpha
+            # warning: this doesn't work. gets order wrong: artist.set_alpha(alpha)
+            artist.set_color(rgba)
 
     def _spikes_i_to_count_for_ng(self, i_spikes, ng):
         counts = np.zeros(ng.N)
@@ -155,6 +166,7 @@ def _plot(
     axis_scale_unit: Unit = mm,
     devices_to_plot: Iterable[InterfaceDevice] = [],
     invert_z: bool = True,
+    scatterargs: dict = {},
 ) -> list[Artist]:
     for ng in neuron_groups:
         for dim in ["x", "y", "z"]:
@@ -166,9 +178,10 @@ def _plot(
     for i in range(len(neuron_groups)):
         ng = neuron_groups[i]
         args = [ng.x / axis_scale_unit, ng.y / axis_scale_unit, ng.z / axis_scale_unit]
-        kwargs = {"label": ng.name, "alpha": 0.3}
+        kwargs = {"label": ng.name, "alpha": _neuron_alpha}
         if colors is not None:
             kwargs["color"] = colors[i]
+        kwargs.update(scatterargs)
         neuron_artists.append(ax.scatter(*args, **kwargs))
         ax.set_xlabel(f"x ({axis_scale_unit._dispname})")
         ax.set_ylabel(f"y ({axis_scale_unit._dispname})")
@@ -201,6 +214,7 @@ def plot(
     axis_scale_unit: Unit = mm,
     devices_to_plot: Iterable[InterfaceDevice] = [],
     invert_z: bool = True,
+    scatterargs: dict = {},
     **figargs: Any,
 ) -> None:
     """Visualize neurons and interface devices
@@ -223,8 +237,10 @@ def plot(
     invert_z : bool, optional
         whether to invert z-axis, by default True to reflect the convention
         that +z represents depth from cortex surface
+    scatterargs : dict, optional
+        arguments passed to plt.scatter() for each neuron group, such as marker
     **figargs : Any, optional
-        arguments passed to plt.figure(), such as figsize
+        keyword arguments passed to plt.figure(), such as figsize
 
     Raises
     ------
@@ -243,4 +259,5 @@ def plot(
         axis_scale_unit,
         devices_to_plot,
         invert_z,
+        scatterargs,
     )

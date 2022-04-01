@@ -37,4 +37,11 @@ def test_VideoVisualizer():
     sim.inject_device(vv, ng)
 
     sim.run(2 * ms)
-    ani = vv.generate_Animation({})
+    plotargs = {
+        "colors": ["xkcd:emerald"],
+        "xlim": (-0.2, 0.2),
+        "ylim": (-0.2, 0.2),
+        "zlim": (0, 0.8),
+        "scatterargs": {"s": 20},  # to adjust neuron marker size
+    }
+    ani = vv.generate_Animation(plotargs)
