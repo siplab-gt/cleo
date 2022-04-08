@@ -22,7 +22,7 @@ def lif(n, name='LIF'):
 
 def adex(n, name='AdEx'):
     ng = NeuronGroup(n,
-        '''dv/dt = (-(v - E_L) + Delta_T*exp((v-theta)/Delta_T) - R*(w+Iopto)) / tau_m : volt
+        '''dv/dt = (-(v - E_L) + Delta_T*exp((v-theta)/Delta_T) + R*(w+Iopto)) / tau_m : volt
         dw/dt = (a*(v-E_L) - w) / tau_w : amp
         Iopto : amp''',
         threshold='v>=30*mV',
