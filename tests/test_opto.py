@@ -1,7 +1,7 @@
 """Tests for opto module"""
 
 import pytest
-from brian2 import NeuronGroup, Network, mV, pamp
+from brian2 import NeuronGroup, Network, mV, pamp, namp
 from brian2.core.base import BrianObjectException
 
 
