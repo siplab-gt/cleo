@@ -167,7 +167,7 @@ def _plot(
     devices_to_plot: Iterable[InterfaceDevice] = [],
     invert_z: bool = True,
     scatterargs: dict = {},
-) -> list[Artist]:
+) -> tuple[list[Artist], list[Artist]]:
     for ng in neuron_groups:
         for dim in ["x", "y", "z"]:
             if not hasattr(ng, dim):

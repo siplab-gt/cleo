@@ -1,7 +1,8 @@
 .vscode/*
 *.html
-# don't know what program is creating this temp folder
+# temp folders created with compiled C code from Brian running Cython
 tmp/*
+*/tmp/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
