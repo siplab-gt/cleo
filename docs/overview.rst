@@ -15,15 +15,15 @@ Who is this package for?
     
     In short, determining the inputs to deliver to a system from its outputs. In neuroscience terms, making the stimulation parameters a function of the data recorded in real time.
 
-cleosim (Closed Loop, Electrophysiology, and Optogenetics Simulator) is a Python package developed primarily for those who want to prototype closed-loop control of neural activity *in silico*. Animal experiments are costly to set up and debug, especially with the added complexity of real-time intervention---our aim is to enable researchers, given a decent spiking model of the system of interest, to assess whether the type of control they desire is feasible and/or what configuration(s) would be most conducive to their goals.
+CLEOsim (Closed Loop, Electrophysiology, and Optogenetics Simulator) is a Python package developed primarily for those who want to prototype closed-loop control of neural activity *in silico*. Animal experiments are costly to set up and debug, especially with the added complexity of real-time intervention---our aim is to enable researchers, given a decent spiking model of the system of interest, to assess whether the type of control they desire is feasible and/or what configuration(s) would be most conducive to their goals.
 
-Because cleosim is built around the `Brian simulator <https://brian2.rtfd.io>`_, another potential user base for the package would be Brian users who for whatever reason would like a convenient way to inject recorders (e.g., electrodes) or stimulators (e.g., optogenetics) into the core network simulation.
+Because CLEOsim is built around the `Brian simulator <https://brian2.rtfd.io>`_, another potential user base for the package would be Brian users who for whatever reason would like a convenient way to inject recorders (e.g., electrodes) or stimulators (e.g., optogenetics) into the core network simulation.
 
 Structure and design
 ^^^^^^^^^^^^^^^^^^^^
-cleosim wraps a spiking network simulator and allows for the injection of stimulators and/or recorders. The models used to emulate these devices are often non-trivial to implement or use in a flexible manner, so cleosim aims to make device injection and configuration as painless as possible, requiring minimal modification to the original network.
+CLEOsim wraps a spiking network simulator and allows for the injection of stimulators and/or recorders. The models used to emulate these devices are often non-trivial to implement or use in a flexible manner, so CLEOsim aims to make device injection and configuration as painless as possible, requiring minimal modification to the original network.
 
-cleosim also orchestrates communication between the simulator and a user-configured :class:`~cleosim.IOProcessor` object, modeling how experiment hardware takes samples, processes signals, and controls stimulation devices in real time.
+CLEOsim also orchestrates communication between the simulator and a user-configured :class:`~cleosim.IOProcessor` object, modeling how experiment hardware takes samples, processes signals, and controls stimulation devices in real time.
 
 .. sidebar::
     Why closed-loop control in neuroscience?
@@ -35,11 +35,11 @@ cleosim also orchestrates communication between the simulator and a user-configu
 
 Why not prototype with more abstract models?
 """"""""""""""""""""""""""""""""""""""""""""
-cleosim aims to be practical, and as such provides models at the level of abstraction corresponding to the variables the experimenter has available to manipulate. This means models of spatially defined, spiking neural networks.
+CLEOsim aims to be practical, and as such provides models at the level of abstraction corresponding to the variables the experimenter has available to manipulate. This means models of spatially defined, spiking neural networks.
 
 Of course, neuroscience is studied at many spatial and temporal scales. While other projects may be better suited for larger segments of the brain and/or longer timescales (such as `HNN <https://elifesciences.org/articles/51214>`_ or BMTK's `PopNet <https://alleninstitute.github.io/bmtk/popnet.html>`_ or `FilterNet <https://alleninstitute.github.io/bmtk/filternet.html>`_), this project caters to finer-grained models because they can directly simulate the effects of alternate experimental configurations. For example, how would the model change when swapping one opsin for another, using multiple opsins simultaneously, or with heterogeneous expression? How does recording or stimulating one cell type vs. another affect the experiment? Would using a more sophisticated control algorithm be worth the extra compute time, and thus later stimulus delivery, compared to a simpler controller? 
 
-Questions like these could be answered using an abstract dynamical system model of a neural circuit, but they would require the extra step of mapping the afore-mentioned details to a suitable abstraction---e.g., estimating a transfer function to model optogenetic stimulation for a given opsin and light configuration. Thus, we haven't emphasized these sorts of models so far in our development of cleosim, though they should be possible to implement in Brian if you are interested. For example, one could develop a Poisson linear dynamical system (PLDS), record spiking output, and configure stimulation to act directly on the system's latent state.
+Questions like these could be answered using an abstract dynamical system model of a neural circuit, but they would require the extra step of mapping the afore-mentioned details to a suitable abstraction---e.g., estimating a transfer function to model optogenetic stimulation for a given opsin and light configuration. Thus, we haven't emphasized these sorts of models so far in our development of CLEOsim, though they should be possible to implement in Brian if you are interested. For example, one could develop a Poisson linear dynamical system (PLDS), record spiking output, and configure stimulation to act directly on the system's latent state.
 
 And just as experiment prototyping could be done on a more abstract level, it could also be done on an even more realistic level, which we did not deem necessary. That brings us to the next point...
 
@@ -67,9 +67,9 @@ Usage
 
 Brian network model
 ^^^^^^^^^^^^^^^^^^^
-The starting point for using cleosim is a Brian spiking neural network model of the system of interest. For those new to Brian, the `docs <https://brian2.rtfd.io>`_ are a great resource. If you have a model built with another simulator or modeling language, you may be able to `import it to Brian via NeuroML <https://brian2tools.readthedocs.io/en/stable/user/nmlimport.html>`_.
+The starting point for using CLEOsim is a Brian spiking neural network model of the system of interest. For those new to Brian, the `docs <https://brian2.rtfd.io>`_ are a great resource. If you have a model built with another simulator or modeling language, you may be able to `import it to Brian via NeuroML <https://brian2tools.readthedocs.io/en/stable/user/nmlimport.html>`_.
 
-Perhaps the biggest change you may have to make to an existing model to make it compatible with cleosim's optogenetics and electrode recording is to give the neurons of interest coordinates in space. See the :doc:`tutorials` or the :mod:`cleosim.coordinates` module for more info.
+Perhaps the biggest change you may have to make to an existing model to make it compatible with CLEOsim's optogenetics and electrode recording is to give the neurons of interest coordinates in space. See the :doc:`tutorials` or the :mod:`cleosim.coordinates` module for more info.
 
 You'll need your model in a Brian :class:`~brian2.core.network.Network` object before you move on. E.g.,::
 
@@ -96,7 +96,7 @@ The recorder will only record from the neuron groups specified on injection, all
 
 Electrodes
 """"""""""
-Electrode recording is the main recording modality currently implemented in cleosim. See the :doc:`tutorials/electrodes` tutorial for more detail, but in brief, usages consists of:
+Electrode recording is the main recording modality currently implemented in CLEOsim. See the :doc:`tutorials/electrodes` tutorial for more detail, but in brief, usages consists of:
 
 #. Constructing a :class:`~cleosim.electrodes.Probe` object with coordinates at the desired contact locations
 
@@ -123,7 +123,7 @@ As with recorders, you can inject stimulators per neuron group to produce a targ
 
 Optogenetics
 """"""""""""
-Optogenetics is the main stimulator device currently implemented by cleosim. This take the form of an :class:`~cleosim.opto.OptogeneticIntervention`, which, on injection, adds a light source at the specified location and transfects the neurons (via Brian "synapses" that deliver current according to an opsin model, leaving the neuron model equations untouched).
+Optogenetics is the main stimulator device currently implemented by CLEOsim. This take the form of an :class:`~cleosim.opto.OptogeneticIntervention`, which, on injection, adds a light source at the specified location and transfects the neurons (via Brian "synapses" that deliver current according to an opsin model, leaving the neuron model equations untouched).
 
 Out of the box you can access a four-state Markov model of channelrhodopsin-2 (ChR2) and parameters for a 473-nm blue optic fiber light source.::
 
