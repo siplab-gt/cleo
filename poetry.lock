@@ -1496,6 +1496,17 @@ code_style = ["pre-commit (==2.12.1)"]
 rtd = ["sphinx", "ipython", "sphinx-book-theme"]
 
 [[package]]
+name = "sphinx-favicon"
+version = "0.2"
+description = "Sphinx Extension adding support for custom favicons"
+category = "dev"
+optional = false
+python-versions = ">=3.6"
+
+[package.dependencies]
+sphinx = ">=3.4"
+
+[[package]]
 name = "sphinx-rtd-theme"
 version = "1.0.0"
 description = "Read the Docs theme for Sphinx"
@@ -1809,7 +1820,7 @@ testing = ["pytest (>=6)", "pytest-checkdocs (>=2.4)", "pytest-flake8", "pytest-
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.7"
-content-hash = "efa6d84b1ffc610359c97633cc95d238225aaf9abc4d14af71f47322bdc4efb5"
+content-hash = "fc834b540a4db5db2399c0cae9714d09b91b1b6acb3b0e2a5ee8562e2a4838f8"
 
 [metadata.files]
 alabaster = [
@@ -2820,6 +2831,10 @@ sphinx = [
 sphinx-copybutton = [
     {file = "sphinx-copybutton-0.4.0.tar.gz", hash = "sha256:8daed13a87afd5013c3a9af3575cc4d5bec052075ccd3db243f895c07a689386"},
     {file = "sphinx_copybutton-0.4.0-py3-none-any.whl", hash = "sha256:4340d33c169dac6dd82dce2c83333412aa786a42dd01a81a8decac3b130dc8b0"},
+]
+sphinx-favicon = [
+    {file = "sphinx-favicon-0.2.tar.gz", hash = "sha256:73436a1f5f80c4fcae6eadd2520b9c2bc6c1aec0d91d153b3774359bdd103a58"},
+    {file = "sphinx_favicon-0.2-py3-none-any.whl", hash = "sha256:0b17cb0f9b97fb99172d47fb11fbdd0aadb26cbe0f6368e81843176ca18d06e6"},
 ]
 sphinx-rtd-theme = [
     {file = "sphinx_rtd_theme-1.0.0-py2.py3-none-any.whl", hash = "sha256:4d35a56f4508cfee4c4fb604373ede6feae2a306731d533f409ef5c3496fdbd8"},
