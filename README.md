@@ -12,7 +12,7 @@
   </img>
 </p>
 
-Hello there! CLEOsim has the goal of bridging theory and experiment for mesoscale neuroscience, facilitating electrode recording, optogenetic stimulation, and closed-loop experiments (e.g., real-time input and output processing) with the Brian 2 spiking neural network simulator. We hope users will find these components useful for prototyping experiments, exploring methods, and testing observations about a hypothesis in silico, incorporating into spiking neural network models laboratory techniques ranging from passive observation to complex model-based feedback control. CLEOsim also serves as an extensible, modular base for developing additional recording and stimulation modules for Brian simulations.
+Hello there! CLEOsim has the goal of bridging theory and experiment for mesoscale neuroscience, facilitating electrode recording, optogenetic stimulation, and closed-loop experiments (e.g., real-time input and output processing) with the [Brian 2](https://brian2.readthedocs.io/en/stable/) spiking neural network simulator. We hope users will find these components useful for prototyping experiments, exploring methods, and testing observations about a hypothesis in silico, incorporating into spiking neural network models laboratory techniques ranging from passive observation to complex model-based feedback control. CLEOsim also serves as an extensible, modular base for developing additional recording and stimulation modules for Brian simulations.
 
 This package was developed by [Kyle Johnsen](https://kjohnsen.org) and Nathan Cruzado under the direction of [Chris Rozell](https://siplab.gatech.edu) at Georgia Institute of Technology.
 
