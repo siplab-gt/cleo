@@ -37,6 +37,7 @@ extensions = [
     "sphinx.ext.napoleon",
     "sphinx.ext.intersphinx",
     "sphinx_copybutton",
+    "sphinx-favicon",
     "myst_nb",
 ]
 
@@ -73,4 +74,13 @@ html_theme = "sphinx_rtd_theme"
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ["_static"]
-html_logo = "_static/logo-dark.svg"
+html_logo = "_static/logo.svg"
+# favicon_url = "_static/favicon.png"
+favicons = [
+    {"static-file": "favicon.svg"},  # => use `_static/favicon.svg`
+    {
+        "sizes": "16x16",
+        "static-file": "favicon.png",
+    },
+
+]
