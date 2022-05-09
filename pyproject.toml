@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "cleosim"
-version = "0.1.0"
+version = "0.1.1"
 description = "Closed Loop, Electrophysiology, and Optogenetics Simulator: testbed and prototyping kit"
 authors = [
     "Kyle Johnsen <kyle@kjohnsen.org>",
@@ -9,6 +9,7 @@ authors = [
 license = "MIT"
 homepage = "https://cleosim.readthedocs.io"
 repository = "https://github.com/kjohnsen/cleosim"
+readme = "README.md"
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
