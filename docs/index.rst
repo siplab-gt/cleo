@@ -6,10 +6,12 @@
 .. include:: ../README.md
    :parser: myst_parser.sphinx_
 
+Documentation contents
+======================
+
 
 .. toctree::
    :maxdepth: 2
-   :caption: Contents:
 
    overview
    tutorials
