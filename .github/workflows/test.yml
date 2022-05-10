@@ -1,4 +1,4 @@
-name: Test and lint
+name: tests
 
 # Controls when the action will run.
 on:
@@ -25,63 +25,24 @@ jobs:
     strategy:
       matrix:
         os: [macos-latest, windows-latest, ubuntu-latest]
-        # os: [macos-latest]
         python: [3.7, 3.9]
-        # python: [3.9]
-        include:
-          - os: ubuntu-latest
-            pip_cache: ~/.cache/pip
-            poetry_cache: ~/.local
-          - os: macos-latest
-            pip_cache: ~/Library/Caches/pip
-            poetry_cache: ~/.local
-          - os: windows-latest
-            pip_cache: ~\AppData\Local\pip\Cache
-            poetry_cache: ~/.local # doesn't seem to work, need a different path
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
 
-      - name: Setup Python
-        uses: actions/setup-python@v2.2.2
+      - name: Install poetry
+        run: pipx install poetry
+      - name: Set up Python
+        uses: actions/setup-python@v3
         with:
-          # Version range or exact version of a Python version to use, using SemVer's version range syntax.
-          python-version: ${{ matrix.python }} # optional, default is 3.x
-
-      - name: Load cached Poetry installation
-        uses: actions/cache@v2
-        with:
-          path: ${{ matrix.poetry_cache }}
-          key: poetry-${{ runner.os }}-${{ matrix.python }}-0 # increment to reset cache
-
-      - name: Install Poetry
-        uses: snok/install-poetry@v1
-
-      - name: Setup tmate session # for optional debugging
-        uses: mxschmitt/action-tmate@v3
-        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.debug_enabled }}
-
-      # - name: Cache pip
-      #   uses: actions/cache@v2
-      #   with:
-      #     path: ${{ matrix.pip_cache }}
-      #     # Look to see if there is a cache hit for the corresponding pyproject.toml file (where dependencies are defined)
-      #     key: ${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
-      #     restore-keys: |
-      #       ${{ runner.os }}-pip-
-      #       ${{ runner.os }}-
-
-      - name: Load cached venv
-        uses: actions/cache@v2
-        with:
-          path: .venv
-          key: venv-${{ runner.os }}-${{ matrix.python }}-${{ hashFiles('**/poetry.lock') }}
-
-      - name: Install via Poetry
-        run: poetry install --no-interaction
-
-      - name: Test
-        # TODO: add --flake8
+          python-version: ${{ matrix.python }}
+          cache: 'poetry'
+      - run: poetry install --no-interaction
+      - name: test
         run: poetry run pytest --ignore=docs/tutorials/lqr_ctrl_ldsctrlest.ipynb --ignore=docs/tutorials/video_visualization.ipynb
+
+      # - name: Setup tmate session # for optional debugging
+      #   uses: mxschmitt/action-tmate@v3
+      #   if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.debug_enabled }}
