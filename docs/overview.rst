@@ -135,7 +135,7 @@ Out of the box you can access a four-state Markov model of channelrhodopsin-2 (C
         location=(0, 0, 0.5) * mm,
     )
 
-Note, however, that for Markov models of opsin dynamics to be realistic, the target neurons must have membrane potentials in realistic ranges, including an upswing during spiking. If you need to interface with a model without these features, you may want to use the simplified :class:`~cleosim.opto.ProportionalCurrentModel`. You can find more details, including a comparison between the two model types, in the :ref:`optogenetics tutorial <tutorials/optogenetics:Appendix: simplified opsin model>`
+Note, however, that for Markov models of opsin dynamics to be realistic, the target neurons must have membrane potentials in realistic ranges, including an upswing during spiking. If you need to interface with a model without these features, you may want to use the simplified :class:`~cleosim.opto.ProportionalCurrentModel`. You can find more details, including a comparison between the two model types, in the :ref:`optogenetics tutorial <tutorials/optogenetics:Appendix: simplified opsin model>`.
     
 These model and parameter settings were designed to be flexible enough that an interested user should be able to imitate and replace them with other opsins, light sources, etc. See the :doc:`tutorials/optogenetics` tutorial for more detail.
 

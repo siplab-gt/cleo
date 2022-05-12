@@ -1,16 +1,17 @@
-# CLEOsim: Closed Loop, Electrophysiology, and Optogenetics Simulator
-
 [![Test and lint](https://github.com/kjohnsen/cleosim/actions/workflows/test.yml/badge.svg)](https://github.com/kjohnsen/cleosim/actions/workflows/test.yml)
 [![Documentation Status](https://readthedocs.org/projects/cleosim/badge/?version=latest)](https://cleosim.readthedocs.io/en/latest/?badge=latest)
 
+<h1>
 <p align="center">
   <img 
       style="display: block; 
              width: 50%;"
       src="https://user-images.githubusercontent.com/19983357/167221164-33ca27e5-e2cb-4dd6-9cb7-2159e4a84b82.png" 
-      alt="logo">
+      alt="CLEOsim: Closed Loop, Electrophysiology, and Optogenetics Simulator">
   </img>
 </p>
+</h1>
+
 
 Hello there! CLEOsim has the goal of bridging theory and experiment for mesoscale neuroscience, facilitating electrode recording, optogenetic stimulation, and closed-loop experiments (e.g., real-time input and output processing) with the [Brian 2](https://brian2.readthedocs.io/en/stable/) spiking neural network simulator. We hope users will find these components useful for prototyping experiments, innovating methods, and testing observations about a hypotheses *in silico*, incorporating into spiking neural network models laboratory techniques ranging from passive observation to complex model-based feedback control. CLEOsim also serves as an extensible, modular base for developing additional recording and stimulation modules for Brian simulations.
 
@@ -57,3 +58,19 @@ Those using CLEOsim to simulate closed-loop control experiments may be intereste
       alt="CLOCTools and CLEOsim">
   </img>
 </p>
+
+### Publications
+[**CLOC Tools: A Library of Tools for Closed-Loop Neuroscience**](https://github.com/stanley-rozell/tools-for-neuro-control-manuscript)<br>
+A.A. Willats, M.F. Bolus, K.A. Johnsen, G.B. Stanley, and C.J. Rozell. *In prep*, 2022.
+
+[**State-Aware Control of Switching Neural Dynamics**](https://github.com/awillats/state-aware-control)<br>
+A.A. Willats, M.F. Bolus, C.J. Whitmire, G.B. Stanley, and C.J. Rozell. *In prep*, 2022.
+
+[**Closed-Loop Identifiability in Neural Circuits**](https://github.com/awillats/clinc)<br>
+A. Willats, M. O'Shaughnessy, and C. Rozell. *In prep*, 2022.
+
+[**State-space optimal feedback control of optogenetically driven neural activity**](https://www.biorxiv.org/content/10.1101/2020.06.25.171785v2)<br>
+M.F. Bolus, A.A. Willats, C.J. Rozell and G.B. Stanley. *Journal of Neural Engineering*, 18(3), pp. 036006, March 2021.
+
+[**Design strategies for dynamic closed-loop optogenetic neurocontrol in vivo**](https://iopscience.iop.org/article/10.1088/1741-2552/aaa506)<br>
+M.F. Bolus, A.A. Willats, C.J. Whitmire, C.J. Rozell and G.B. Stanley. *Journal of Neural Engineering*, 15(2), pp. 026011, January 2018.
