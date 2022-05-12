@@ -1,5 +1,7 @@
+###### CLEOsim: Closed Loop, Electrophysiology, and Optogenetics Simulator
 [![Test and lint](https://github.com/kjohnsen/cleosim/actions/workflows/test.yml/badge.svg)](https://github.com/kjohnsen/cleosim/actions/workflows/test.yml)
 [![Documentation Status](https://readthedocs.org/projects/cleosim/badge/?version=latest)](https://cleosim.readthedocs.io/en/latest/?badge=latest)
+
 
 <h1>
 <p align="center">
