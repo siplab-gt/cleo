@@ -47,7 +47,7 @@ pip install cleosim
 Then head to the [overview section of the documentation](https://cleosim.readthedocs.io/en/latest/overview.html) for a more detailed discussion of motivation, structure, and basic usage.
 
 ## Related resources
-Those using CLEOSim to simulate closed-loop control experiments may be interested in software developed for the execution of real-time, *in-vivo* experiments. Developed by members of [Chris Rozell](https://siplab.gatech.edu)'s and [Garrett Stanley](https://stanley.gatech.edu/)'s labs at Georgia Tech, the [CLOCTools repository](https://stanley-rozell.github.io) can serve these users in two ways:
+Those using CLEOSim to simulate closed-loop control experiments may be interested in software developed for the execution of real-time, *in-vivo* experiments. Developed by members of [Chris Rozell](https://siplab.gatech.edu)'s and [Garrett Stanley](https://stanley.gatech.edu/)'s labs at Georgia Tech, the [CLOCTools repository](https://cloctools.github.io) can serve these users in two ways:
 
 1. By providing utilities and interfaces with experimental platforms for moving from simulation to reality.
 2. By providing performant control and estimation algorithms for feedback control. Although CLEOSim enables closed-loop manipulation of network simulations, it does not include any advanced control algorithms itself. The `ldsCtrlEst` library implements adaptive linear dynamical system-based control while the `hmm` library can generate and decode systems with discrete latent states and observations.
@@ -62,7 +62,7 @@ Those using CLEOSim to simulate closed-loop control experiments may be intereste
 </p>
 
 ### Publications
-[**CLOC Tools: A Library of Tools for Closed-Loop Neuroscience**](https://github.com/stanley-rozell/tools-for-neuro-control-manuscript)<br>
+[**CLOC Tools: A Library of Tools for Closed-Loop Neuroscience**](https://github.com/cloctools/tools-for-neuro-control-manuscript)<br>
 A.A. Willats, M.F. Bolus, K.A. Johnsen, G.B. Stanley, and C.J. Rozell. *In prep*, 2022.
 
 [**State-Aware Control of Switching Neural Dynamics**](https://github.com/awillats/state-aware-control)<br>
