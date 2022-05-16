@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.abspath(".."))
 
 # -- Project information -----------------------------------------------------
 
-project = "CLEOsim"
+project = "CLEOSim"
 copyright = "2022"
 author = "Kyle Johnsen, Nathan Cruzado"
 
