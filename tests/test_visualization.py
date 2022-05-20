@@ -7,7 +7,7 @@ from cleosim.opto import (
     OptogeneticIntervention,
     FourStateModel,
     ChR2_four_state,
-    default_blue,
+    fiber_params_blue,
 )
 from cleosim.coordinates import assign_coords_rand_rect_prism
 from cleosim.electrodes import Probe
@@ -25,7 +25,7 @@ def test_VideoVisualizer():
     )
     assign_coords_rand_rect_prism(ng, (0, 0), (0, 0), (0, 0))
     opto = OptogeneticIntervention(
-        "opto", FourStateModel(ChR2_four_state), default_blue, max_Irr0_mW_per_mm2=20
+        "opto", FourStateModel(ChR2_four_state), fiber_params_blue, max_Irr0_mW_per_mm2=20
     )
     probe = Probe("probe", [(0, 0, 0.1)] * mm)
 

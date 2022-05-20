@@ -131,7 +131,7 @@ Out of the box you can access a four-state Markov model of channelrhodopsin-2 (C
     opto = OptogeneticIntervention(
         name="...",
         opsin_model=FourStateModel(params=ChR2_four_state),
-        light_model_params=default_blue,
+        light_model_params=fiber_params_blue,
         location=(0, 0, 0.5) * mm,
     )
 
