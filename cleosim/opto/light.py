@@ -130,6 +130,8 @@ class LightSource(Stimulator):
             phi = Irr / Ephoton : 1/second/meter**2
         """
 
+        # TODO: opsin model needs epsilon, way to take into account crosstalk
+        # -- partial current for non-peak wavelength
         opto_syn = Synapses(
             neuron_group,
             model=modified_opsin_model + light_model,

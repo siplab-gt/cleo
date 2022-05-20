@@ -41,6 +41,10 @@ ChR2_four_state = {
 
 Taken from try.projectpyrho.org's default 4-state params.
 """
+# TODO: opsin model needs epsilon, way to take into account crosstalk
+# -- partial current for non-peak wavelength
+# should we set that here with all the other params? Or have it 
+# separate and explicit?
 
 
 class OpsinModel(ABC):
@@ -54,6 +58,8 @@ class OpsinModel(ABC):
     symbols such as V_VAR_NAME to be replaced on injection in 
     :meth:`get_modified_model_for_ng`."""
 
+    # TODO: opsin model needs epsilon, way to take into account crosstalk
+    # -- partial current for non-peak wavelength
     params: dict
     """Parameter values for model, passed in as a namespace dict"""
 
