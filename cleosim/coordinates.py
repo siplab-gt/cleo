@@ -42,7 +42,6 @@ def assign_coords_grid_rect_prism(
     ValueError
         When the shape is incompatible with the number of neurons in the group
     """
-    _init_variables(neuron_group)
     num_grid_elements = np.product(shape)
     if num_grid_elements != len(neuron_group):
         raise ValueError(
@@ -55,10 +54,7 @@ def assign_coords_grid_rect_prism(
     z = np.linspace(zlim[0], zlim[1], shape[2])
 
     x, y, z = np.meshgrid(x, y, z)
-
-    neuron_group.x = x.flatten() * unit
-    neuron_group.y = y.flatten() * unit
-    neuron_group.z = z.flatten() * unit
+    assign_coords(neuron_group, x, y, z)
 
 
 def assign_coords_rand_rect_prism(
@@ -83,14 +79,10 @@ def assign_coords_rand_rect_prism(
     unit : Unit, optional
         Brian unit to specify scale implied in limits, by default mm
     """
-    _init_variables(neuron_group)
     x = (xlim[1] - xlim[0]) * np.random.random(len(neuron_group)) + xlim[0]
     y = (ylim[1] - ylim[0]) * np.random.random(len(neuron_group)) + ylim[0]
     z = (zlim[1] - zlim[0]) * np.random.random(len(neuron_group)) + zlim[0]
-
-    neuron_group.x = x.flatten() * unit
-    neuron_group.y = y.flatten() * unit
-    neuron_group.z = z.flatten() * unit
+    assign_coords(neuron_group, x, y, z)
 
 
 def assign_coords_rand_cylinder(
@@ -119,7 +111,6 @@ def assign_coords_rand_cylinder(
     unit : Unit, optional
         Brian unit to scale other params, by default mm
     """
-    _init_variables(neuron_group)
     xyz_start = np.array(xyz_start)
     xyz_end = np.array(xyz_end)
     rs = radius * np.random.random(len(neuron_group))
@@ -143,9 +134,29 @@ def assign_coords_rand_cylinder(
     rs = np.reshape(rs, (len(rs), 1))
     points = np.reshape(xyz_start, (1, 3)) + (c * z_cyls).T + rs * r_unit_vecs(thetas)
 
-    neuron_group.x = points[:, 0] * unit
-    neuron_group.y = points[:, 1] * unit
-    neuron_group.z = points[:, 2] * unit
+    assign_coords(neuron_group, points[:, 0], points[:, 1], points[:, 2], unit)
+
+
+def assign_coords(neuron_group: NeuronGroup, x: np.ndarray, y: np.ndarray, z: np.ndarray, unit: Unit = mm):
+    """Assign arbitrary coordinates to neuron group.
+
+    Parameters
+    ----------
+    neuron_group : NeuronGroup
+        neurons to be assigned coordinates
+    x : np.ndarray
+        x positions to assign (preferably 1D with no unit)
+    y : np.ndarray
+        y positions to assign (preferably 1D with no unit)
+    z : np.ndarray
+        z positions to assign (preferably 1D with no unit)
+    unit : Unit, optional
+        Brian unit determining what scale to use for coordinates, by default mm
+    """
+    _init_variables(neuron_group)
+    neuron_group.x = np.reshape(x, (-1,)) * unit
+    neuron_group.y = np.reshape(y, (-1,)) * unit
+    neuron_group.z = np.reshape(z, (-1,)) * unit
 
 
 def _init_variables(group: Group):
