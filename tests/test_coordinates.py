@@ -35,3 +35,18 @@ def test_cylinder_random():
     assert not any(np.logical_and.reduce((ng.x > 2 * mm, ng.y > 2 * mm, ng.z > 2 * mm)))
     # none exactly on the axis (theoretically possible but highly improbable)
     assert not any(ng.z == ng.x / 2 + ng.y / 2)
+
+
+def test_arbitrary_coords():
+    # single neuron
+    ng = NeuronGroup(1, 'v=0: volt')
+    assign_coords(ng, 4, 4, 4)
+    # lists
+    ng = NeuronGroup(3, 'v=0: volt')
+    assign_coords(ng, [0, 1, 2], [3, 4, 5], [6, 7, 8])
+    # nested lists
+    ng = NeuronGroup(3, 'v=0: volt')
+    assign_coords(ng, [[0, 1, 2]], [[3, 4, 5]], [[6, 7, 8]])
+    # np arrays
+    ng = NeuronGroup(3, 'v=0: volt')
+    assign_coords(ng, np.array([0, 1, 2]), np.array([3, 4, 5]), np.array([6, 7, 8]))
