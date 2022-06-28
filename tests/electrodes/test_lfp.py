@@ -6,7 +6,7 @@ from brian2.input.poissongroup import PoissonGroup
 
 from cleosim import CLSimulator
 from cleosim.electrodes import linear_shank_coords, concat_coords, TKLFPSignal, Probe
-from cleosim.coordinates import assign_coords_rand_rect_prism
+from cleosim.coordinates import assign_coords_rand_rect_prism, assign_coords
 
 
 def _groups_types_ei(n_e, n_i):
@@ -99,3 +99,24 @@ def test_TKLFPSignal(groups_and_types, signal_positive, rand_seed):
     lfp_reset = tklfp.get_state()
     assert np.all(lfp_reset == 0)
     assert tklfp.lfp_uV.shape == (1, 8)
+
+
+def test_TKLFPSignal_out_of_range():
+    # make sure logic works when neuron groups are ignored because they're too far away
+    n = 5
+    pgs = []
+    for i in range(4):
+        pg = PoissonGroup(n, 500 * Hz)
+        assign_coords(pg, 5 * i, 5 * i, 5 * i)  # ranging from close (origin) to far
+        pgs.append(pg)
+    net = Network(*pgs)
+    sim = CLSimulator(net)
+    tklfp = TKLFPSignal("tklfp")
+    probe = Probe(
+        "probe", [[0, 0, 0], [5, 5, 5]] * mm, signals=[tklfp]
+    )  # contacts at origin and 5,5,5
+    sim.inject_recorder(probe, *pgs, tklfp_type="exc", sample_period_ms=1)
+    sim.run(30 * ms)
+    lfp = tklfp.get_state()
+    assert lfp.shape == (2,)
+    assert not np.all(lfp == 0)

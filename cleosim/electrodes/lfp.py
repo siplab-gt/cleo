@@ -84,19 +84,24 @@ class TKLFPSignal(Signal):
             is_excitatory=tklfp_type == "exc",
             elec_coords_mm=self._elec_coords_mm,
         )
-        self._tklfps.append(tklfp)
 
-        # prep buffers
+        # determine buffer length necessary for given neuron group
+        # if 0 (neurons are too far away to much influence LFP)
+        # then we ignore this neuron group
         buf_len = self._get_buffer_length(tklfp, **kwparams)
-        self._i_buffers.append([np.array([], dtype=int, ndmin=1)] * buf_len)
-        self._t_ms_buffers.append([np.array([], dtype=float, ndmin=1)] * buf_len)
-        self._buffer_positions.append(0)
 
-        # prep SpikeMonitor
-        mon = SpikeMonitor(neuron_group)
-        self._monitors.append(mon)
-        self._mon_spikes_already_seen.append(0)
-        self.brian_objects.add(mon)
+        if buf_len > 0:
+            # prep buffers
+            self._tklfps.append(tklfp)
+            self._i_buffers.append([np.array([], dtype=int, ndmin=1)] * buf_len)
+            self._t_ms_buffers.append([np.array([], dtype=float, ndmin=1)] * buf_len)
+            self._buffer_positions.append(0)
+
+            # prep SpikeMonitor
+            mon = SpikeMonitor(neuron_group)
+            self._monitors.append(mon)
+            self._mon_spikes_already_seen.append(0)
+            self.brian_objects.add(mon)
 
     def get_state(self) -> np.ndarray:
         tot_tklfp = 0
@@ -105,7 +110,7 @@ class TKLFPSignal(Signal):
         for i_mon in range(len(self._monitors)):
             self._update_spike_buffer(i_mon)
             tot_tklfp += self._tklfp_for_monitor(i_mon, now_ms)
-        out = tot_tklfp.reshape((-1,))  # return 1D array (vector)
+        out = np.reshape(tot_tklfp, (-1,))  # return 1D array (vector)
         if self.save_history:
             self.lfp_uV = np.vstack([self.lfp_uV, out])
         return out

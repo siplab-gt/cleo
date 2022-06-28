@@ -113,7 +113,7 @@ class Probe(Recorder):
             When coords aren't n x 3
         """
         super().__init__(name)
-        self.coords = coords.reshape((-1, 3))
+        self.coords = np.reshape(coords, (-1, 3))
         if len(self.coords.shape) != 2 or self.coords.shape[1] != 3:
             raise ValueError(
                 "coords must be an n by 3 array (with unit) with x, y, and z"
