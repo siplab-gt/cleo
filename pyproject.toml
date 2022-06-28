@@ -8,7 +8,7 @@ authors = [
 ]
 license = "MIT"
 homepage = "https://cleosim.readthedocs.io"
-repository = "https://github.com/kjohnsen/cleosim"
+repository = "https://github.com/Sensory-Information-Processing-Lab/CLEOSim"
 readme = "README.md"
 classifiers = [
     "Development Status :: 4 - Beta",
