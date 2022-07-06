@@ -1,10 +1,12 @@
 """Tests for ephys.lfp module"""
 import pytest
-from brian2 import mm, Hz, ms, Network, seed
+from brian2 import mm, Hz, ms, Network, seed, SpikeGeneratorGroup
 import numpy as np
 from brian2.input.poissongroup import PoissonGroup
+from tklfp import TKLFP
 
 from cleosim import CLSimulator
+from cleosim.processing import RecordOnlyProcessor
 from cleosim.electrodes import linear_shank_coords, concat_coords, TKLFPSignal, Probe
 from cleosim.coordinates import assign_coords_rand_rect_prism, assign_coords
 
@@ -120,3 +122,60 @@ def test_TKLFPSignal_out_of_range():
     lfp = tklfp.get_state()
     assert lfp.shape == (2,)
     assert not np.all(lfp == 0)
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("seed", [1783, 1865, 1918, 1945])
+@pytest.mark.parametrize("is_exc", [True, False])
+def test_TKLFP_orientation(seed, is_exc):
+    # here we'll just compare TKLFPSignal's output to TKLFP. Should
+    # have done this for the other tests
+    rng = np.random.default_rng(seed)
+    n_nrns = 5
+    n_elec = 4
+    # random network setup and spikes
+    c_mm = 2 * rng.random((n_nrns, 3)) - 1
+    orientation = 2 * rng.random((n_nrns, 3)) - 1
+    elec_coords = (2 * rng.random((n_elec, 3)) - 1) * mm
+    # random spikes during first 40 ms
+    n_spk = n_nrns * 4
+    i_spk = rng.choice(range(n_nrns), n_spk)
+    t_spk = 40 * rng.random((n_spk,)) * ms
+    sgg = SpikeGeneratorGroup(n_nrns, i_spk, t_spk)
+    sgg._N = n_nrns  # hack for assign_coords to work
+    assign_coords(sgg, c_mm[:, 0], c_mm[:, 1], c_mm[:, 2])
+
+    # cleosim setup
+    sim = CLSimulator(Network(sgg))
+    tklfp_signal = TKLFPSignal("tklfp", save_history=True)
+    probe = Probe("probe", elec_coords, [tklfp_signal])
+    samp_period = 10 * ms
+    sim.set_io_processor(RecordOnlyProcessor(samp_period / ms))  # record every 10 ms
+    sim.inject_recorder(
+        probe, sgg, tklfp_type="exc" if is_exc else "inh", orientation=orientation
+    )
+
+    sim.run(7 * samp_period)
+
+    # tklfp
+    elec_coords_mm_invert = elec_coords / mm
+    elec_coords_mm_invert[:, 2] *= -1
+    orientation_invert = orientation.copy()
+    orientation_invert[:, 2] *= -1
+    tklfp = TKLFP(
+        c_mm[:, 0],
+        c_mm[:, 1],
+        -c_mm[:, 2],
+        is_exc,
+        elec_coords_mm_invert,
+        orientation_invert,
+    )
+    tklfp_out = tklfp.compute(i_spk, t_spk / ms, sim.io_processor.t_samp_ms)
+
+    # not super close--why? inverting z axis could introduce some floating point
+    # differences. Also, TKLFPSignal ignores spikes with low contributions
+    # BUT--after exploring a lower spike collection threshold and still seeing
+    # the same phenomenon I think the biggest difference is that tklfp
+    # computes it all post-hoc but TKLFPSignal can only compute using
+    # a causal buffer of spikes
+    assert np.allclose(tklfp_signal.lfp_uV, tklfp_out, atol=5e-3)
