@@ -22,7 +22,7 @@ brian2 = "^2.4, !=2.5.0.2"
 matplotlib = "^3.4"
 numpy = "^1.16"
 scipy = "^1.7.2"
-tklfp = "^0.1"
+tklfp = "^0.2"
 bidict = "*"
 nptyping = "^1.4.4"
 
