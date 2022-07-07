@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "cleosim"
-version = "0.2.1"
+version = "0.3.0"
 description = "Closed Loop, Electrophysiology, and Optogenetics Simulator: testbed and prototyping kit"
 authors = [
     "Kyle Johnsen <kyle@kjohnsen.org>",
@@ -22,7 +22,7 @@ brian2 = "^2.4, !=2.5.0.2"
 matplotlib = "^3.4"
 numpy = "^1.16"
 scipy = "^1.7.2"
-tklfp = "^0.1"
+tklfp = "^0.2"
 bidict = "*"
 nptyping = "^1.4.4"
 

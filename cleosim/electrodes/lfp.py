@@ -15,7 +15,16 @@ class TKLFPSignal(Signal):
     Requires ``tklfp_type='exc'|'inh'`` to specify cell type
     on injection.
 
-    TKLFP is computed from spikes using the tklfp package"""
+    An ``orientation`` keyword argument can also be specified on
+    injection, which should be an array of shape ``(n_neurons, 3)``
+    representing which way is "up," that is, towards the surface of
+    the cortex, for each neuron. If a single vector is given, it is
+    taken to be the orientation for all neurons in the group. [0, 0, -1]
+    is the default, meaning the negative z axis is "up." As stated
+    elsewhere, CLEOSim's convention is that z=0 corresponds to the
+    cortical surface and increasing z values represent increasing depth.
+
+    TKLFP is computed from spikes using the tklfp package."""
 
     uLFP_threshold_uV: float
     """Threshold, in microvolts, above which the uLFP for a single
@@ -23,10 +32,11 @@ class TKLFPSignal(Signal):
     length of past spikes, since the uLFP from a long-past spike
     becomes negligible and is ignored."""
     save_history: bool
-    """Whether to record output from every timestep in :attr:`lfp_uV`
+    """Whether to record output from every timestep in :attr:`lfp_uV`.
     Output is stored every time :meth:`get_state` is called."""
     lfp_uV: np.ndarray
-    """Approximated LFP from every timstep, recorded if :attr:`save_history`"""
+    """Approximated LFP from every call to :meth:`get_state`, recorded
+    if :attr:`save_history`. Shape is (n_samples, n_channels)."""
     _elec_coords_mm: np.ndarray
     _tklfps: list[TKLFP]
     _monitors: list[SpikeMonitor]
@@ -70,12 +80,14 @@ class TKLFPSignal(Signal):
     def connect_to_neuron_group(self, neuron_group: NeuronGroup, **kwparams):
         # inherit docstring
         # prep tklfp object
-        tklfp_type = kwparams.get("tklfp_type", "not given")
+        tklfp_type = kwparams.pop("tklfp_type", "not given")
         if tklfp_type not in ["exc", "inh"]:
             raise Exception(
                 "tklfp_type ('exc' or 'inh') must be passed as a keyword argument to "
                 "inject_recorder() when injecting an electrode with a TKLFPSignal."
             )
+        orientation = kwparams.pop("orientation", np.array([[0, 0, -1]])).copy()
+        orientation[:, 2] *= -1
 
         tklfp = TKLFP(
             neuron_group.x / mm,
@@ -83,6 +95,7 @@ class TKLFPSignal(Signal):
             -neuron_group.z / mm,  # invert neuron zs as well
             is_excitatory=tklfp_type == "exc",
             elec_coords_mm=self._elec_coords_mm,
+            orientation=orientation,
         )
 
         # determine buffer length necessary for given neuron group
