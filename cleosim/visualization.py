@@ -192,9 +192,8 @@ def _plot(
     zlim = ax.get_zlim() if zlim is None else zlim
 
     ax.set(xlim=xlim, ylim=ylim, zlim=zlim)
-    ax.set_box_aspect(
-        (xlim[1] - xlim[0], ylim[1] - ylim[0], int(invert_z) * (zlim[0] - zlim[1]))
-    )
+    z_aspect = zlim[0] - zlim[1] if invert_z else zlim[1] - zlim[0]
+    ax.set_box_aspect((xlim[1] - xlim[0], ylim[1] - ylim[0], z_aspect))
 
     ax.legend()
 
