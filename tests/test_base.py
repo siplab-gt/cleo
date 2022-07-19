@@ -41,7 +41,7 @@ def sim(neurons):
 
 
 def test_stimulator(sim, neurons):
-    my_stim = MyStim("my_stim", 42)
+    my_stim = MyStim("my_stim", 42, save_history=True)
     sim.inject_stimulator(my_stim, neurons)
     assert sim.stimulators["my_stim"] == my_stim
 
@@ -51,12 +51,17 @@ def test_stimulator(sim, neurons):
     assert my_stim.value == 42
     my_stim.update(43)
     assert my_stim.value == 43
+    assert len(my_stim.values) == len(my_stim.t_ms) == 2  # init and update
 
     sim.update_stimulators({"my_stim": 42})
     assert my_stim.value == 42
+    assert len(my_stim.values) == len(my_stim.t_ms) == 3  # init and updates
+
+    my_stim.reset()
+    assert len(my_stim.values) == len(my_stim.t_ms) == 1  # init
 
     neurons2 = NeuronGroup(1, "v = -70*mV : volt")
-    with pytest.raises(Exception):
+    with pytest.raises(Exception):  # neuron2 not in network
         sim.inject_stimulator(my_stim, neurons2)
 
 
