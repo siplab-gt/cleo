@@ -1,9 +1,11 @@
 """Contains LFP signals"""
 from __future__ import annotations
+from typing import Any
 
 from brian2 import NeuronGroup, mm, ms
 from brian2.monitors.spikemonitor import SpikeMonitor
 import numpy as np
+from nptyping import NDArray
 from tklfp import TKLFP
 
 from cleosim.electrodes.probes import Signal, Probe
@@ -34,7 +36,9 @@ class TKLFPSignal(Signal):
     save_history: bool
     """Whether to record output from every timestep in :attr:`lfp_uV`.
     Output is stored every time :meth:`get_state` is called."""
-    lfp_uV: np.ndarray
+    t_ms: NDArray[(Any,), float]
+    """Times at which LFP is recorded, in ms, stored if :attr:`save_history`"""
+    lfp_uV: NDArray[(Any, Any), float]
     """Approximated LFP from every call to :meth:`get_state`, recorded
     if :attr:`save_history`. Shape is (n_samples, n_channels)."""
     _elec_coords_mm: np.ndarray
@@ -74,8 +78,17 @@ class TKLFPSignal(Signal):
         # need to invert z coords since cleosim uses an inverted z axis and
         # tklfp does not
         self._elec_coords_mm[:, 2] *= -1
+        self._init_saved_vars()
+
+    def _init_saved_vars(self):
         if self.save_history:
+            self.t_ms = np.empty((0,))
             self.lfp_uV = np.empty((0, self.probe.n))
+
+    def _update_saved_vars(self, t_ms, lfp_uV):
+        if self.save_history:
+            self.t_ms = np.concatenate([self.t_ms, [t_ms]])
+            self.lfp_uV = np.vstack([self.lfp_uV, lfp_uV])
 
     def connect_to_neuron_group(self, neuron_group: NeuronGroup, **kwparams):
         # inherit docstring
@@ -124,16 +137,14 @@ class TKLFPSignal(Signal):
             self._update_spike_buffer(i_mon)
             tot_tklfp += self._tklfp_for_monitor(i_mon, now_ms)
         out = np.reshape(tot_tklfp, (-1,))  # return 1D array (vector)
-        if self.save_history:
-            self.lfp_uV = np.vstack([self.lfp_uV, out])
+        self._update_saved_vars(now_ms, out)
         return out
 
     def reset(self, **kwargs) -> None:
         super().reset(**kwargs)
         for i_mon in range(len(self._monitors)):
             self._reset_buffer(i_mon)
-        if self.save_history:
-            self.lfp_uV = np.empty((0, self.probe.n))
+        self._init_saved_vars()
 
     def _reset_buffer(self, i_mon):
         mon = self._monitors[i_mon]
