@@ -196,17 +196,40 @@ class Recorder(InterfaceDevice):
 class Stimulator(InterfaceDevice):
     """Device for manipulating the network"""
 
-    def __init__(self, name: str, start_value) -> None:
+    value: Any
+    """The current value of the stimulator device"""
+    default_value: Any
+    """The default value of the device---used on initialization and on :meth:`~reset`"""
+    t_ms: list[float]
+    """Times stimulator was updated, stored if :attr:`save_history`"""
+    values: list[Any]
+    """Values taken by the stimulator at each :meth:`~update` call, 
+    stored if :attr:`save_history`"""
+    save_history: bool
+    """Determines whether :attr:`t_ms` and :attr:`values` are recorded"""
+
+    def __init__(self, name: str, default_value, save_history: bool = False) -> None:
         """
         Parameters
         ----------
         name : str
             Unique device name used in :meth:`CLSimulator.update_stimulators`
-        start_value : any
+        default_value : any
             The stimulator's default value
         """
         super().__init__(name)
-        self.value = start_value
+        self.value = default_value
+        self.default_value = default_value
+        self.save_history = save_history
+
+    def init_for_simulator(self, simulator: CLSimulator) -> None:
+        super().init_for_simulator(simulator)
+        self._init_saved_vars()
+
+    def _init_saved_vars(self):
+        if self.save_history:
+            self.t_ms = [self.sim.network.t / ms]
+            self.values = [self.default_value]
 
     def update(self, ctrl_signal) -> None:
         """Set the stimulator value.
@@ -222,10 +245,13 @@ class Stimulator(InterfaceDevice):
             The value the stimulator is to take.
         """
         self.value = ctrl_signal
+        if self.save_history:
+            self.t_ms.append(self.sim.network.t / ms)
+            self.values.append(self.value)
 
     def reset(self, **kwargs) -> None:
         """Reset the stimulator device to a neutral state"""
-        pass
+        self._init_saved_vars()
 
 
 class CLSimulator:

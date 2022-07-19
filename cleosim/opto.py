@@ -289,6 +289,7 @@ class OptogeneticIntervention(Stimulator):
         location: Quantity = (0, 0, 0) * mm,
         direction: Tuple[float, float, float] = (0, 0, 1),
         max_Irr0_mW_per_mm2: float = None,
+        save_history: bool = False,
     ):
         """
         Parameters
@@ -310,8 +311,10 @@ class OptogeneticIntervention(Stimulator):
             source is pointing, by default (0, 0, 1)
         max_Irr0_mW_per_mm2 : float, optional
             Set :attr:`max_Irr0_mW_per_mm2`.
+        save_history : bool, optional
+            Determines whether :attr:`~values` and :attr:`~t_ms` are saved.
         """
-        super().__init__(name, 0)
+        super().__init__(name, 0, save_history)
         self.opsin_model = opsin_model
         self.light_model_params = light_model_params
         self.location = location
@@ -345,11 +348,11 @@ class OptogeneticIntervention(Stimulator):
         def kubelka_munk(dist):
             S = self.light_model_params["S"]
             a = 1 + self.light_model_params["K"] / S
-            b = np.sqrt(a ** 2 - 1)
-            dist = np.sqrt(r ** 2 + z ** 2)
+            b = np.sqrt(a**2 - 1)
+            dist = np.sqrt(r**2 + z**2)
             return b / (a * np.sinh(b * S * dist) + b * np.cosh(b * S * dist))
 
-        M = kubelka_munk(np.sqrt(r ** 2 + z ** 2)) if scatter else 1
+        M = kubelka_munk(np.sqrt(r**2 + z**2)) if scatter else 1
 
         T = G * C * M
         return T
