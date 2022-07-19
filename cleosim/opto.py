@@ -345,11 +345,11 @@ class OptogeneticIntervention(Stimulator):
         def kubelka_munk(dist):
             S = self.light_model_params["S"]
             a = 1 + self.light_model_params["K"] / S
-            b = np.sqrt(a ** 2 - 1)
-            dist = np.sqrt(r ** 2 + z ** 2)
+            b = np.sqrt(a**2 - 1)
+            dist = np.sqrt(r**2 + z**2)
             return b / (a * np.sinh(b * S * dist) + b * np.cosh(b * S * dist))
 
-        M = kubelka_munk(np.sqrt(r ** 2 + z ** 2)) if scatter else 1
+        M = kubelka_munk(np.sqrt(r**2 + z**2)) if scatter else 1
 
         T = G * C * M
         return T
