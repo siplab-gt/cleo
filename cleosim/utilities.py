@@ -1,5 +1,6 @@
 """Assorted utilities for developers."""
 from collections.abc import MutableMapping
+from math import ceil, floor
 
 from scipy import linalg
 import numpy as np
@@ -16,13 +17,69 @@ from brian2.equations.equations import (
 
 def get_orth_vectors_for_v(v):
     """Returns w1, w2 as 1x3 row vectors"""
-    v = v.reshape((3, 1))
     q, r = linalg.qr(
-        np.hstack([v, v, v])
+        np.column_stack([v, v, v])
     )  # get two vectors orthogonal to v from QR decomp
-    w1 = np.reshape(q[:, 1], (1, 3))
-    w2 = np.reshape(q[:, 2], (1, 3))
-    return w1, w2
+    return q[:, 1], q[:, 2]
+
+
+def xyz_from_rθz(rs, thetas, zs, xyz_start, xyz_end):
+    """Convert from cylindrical to Cartesian coordinates."""
+    # not using np.linalg.norm because it strips units
+    cyl_length = np.sqrt(np.sum(np.subtract(xyz_end, xyz_start)**2))
+    c = (xyz_end - xyz_start) / cyl_length  # unit vector in direction of cylinder
+
+    r1, r2 = get_orth_vectors_for_v(c)
+
+    def r_unit_vecs(thetas):
+        cosines = np.reshape(np.cos(thetas), (len(thetas), 1))
+        sines = np.reshape(np.sin(thetas), (len(thetas), 1))
+        # add axis for broadcasting so result is nx3
+        cosines = np.cos(thetas)[..., np.newaxis]
+        sines = np.sin(thetas)[..., np.newaxis]
+        return r1 * cosines + r2 * sines
+
+    coords = (
+        xyz_start + c * zs[..., np.newaxis] + rs[..., np.newaxis] * r_unit_vecs(thetas)
+    )
+    return coords[:, 0], coords[:, 1], coords[:, 2]
+
+
+def uniform_cylinder_rθz(n, rmax, zmax):
+    # # using m Fibonacci spirals, spaced at minimum packing distance apart
+    # # normalized min packing distance δ*=√(n)δ(n)
+    # # δ* = 3.09 (according to http://extremelearning.com.au/how-to-evenly-distribute-points-on-a-sphere-more-effectively-than-the-canonical-fibonacci-lattice/)
+    # δnorm = 3.09
+    # # n_per_spiral = np.floor(np.sqrt(n) * δnorm / zmax)
+    # n_per_spiral = n / (np.sqrt(n) * zmax / δnorm + 1)
+    # δ = δnorm / np.sqrt(n_per_spiral)
+    # assert n % n_per_spiral == 0
+    # n_spirals = int(n // n_per_spiral)
+    # n_spirals_with_extra = n % n_per_spiral
+    # rs, thetas, zs = np.empty(0), np.empty(0), np.empty(0)
+    # for i_spiral in range(n_spirals):
+    #     # either n_per_spiral or +1 for those that need extra
+    #     if i_spiral < n_spirals_with_extra:
+    #         n_this_spiral = np.ceil(n_per_spiral)
+    #     else:
+    #         n_this_spiral = np.floor(n_per_spiral)
+    #     golden_angle = np.pi * (3 - np.sqrt(5))
+    #     thetas = np.concatenate([thetas, golden_angle * np.arange(n_this_spiral)])
+    #     rs = np.concatenate(
+    #         [rs, rmax * np.sqrt(np.arange(n_this_spiral) / n_this_spiral)]
+    #     )
+    #     zs = np.concatenate([zs, δ * i_spiral * np.ones(n_this_spiral)])
+
+    # take 2: generate Fibonacci spiral by rotating around axis and up and down
+    # cylinder simultaneously
+    indices = np.arange(0, n) + 0.5
+    rs = rmax * np.sqrt(indices / n)
+    golden_angle = np.pi * (1 + np.sqrt(5))
+    thetas = golden_angle * indices
+    phis = np.sqrt(2) * indices
+    zs = zmax * (1 + np.sin(phis)) / 2
+
+    return rs, thetas, zs
 
 
 def modify_model_with_eqs(neuron_group, eqs_to_add):
@@ -84,7 +141,7 @@ def modify_model_with_eqs(neuron_group, eqs_to_add):
     # Stochastic variables
     for xi in neuron_group.equations.stochastic_variables:
         neuron_group.variables.add_auxiliary_variable(
-            xi, dimensions=(second ** -0.5).dim
+            xi, dimensions=(second**-0.5).dim
         )
 
     # Check scalar subexpressions
