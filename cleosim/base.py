@@ -78,7 +78,7 @@ class InterfaceDevice(ABC):
         """
         pass
 
-    def add_self_to_plot(self, ax: Axes3D, axis_scale_unit: Unit) -> list[Artist]:
+    def add_self_to_plot(self, ax: Axes3D, axis_scale_unit: Unit, **kwargs) -> list[Artist]:
         """Add device to an existing plot
 
         Should only be called by :func:`~cleosim.visualization.plot`.
@@ -89,6 +89,7 @@ class InterfaceDevice(ABC):
             The existing matplotlib Axes object
         axis_scale_unit : Unit
             The unit used to label axes and define chart limits
+        **kwargs : optional
 
         Returns
         -------
