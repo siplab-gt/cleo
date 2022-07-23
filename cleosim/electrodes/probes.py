@@ -83,7 +83,17 @@ class Signal(ABC):
 
 
 class Probe(Recorder):
-    """Picks up specified signals across an array of electrodes"""
+    """Picks up specified signals across an array of electrodes.
+
+    Visualization kwargs
+    --------------------
+    marker : str, optional
+        The marker used to represent each contact. "x" by default.
+    size : float, optional
+        The size of each contact marker. 40 by default.
+    color : Any, optional
+        The color of contact markers. "xkcd:dark gray" by default.
+    """
 
     coords: Quantity
     """n x 3 array (with Brian length unit) specifying contact locations"""
@@ -166,22 +176,28 @@ class Probe(Recorder):
             state_dict[signal.name] = signal.get_state()
         return state_dict
 
-    def add_self_to_plot(self, ax: Axes3D, axis_scale_unit: Unit) -> list[Artist]:
+    def add_self_to_plot(
+        self, ax: Axes3D, axis_scale_unit: Unit, **kwargs
+    ) -> list[Artist]:
         # docstring inherited from InterfaceDevice
-        marker = ax.scatter(
+        marker = kwargs.get("marker", "x")
+        size = kwargs.get("size", 40)
+        color = kwargs.get("color", "xkcd:dark gray")
+
+        markers = ax.scatter(
             self.xs / axis_scale_unit,
             self.ys / axis_scale_unit,
             self.zs / axis_scale_unit,
-            marker="x",
-            s=40,
-            color="xkcd:dark gray",
+            marker=marker,
+            s=size,
+            color=color,
             label=self.name,
             depthshade=False,
         )
         handles = ax.get_legend().legendHandles
-        handles.append(marker)
+        handles.append(markers)
         ax.legend(handles=handles)
-        return [marker]
+        return [markers]
 
     @property
     def xs(self) -> Quantity:

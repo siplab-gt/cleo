@@ -64,6 +64,9 @@ autosectionlabel_prefix_document = True
 jupyter_execute_notebooks = "off"
 execution_excludepatterns = ["*ldsctrlest*"]
 
+# napoleon_custom_sections = "Visualization Keyword Arguments"
+napoleon_custom_sections = [("Visualization kwargs", "params_style")]
+
 # -- Options for HTML output -------------------------------------------------
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for

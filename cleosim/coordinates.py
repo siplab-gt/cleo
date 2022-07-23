@@ -9,7 +9,12 @@ from brian2.groups.neurongroup import NeuronGroup
 from brian2.units.fundamentalunits import get_dimensions
 import numpy as np
 
-from cleosim.utilities import get_orth_vectors_for_v, modify_model_with_eqs
+from cleosim.utilities import (
+    get_orth_vectors_for_v,
+    modify_model_with_eqs,
+    uniform_cylinder_rθz,
+    xyz_from_rθz,
+)
 
 
 def assign_coords_grid_rect_prism(
@@ -94,9 +99,40 @@ def assign_coords_rand_cylinder(
 ) -> None:
     """Assign random coordinates within a cylinder.
 
-    *DON'T USE YET*: spacing isn't uniform, clustering around
-    the center since a random height and radius is chosen for
-    each neuron
+    Parameters
+    ----------
+    neuron_group : NeuronGroup
+        neurons to assign coordinates to
+    xyz_start : Tuple[float, float, float]
+        starting position of cylinder without unit
+    xyz_end : Tuple[float, float, float]
+        ending position of cylinder without unit
+    radius : float
+        radius of cylinder without unit
+    unit : Unit, optional
+        Brian unit to scale other params, by default mm
+    """
+    xyz_start = np.array(xyz_start)
+    xyz_end = np.array(xyz_end)
+    # sample uniformly over r**2 for equal area
+    rs = np.sqrt(radius**2 * np.random.random(len(neuron_group)))
+    thetas = 2 * np.pi * np.random.random(len(neuron_group))
+    cyl_length = np.linalg.norm(xyz_end - xyz_start)
+    z_cyls = cyl_length * np.random.random(len(neuron_group))
+
+    xs, ys, zs = xyz_from_rθz(rs, thetas, z_cyls, xyz_start, xyz_end)
+
+    assign_coords(neuron_group, xs, ys, zs, unit)
+
+
+def assign_coords_uniform_cylinder(
+    neuron_group: NeuronGroup,
+    xyz_start: Tuple[float, float, float],
+    xyz_end: Tuple[float, float, float],
+    radius: float,
+    unit: Unit = mm,
+) -> None:
+    """Assign uniformly spaced coordinates within a cylinder.
 
     Parameters
     ----------
@@ -113,31 +149,21 @@ def assign_coords_rand_cylinder(
     """
     xyz_start = np.array(xyz_start)
     xyz_end = np.array(xyz_end)
-    rs = radius * np.random.random(len(neuron_group))
-    thetas = 2 * np.pi * np.random.random(len(neuron_group))
     cyl_length = np.linalg.norm(xyz_end - xyz_start)
-    z_cyls = cyl_length * np.random.random(len(neuron_group))
 
-    c = np.reshape(
-        (xyz_end - xyz_start) / cyl_length, (-1, 1)
-    )  # unit vector in direction of cylinder
+    rs, thetas, z_cyls = uniform_cylinder_rθz(len(neuron_group), radius, cyl_length)
+    xs, ys, zs = xyz_from_rθz(rs, thetas, z_cyls, xyz_start, xyz_end)
 
-    r1, r2 = get_orth_vectors_for_v(c)
-
-    def r_unit_vecs(thetas):
-        r1s = np.repeat(r1, len(thetas), 0)
-        r2s = np.repeat(r2, len(thetas), 0)
-        cosines = np.reshape(np.cos(thetas), (len(thetas), 1))
-        sines = np.reshape(np.sin(thetas), (len(thetas), 1))
-        return r1s * cosines + r2s * sines
-
-    rs = np.reshape(rs, (len(rs), 1))
-    points = np.reshape(xyz_start, (1, 3)) + (c * z_cyls).T + rs * r_unit_vecs(thetas)
-
-    assign_coords(neuron_group, points[:, 0], points[:, 1], points[:, 2], unit)
+    assign_coords(neuron_group, xs, ys, zs, unit)
 
 
-def assign_coords(neuron_group: NeuronGroup, x: np.ndarray, y: np.ndarray, z: np.ndarray, unit: Unit = mm):
+def assign_coords(
+    neuron_group: NeuronGroup,
+    x: np.ndarray,
+    y: np.ndarray,
+    z: np.ndarray,
+    unit: Unit = mm,
+):
     """Assign arbitrary coordinates to neuron group.
 
     Parameters

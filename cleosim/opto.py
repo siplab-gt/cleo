@@ -29,7 +29,7 @@ from matplotlib import colors
 from matplotlib.artist import Artist
 from matplotlib.collections import PathCollection
 
-from cleosim.utilities import wavelength_to_rgb
+from cleosim.utilities import uniform_cylinder_rθz, wavelength_to_rgb, xyz_from_rθz
 from cleosim.stimulators import Stimulator
 
 
@@ -263,6 +263,15 @@ class OptogeneticIntervention(Stimulator):
     See :meth:`connect_to_neuron_group` for optional keyword parameters
     that can be specified when calling
     :meth:`cleosim.CLSimulator.inject_stimulator`.
+
+    Visualization kwargs
+    --------------------
+    n_points : int, optional
+        The number of points used to represent light intensity in space.
+        By default 1e4.
+    T_threshold : float, optional
+        The transmittance below which no points are plotted. By default
+        1e-3.
     """
 
     opto_syns: dict[str, Synapses]
@@ -319,7 +328,7 @@ class OptogeneticIntervention(Stimulator):
         self.light_model_params = light_model_params
         self.location = location
         # direction unit vector
-        self.dir_uvec = (direction / np.linalg.norm(direction)).reshape((3, 1))
+        self.dir_uvec = direction / np.linalg.norm(direction)
         self.opto_syns = {}
         self.max_Irr0_mW_per_mm2 = max_Irr0_mW_per_mm2
         self.max_Irr0_mW_per_mm2_viz = None
@@ -355,6 +364,7 @@ class OptogeneticIntervention(Stimulator):
         M = kubelka_munk(np.sqrt(r**2 + z**2)) if scatter else 1
 
         T = G * C * M
+        T[z < 0] = 0
         return T
 
     def _get_rz_for_xyz(self, x, y, z):
@@ -379,7 +389,7 @@ class OptogeneticIntervention(Stimulator):
         zc = usf.dot(rel_coords, self.dir_uvec)  # distance along cylinder axis
         # just need length (norm) of radius vectors
         # not using np.linalg.norm because it strips units
-        r = np.sqrt(np.sum((rel_coords - usf.dot(zc, self.dir_uvec.T)) ** 2, axis=1))
+        r = np.sqrt(np.sum((rel_coords - zc[..., np.newaxis] * self.dir_uvec.T)**2, axis=1))
         r = r.reshape((-1, 1))
         return r, zc
 
@@ -461,26 +471,26 @@ class OptogeneticIntervention(Stimulator):
         self.opto_syns[neuron_group.name] = opto_syn
         self.brian_objects.add(opto_syn)
 
-    def add_self_to_plot(self, ax, axis_scale_unit) -> PathCollection:
+    def add_self_to_plot(self, ax, axis_scale_unit, **kwargs) -> PathCollection:
         # show light with point field, assigning r and z coordinates
         # to all points
-        xlim = ax.get_xlim()
-        ylim = ax.get_ylim()
-        zlim = ax.get_zlim()
-        x = np.linspace(xlim[0], xlim[1], 50)
-        y = np.linspace(ylim[0], ylim[1], 50)
-        z = np.linspace(zlim[0], zlim[1], 50)
-        x, y, z = np.meshgrid(x, y, z) * axis_scale_unit
-
-        r, zc = self._get_rz_for_xyz(x, y, z)
-        T = self._Foutz12_transmittance(r, zc)
         # filter out points with <0.001 transmittance to make plotting faster
-        plot_threshold = 0.001
-        idx_to_plot = T[:, 0] >= plot_threshold
-        x = x.flatten()[idx_to_plot]
-        y = y.flatten()[idx_to_plot]
-        z = z.flatten()[idx_to_plot]
-        T = T[idx_to_plot, 0]
+
+        fiber_T_thresh = kwargs.get('fiber_T_thresh', 0.001)
+        n_points = kwargs.get('n_points', 1e4)
+        r_thresh, zc_thresh = self._find_rz_thresholds(fiber_T_thresh)
+        r, theta, zc = uniform_cylinder_rθz(n_points, r_thresh, zc_thresh)
+
+        T = self._Foutz12_transmittance(r, zc)
+
+        end = self.location + zc_thresh*self.dir_uvec
+        x, y, z = xyz_from_rθz(r, theta, zc, self.location, end)
+
+        idx_to_plot = T >= fiber_T_thresh
+        x = x[idx_to_plot]
+        y = y[idx_to_plot]
+        z = z[idx_to_plot]
+        T = T[idx_to_plot]
         point_cloud = ax.scatter(
             x / axis_scale_unit,
             y / axis_scale_unit,
@@ -497,6 +507,19 @@ class OptogeneticIntervention(Stimulator):
         handles.append(opto_patch)
         ax.legend(handles=handles)
         return [point_cloud]
+
+    def _find_rz_thresholds(self, thresh):
+        """find r and z thresholds for visualization purposes"""
+        res_mm = 0.1
+        zc = np.arange(20, 0, -res_mm) * mm  # ascending T
+        T = self._Foutz12_transmittance(0 * mm, zc)
+        zc_thresh = zc[np.searchsorted(T, thresh)]
+        # look at half the z threshold for the r threshold
+        r = np.arange(20, 0, -res_mm) * mm
+        T = self._Foutz12_transmittance(r, zc_thresh / 2)
+        r_thresh = r[np.searchsorted(T, thresh)]
+        return r_thresh, zc_thresh
+
 
     def update_artists(
         self, artists: list[Artist], value, *args, **kwargs
