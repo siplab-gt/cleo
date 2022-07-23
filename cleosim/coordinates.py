@@ -115,7 +115,7 @@ def assign_coords_rand_cylinder(
     xyz_start = np.array(xyz_start)
     xyz_end = np.array(xyz_end)
     # sample uniformly over r**2 for equal area
-    rs = radius * np.sqrt(np.random.random(len(neuron_group)) ** 2)
+    rs = np.sqrt(radius**2 * np.random.random(len(neuron_group)))
     thetas = 2 * np.pi * np.random.random(len(neuron_group))
     cyl_length = np.linalg.norm(xyz_end - xyz_start)
     z_cyls = cyl_length * np.random.random(len(neuron_group))
