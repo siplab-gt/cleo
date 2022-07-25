@@ -177,12 +177,20 @@ def _plot(
     neuron_artists = []
     for i in range(len(neuron_groups)):
         ng = neuron_groups[i]
-        args = [ng.x / axis_scale_unit, ng.y / axis_scale_unit, ng.z / axis_scale_unit]
+        xyz = [ng.x / axis_scale_unit, ng.y / axis_scale_unit, ng.z / axis_scale_unit]
+        # mask neurons outside desired lims:
+        for i_dim, lim in enumerate([xlim, ylim, zlim]):
+            if lim is not None:
+                xyz[i_dim] = np.ma.masked_array(
+                    xyz[i_dim],
+                    np.logical_or(xyz[i_dim] < lim[0], xyz[i_dim] > lim[1]),
+                    dtype=float,
+                )
         kwargs = {"label": ng.name, "alpha": _neuron_alpha}
         if colors is not None:
             kwargs["color"] = colors[i]
         kwargs.update(scatterargs)
-        neuron_artists.append(ax.scatter(*args, **kwargs))
+        neuron_artists.append(ax.scatter(*xyz, **kwargs))
         ax.set_xlabel(f"x ({axis_scale_unit._dispname})")
         ax.set_ylabel(f"y ({axis_scale_unit._dispname})")
         ax.set_zlabel(f"z ({axis_scale_unit._dispname})")
@@ -269,5 +277,4 @@ def plot(
         devices,
         invert_z,
         scatterargs,
-        **figargs,
     )
