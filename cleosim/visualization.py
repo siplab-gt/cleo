@@ -278,3 +278,4 @@ def plot(
         invert_z,
         scatterargs,
     )
+    return fig, ax
