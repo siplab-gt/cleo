@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from typing import Tuple, Any
 import warnings
 
-from brian2 import Synapses, NeuronGroup
+from brian2 import Synapses, NeuronGroup, Unit, BrianObjectException, get_unit
 from brian2.units import (
     mm,
     mm2,
@@ -23,7 +23,6 @@ from brian2.units import (
 )
 from brian2.units.allunits import meter2, radian
 import brian2.units.unitsafefunctions as usf
-from brian2.core.base import BrianObjectException
 import numpy as np
 import matplotlib
 from matplotlib import colors
@@ -73,13 +72,15 @@ class OpsinModel(ABC):
     params: dict
     """Parameter values for model, passed in as a namespace dict"""
 
-    required_vars: list[str]
+    required_vars: list[Tuple[str, Unit]]
     """Default names of state variables required in the neuron group,
+    along with units, e.g., [(Iopto, amp)].
     
     It is assumed that non-default values can be passed in on injection
-    as a keyword argument ``[default_name]_var_name``"""
+    as a keyword argument ``[default_name]_var_name=[non_default_name]``
+    and that these are found in the model string as 
+    ``[DEFAULT_NAME]_VAR_NAME`` before replacement."""
 
-    @abstractmethod
     def get_modified_model_for_ng(
         self, neuron_group: NeuronGroup, injct_params: dict
     ) -> str:
@@ -102,13 +103,25 @@ class OpsinModel(ABC):
             A string containing modified model equations for use
             in :attr:`~cleosim.opto.OptogeneticIntervention.opto_syns`
         """
-        self._check_vars_on_injection(neuron_group, injct_params)
-        Iopto_var_name = injct_params.get("Iopto_var_name", "Iopto")
-        v_var_name = injct_params.get("v_var_name", "v")
-        pass
-        return self.model.replace("IOPTO_VAR_NAME", Iopto_var_name).replace(
-            "V_VAR_NAME", v_var_name
-        )
+        modified_model = self.model
+
+        for default_name, unit in self.required_vars:
+            var_name = injct_params.get(f"{default_name}_var_name", default_name)
+            if var_name not in neuron_group.variables or not neuron_group.variables[
+                var_name
+            ].unit.has_same_dimensions(unit):
+                raise BrianObjectException(
+                    (
+                        f"{default_name} : {unit.name} needed in the model of NeuronGroup "
+                        f"{neuron_group.name} to connect OptogeneticIntervention."
+                    ),
+                    neuron_group,
+                )
+            # opsin synapse model needs modified names
+            to_replace = f"{default_name}_var_name".upper()
+            modified_model = modified_model.replace(to_replace, var_name)
+
+        return modified_model
 
     def init_opto_syn_vars(self, opto_syn: Synapses) -> None:
         """Initializes appropriate variables in Synapses implementing the model
@@ -121,21 +134,6 @@ class OpsinModel(ABC):
             The synapses object implementing this model
         """
         pass
-
-    def _check_vars_on_injection(self, neuron_group, injct_params):
-        Iopto_var_name = injct_params.get("Iopto_var_name", "Iopto")
-        v_var_name = injct_params.get("v_var_name", "v")
-        for variable, unit in zip([v_var_name, Iopto_var_name], [volt, amp]):
-            if (
-                variable not in neuron_group.variables
-            ):
-                raise BrianObjectException(
-                    (
-                        f"{variable} : {unit.name} needed in the model of NeuronGroup"
-                        f"{neuron_group.name} to connect OptogeneticIntervention."
-                    ),
-                    neuron_group,
-                )
 
 
 class MarkovModel(OpsinModel):
@@ -150,33 +148,7 @@ class MarkovModel(OpsinModel):
         """
         super().__init__()
         self.params = params
-
-    def _check_vars_on_injection(self, neuron_group, injct_params):
-        Iopto_var_name = injct_params.get("Iopto_var_name", "Iopto")
-        v_var_name = injct_params.get("v_var_name", "v")
-        for variable, unit in zip([v_var_name, Iopto_var_name], [volt, amp]):
-            if (
-                variable not in neuron_group.variables
-                or neuron_group.variables[variable].unit != unit
-            ):
-                raise BrianObjectException(
-                    (
-                        f"{variable} : {unit.name} needed in the model of NeuronGroup"
-                        f"{neuron_group.name} to connect OptogeneticIntervention."
-                    ),
-                    neuron_group,
-                )
-
-    def get_modified_model_for_ng(
-        self, neuron_group: NeuronGroup, injct_params: dict
-    ) -> str:
-        self._check_vars_on_injection(neuron_group, injct_params)
-        Iopto_var_name = injct_params.get("Iopto_var_name", "Iopto")
-        v_var_name = injct_params.get("v_var_name", "v")
-        # opsin synapse model needs modified names
-        return self.model.replace("IOPTO_VAR_NAME", Iopto_var_name).replace(
-            "V_VAR_NAME", v_var_name
-        )
+        self.required_vars = [("Iopto", amp), ("v", volt)]
 
 
 class FourStateModel(MarkovModel):
@@ -233,31 +205,18 @@ class ProportionalCurrentModel(OpsinModel):
         """
         self.params = {"gain": Iopto_per_mW_per_mm2 / (mwatt / mm2)}
         if isinstance(Iopto_per_mW_per_mm2, Quantity):
-            self._Iopto_dim = Iopto_per_mW_per_mm2.get_best_unit().dim
-            self._Iopto_dim_name = self._Iopto_dim._str_representation(python_code=True)
+            self._Iopto_unit = get_unit(Iopto_per_mW_per_mm2.dim)
         else:
-            self._Iopto_dim = radian.dim
-            self._Iopto_dim_name = self._Iopto_dim._str_representation(
-                python_code=False
-            )
+            self._Iopto_unit = radian
+        self.required_vars = [("Iopto", self._Iopto_unit)]
 
     def get_modified_model_for_ng(
         self, neuron_group: NeuronGroup, injct_params: dict
     ) -> str:
-        Iopto_var_name = injct_params.get("Iopto_var_name", "Iopto")
-        if (
-            Iopto_var_name not in neuron_group.variables
-            or neuron_group.variables[Iopto_var_name].dim != self._Iopto_dim
-        ):
-            raise BrianObjectException(
-                (
-                    f"{Iopto_var_name} : {self._Iopto_dim_name} needed in the model of NeuronGroup"
-                    f"{neuron_group.name} to connect OptogeneticIntervention."
-                ),
-                neuron_group,
-            )
-        return self.model.replace("IOPTO_VAR_NAME", Iopto_var_name).replace(
-            "IOPTO_UNIT", self._Iopto_dim_name
+        return (
+            super()
+            .get_modified_model_for_ng(neuron_group, injct_params)
+            .replace("IOPTO_UNIT", self._Iopto_unit.name)
         )
 
 
