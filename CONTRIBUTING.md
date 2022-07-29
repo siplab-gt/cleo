@@ -16,10 +16,14 @@ You may want to avoid some of the tutorials: the adaptive control tutorial requi
 
 We use [NumPy/SciPy-style docstrings](https://numpydoc.readthedocs.io/en/latest/format.html), which are supported by Sphinx and will allow us to host the documentation with readthedocs.io. 
 
+Use Sphinx references (e.g., `:func:`, `:class:`, `:meth:`, `:attr:`, `:ref:`) whenever possible, which creates links.
+
+Try to keep docstring line width to 75 characters.
+
 Example:
 ```python
 my_function(a, b='B'):
-    """A one-line summary that does not use variable names or the function name
+    """A one-line summary that does not use variable names or the function name.
 
     An extended summary of functionality.
 
