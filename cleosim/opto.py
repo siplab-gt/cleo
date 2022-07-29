@@ -2,6 +2,7 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Tuple, Any
+import warnings
 
 from brian2 import Synapses, NeuronGroup
 from brian2.units import (
@@ -72,6 +73,12 @@ class OpsinModel(ABC):
     params: dict
     """Parameter values for model, passed in as a namespace dict"""
 
+    required_vars: list[str]
+    """Default names of state variables required in the neuron group,
+    
+    It is assumed that non-default values can be passed in on injection
+    as a keyword argument ``[default_name]_var_name``"""
+
     @abstractmethod
     def get_modified_model_for_ng(
         self, neuron_group: NeuronGroup, injct_params: dict
@@ -95,7 +102,13 @@ class OpsinModel(ABC):
             A string containing modified model equations for use
             in :attr:`~cleosim.opto.OptogeneticIntervention.opto_syns`
         """
+        self._check_vars_on_injection(neuron_group, injct_params)
+        Iopto_var_name = injct_params.get("Iopto_var_name", "Iopto")
+        v_var_name = injct_params.get("v_var_name", "v")
         pass
+        return self.model.replace("IOPTO_VAR_NAME", Iopto_var_name).replace(
+            "V_VAR_NAME", v_var_name
+        )
 
     def init_opto_syn_vars(self, opto_syn: Synapses) -> None:
         """Initializes appropriate variables in Synapses implementing the model
@@ -108,6 +121,21 @@ class OpsinModel(ABC):
             The synapses object implementing this model
         """
         pass
+
+    def _check_vars_on_injection(self, neuron_group, injct_params):
+        Iopto_var_name = injct_params.get("Iopto_var_name", "Iopto")
+        v_var_name = injct_params.get("v_var_name", "v")
+        for variable, unit in zip([v_var_name, Iopto_var_name], [volt, amp]):
+            if (
+                variable not in neuron_group.variables
+            ):
+                raise BrianObjectException(
+                    (
+                        f"{variable} : {unit.name} needed in the model of NeuronGroup"
+                        f"{neuron_group.name} to connect OptogeneticIntervention."
+                    ),
+                    neuron_group,
+                )
 
 
 class MarkovModel(OpsinModel):
@@ -272,6 +300,9 @@ class OptogeneticIntervention(Stimulator):
     T_threshold : float, optional
         The transmittance below which no points are plotted. By default
         1e-3.
+    rasterized : bool, optional
+        Whether to render as rasterized in vector output, True by default.
+        Useful since so many points makes later rendering and editing slow.
     """
 
     opto_syns: dict[str, Synapses]
@@ -389,7 +420,9 @@ class OptogeneticIntervention(Stimulator):
         zc = usf.dot(rel_coords, self.dir_uvec)  # distance along cylinder axis
         # just need length (norm) of radius vectors
         # not using np.linalg.norm because it strips units
-        r = np.sqrt(np.sum((rel_coords - zc[..., np.newaxis] * self.dir_uvec.T)**2, axis=1))
+        r = np.sqrt(
+            np.sum((rel_coords - zc[..., np.newaxis] * self.dir_uvec.T) ** 2, axis=1)
+        )
         r = r.reshape((-1, 1))
         return r, zc
 
@@ -476,14 +509,14 @@ class OptogeneticIntervention(Stimulator):
         # to all points
         # filter out points with <0.001 transmittance to make plotting faster
 
-        fiber_T_thresh = kwargs.get('fiber_T_thresh', 0.001)
-        n_points = kwargs.get('n_points', 1e4)
+        fiber_T_thresh = kwargs.get("fiber_T_thresh", 0.001)
+        n_points = kwargs.get("n_points", 1e4)
         r_thresh, zc_thresh = self._find_rz_thresholds(fiber_T_thresh)
         r, theta, zc = uniform_cylinder_rθz(n_points, r_thresh, zc_thresh)
 
         T = self._Foutz12_transmittance(r, zc)
 
-        end = self.location + zc_thresh*self.dir_uvec
+        end = self.location + zc_thresh * self.dir_uvec
         x, y, z = xyz_from_rθz(r, theta, zc, self.location, end)
 
         idx_to_plot = T >= fiber_T_thresh
@@ -501,6 +534,12 @@ class OptogeneticIntervention(Stimulator):
             edgecolors="none",
             label=self.name,
         )
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore", message=".*Rasterization.*will be ignored.*"
+            )
+            # to make manageable in SVGs
+            point_cloud.set_rasterized(kwargs.get("rasterized", True))
         handles = ax.get_legend().legendHandles
         c = wavelength_to_rgb(self.light_model_params["wavelength"] / nmeter)
         opto_patch = matplotlib.patches.Patch(color=c, label=self.name)
@@ -519,7 +558,6 @@ class OptogeneticIntervention(Stimulator):
         T = self._Foutz12_transmittance(r, zc_thresh / 2)
         r_thresh = r[np.searchsorted(T, thresh)]
         return r_thresh, zc_thresh
-
 
     def update_artists(
         self, artists: list[Artist], value, *args, **kwargs
