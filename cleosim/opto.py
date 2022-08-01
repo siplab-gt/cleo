@@ -377,7 +377,7 @@ class OptogeneticIntervention(Stimulator):
             )
             Rz = self.light_model_params["R0"] + z * np.tan(
                 theta_div
-            )  # radius as light spreads("apparent radius" from original code)
+            )  # radius as light spreads ("apparent radius" from original code)
             C = (self.light_model_params["R0"] / Rz) ** 2
         else:
             Rz = self.light_model_params["R0"]  # "apparent radius"
@@ -388,14 +388,14 @@ class OptogeneticIntervention(Stimulator):
         else:
             G = 1
 
-        def kubelka_munk(dist):
+        if scatter:
             S = self.light_model_params["S"]
             a = 1 + self.light_model_params["K"] / S
             b = np.sqrt(a**2 - 1)
             dist = np.sqrt(r**2 + z**2)
-            return b / (a * np.sinh(b * S * dist) + b * np.cosh(b * S * dist))
-
-        M = kubelka_munk(np.sqrt(r**2 + z**2)) if scatter else 1
+            M = b / (a * np.sinh(b * S * dist) + b * np.cosh(b * S * dist))
+        else:
+            M = 1
 
         T = G * C * M
         T[z < 0] = 0
@@ -404,19 +404,8 @@ class OptogeneticIntervention(Stimulator):
     def _get_rz_for_xyz(self, x, y, z):
         """Assumes x, y, z already have units"""
 
-        def flatten_if_needed(var):
-            if len(var.shape) != 1:
-                return var.flatten()
-            else:
-                return var
-
         # have to add unit back on since it's stripped by vstack
-        coords = (
-            np.vstack(
-                [flatten_if_needed(x), flatten_if_needed(y), flatten_if_needed(z)]
-            ).T
-            * meter
-        )
+        coords = np.column_stack([x, y, z]) * meter
         rel_coords = coords - self.location  # relative to fiber location
         # must use brian2's dot function for matrix multiply to preserve
         # units correctly.
@@ -426,7 +415,6 @@ class OptogeneticIntervention(Stimulator):
         r = np.sqrt(
             np.sum((rel_coords - zc[..., np.newaxis] * self.dir_uvec.T) ** 2, axis=1)
         )
-        r = r.reshape((-1, 1))
         return r, zc
 
     def connect_to_neuron_group(
@@ -502,8 +490,9 @@ class OptogeneticIntervention(Stimulator):
         # calculate transmittance coefficient for each point
         r, z = self._get_rz_for_xyz(neuron_group.x, neuron_group.y, neuron_group.z)
         T = self._Foutz12_transmittance(r, z).flatten()
+        assert len(T) == len(neuron_group)
         # reduce to subset expressing opsin before assigning
-        T = [T[k] for k in opto_syn.i]
+        T = T[opto_syn.i]
 
         opto_syn.T = T
 
