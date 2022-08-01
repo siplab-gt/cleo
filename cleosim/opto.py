@@ -4,7 +4,14 @@ from abc import ABC, abstractmethod
 from typing import Tuple, Any
 import warnings
 
-from brian2 import Synapses, NeuronGroup, Unit, BrianObjectException, get_unit
+from brian2 import (
+    Synapses,
+    NeuronGroup,
+    Unit,
+    BrianObjectException,
+    get_unit,
+    Equations,
+)
 from brian2.units import (
     mm,
     mm2,
@@ -67,27 +74,28 @@ class OpsinModel(ABC):
     Should contain a `rho_rel` term reflecting relative expression 
     levels. Will likely also contain special NeuronGroup-dependent
     symbols such as V_VAR_NAME to be replaced on injection in 
-    :meth:`get_modified_model_for_ng`."""
+    :meth:`~OpsinModel.modify_model_and_params_for_ng`."""
 
     params: dict
     """Parameter values for model, passed in as a namespace dict"""
 
     required_vars: list[Tuple[str, Unit]]
     """Default names of state variables required in the neuron group,
-    along with units, e.g., [(Iopto, amp)].
+    along with units, e.g., [('Iopto', amp)].
     
     It is assumed that non-default values can be passed in on injection
     as a keyword argument ``[default_name]_var_name=[non_default_name]``
     and that these are found in the model string as 
     ``[DEFAULT_NAME]_VAR_NAME`` before replacement."""
 
-    def get_modified_model_for_ng(
-        self, neuron_group: NeuronGroup, injct_params: dict
-    ) -> str:
+    def modify_model_and_params_for_ng(
+        self, neuron_group: NeuronGroup, injct_params: dict, model="class-defined"
+    ) -> Tuple[Equations, dict]:
         """Adapt model for given neuron group on injection
 
-        This is mainly to enable the specification of variable names
-        differently for each neuron group.
+        This enables the specification of variable names
+        differently for each neuron group, allowing for custom names
+        and avoiding conflicts.
 
         Parameters
         ----------
@@ -97,13 +105,23 @@ class OpsinModel(ABC):
             kwargs passed in on injection, could contain variable
             names to plug into the model
 
+        Keyword Args
+        ------------
+        model : str, optional
+            Model to start with, by default that defined for the class.
+            This allows for prior string manipulations before it can be
+            parsed as an `Equations` object.
+
         Returns
         -------
-        str
-            A string containing modified model equations for use
+        Equations, dict
+            A tuple containing an Equations object
+            and a parameter dictionary, constructed from :attr:`~model`
+            and :attr:`~params`, respectively, with modified names for use
             in :attr:`~cleosim.opto.OptogeneticIntervention.opto_syns`
         """
-        modified_model = self.model
+        if model == "class-defined":
+            model = self.model
 
         for default_name, unit in self.required_vars:
             var_name = injct_params.get(f"{default_name}_var_name", default_name)
@@ -119,9 +137,34 @@ class OpsinModel(ABC):
                 )
             # opsin synapse model needs modified names
             to_replace = f"{default_name}_var_name".upper()
-            modified_model = modified_model.replace(to_replace, var_name)
+            model = model.replace(to_replace, var_name)
 
-        return modified_model
+        # Synapse variable and parameter names cannot be the same as any
+        # neuron group variable name
+        return self._fix_name_conflicts(model, neuron_group)
+
+    def _fix_name_conflicts(
+        self, modified_model: str, neuron_group: NeuronGroup
+    ) -> Tuple[str, dict]:
+        modified_params = self.params.copy()
+        rename = lambda x: f"{x}_syn"
+
+        # get variables to rename
+        opsin_eqs = Equations(modified_model)
+        substitutions = {}
+        for var in opsin_eqs.names:
+            if var in neuron_group.variables:
+                substitutions[var] = rename(var)
+
+        # and parameters
+        for param in self.params.keys():
+            if param in neuron_group.variables:
+                substitutions[param] = rename(param)
+                modified_params[rename(param)] = modified_params[param]
+                del modified_params[param]
+
+        mod_opsin_eqs = opsin_eqs.substitute(**substitutions)
+        return mod_opsin_eqs, modified_params
 
     def init_opto_syn_vars(self, opto_syn: Synapses) -> None:
         """Initializes appropriate variables in Synapses implementing the model
@@ -139,6 +182,8 @@ class OpsinModel(ABC):
 class MarkovModel(OpsinModel):
     """Base class for Markov state models à la Evans et al., 2016"""
 
+    required_vars: list[Tuple[str, Unit]] = [("Iopto", amp), ("v", volt)]
+
     def __init__(self, params: dict) -> None:
         """
         Parameters
@@ -148,7 +193,6 @@ class MarkovModel(OpsinModel):
         """
         super().__init__()
         self.params = params
-        self.required_vars = [("Iopto", amp), ("v", volt)]
 
 
 class FourStateModel(MarkovModel):
@@ -190,6 +234,7 @@ class FourStateModel(MarkovModel):
 class ProportionalCurrentModel(OpsinModel):
     """A simple model delivering current proportional to light intensity"""
 
+    # would be IOPTO_UNIT but that throws off Equation parsing
     model: str = """
         IOPTO_VAR_NAME_post = gain * Irr * rho_rel : IOPTO_UNIT (summed)
         rho_rel : 1
@@ -210,13 +255,12 @@ class ProportionalCurrentModel(OpsinModel):
             self._Iopto_unit = radian
         self.required_vars = [("Iopto", self._Iopto_unit)]
 
-    def get_modified_model_for_ng(
+    def modify_model_and_params_for_ng(
         self, neuron_group: NeuronGroup, injct_params: dict
-    ) -> str:
-        return (
-            super()
-            .get_modified_model_for_ng(neuron_group, injct_params)
-            .replace("IOPTO_UNIT", self._Iopto_unit.name)
+    ) -> Tuple[Equations, dict]:
+        mod_model = self.model.replace("IOPTO_UNIT", self._Iopto_unit.name)
+        return super().modify_model_and_params_for_ng(
+            neuron_group, injct_params, model=mod_model
         )
 
 
@@ -413,9 +457,10 @@ class OptogeneticIntervention(Stimulator):
             membrane potential
         """
         # get modified opsin model string (i.e., with names/units specified)
-        modified_opsin_model = self.opsin_model.get_modified_model_for_ng(
-            neuron_group, kwparams
-        )
+        (
+            mod_opsin_model,
+            mod_opsin_params,
+        ) = self.opsin_model.modify_model_and_params_for_ng(neuron_group, kwparams)
 
         # fmt: off
         # Ephoton = h*c/lambda
@@ -426,17 +471,19 @@ class OptogeneticIntervention(Stimulator):
         )
         # fmt: on
 
-        light_model = """
+        light_model = Equations(
+            """
             Irr = Irr0*T : watt/meter**2
             Irr0 : watt/meter**2 
             T : 1
             phi = Irr / Ephoton : 1/second/meter**2
-        """
+            """
+        )
 
         opto_syn = Synapses(
             neuron_group,
-            model=modified_opsin_model + light_model,
-            namespace=self.opsin_model.params,
+            model=mod_opsin_model + light_model,
+            namespace=mod_opsin_params,
             name=f"synapses_{self.name}_{neuron_group.name}",
             method="rk2",
         )
