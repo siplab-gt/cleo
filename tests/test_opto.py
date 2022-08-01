@@ -102,7 +102,7 @@ def test_v_and_Iopto_in_model(opto, opto2):
 
 
 @pytest.mark.slow
-def test_opsin_model(opto, neurons):
+def test_markov_opsin_model(opto, neurons):
     sim = CLSimulator(Network(neurons))
     sim.inject_stimulator(opto, neurons)
     opsyn = opto.opto_syns[neurons.name]
