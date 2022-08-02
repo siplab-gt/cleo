@@ -112,6 +112,9 @@ class ProcessingBlock(ABC):
 class LatencyIOProcessor(IOProcessor):
     """IOProcessor capable of delivering stimulation some time after measurement."""
 
+    t_samp_ms: list[float]
+    """Record of sampling times---each time :meth:`~put_state` is called."""
+
     def __init__(self, sample_period_ms: float, **kwargs):
         """
         Parameters
@@ -161,6 +164,7 @@ class LatencyIOProcessor(IOProcessor):
         ValueError
             For invalid `sampling` or `processing` kwargs
         """
+        self.t_samp_ms = []
         self.out_buffer = deque([])
         self.sample_period_ms = sample_period_ms
         self.sampling = kwargs.get("sampling", "fixed")
@@ -171,6 +175,7 @@ class LatencyIOProcessor(IOProcessor):
             raise ValueError("Invalid processing scheme:", self.processing)
 
     def put_state(self, state_dict: dict, sample_time_ms):
+        self.t_samp_ms.append(sample_time_ms)
         out, t_out_ms = self.process(state_dict, sample_time_ms)
         if self.processing == "serial" and len(self.out_buffer) > 0:
             prev_t_out_ms = self.out_buffer[-1][1]

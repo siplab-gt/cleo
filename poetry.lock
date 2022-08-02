@@ -1740,7 +1740,7 @@ test = ["pytest", "pytest-cov", "pytest-flake8", "pytest-isort", "coverage"]
 
 [[package]]
 name = "tklfp"
-version = "0.1.1"
+version = "0.2.0"
 description = "A minimal package for computing the kernel LFP approximation from Telenczuk et al., 2020"
 category = "main"
 optional = false
@@ -1880,7 +1880,7 @@ testing = ["pytest (>=6)", "pytest-checkdocs (>=2.4)", "pytest-flake8", "pytest-
 [metadata]
 lock-version = "1.1"
 python-versions = ">=3.7,<3.10"
-content-hash = "c84a56074da34d38bbda5c06d3fa8085d3fead57219e3a87902e43baee6694f3"
+content-hash = "90ecaa6b5fa2f2b74747c8a8476df620a3f4752989c11b074f174cb55d4d9a65"
 
 [metadata.files]
 alabaster = [
@@ -3009,8 +3009,8 @@ tinycss2 = [
     {file = "tinycss2-1.1.1.tar.gz", hash = "sha256:b2e44dd8883c360c35dd0d1b5aad0b610e5156c2cb3b33434634e539ead9d8bf"},
 ]
 tklfp = [
-    {file = "tklfp-0.1.1-py3-none-any.whl", hash = "sha256:0f8e5ca562bb51b076a68aa2fc7b18f1c11673dc3ccba62c96541e5f4d7fcf23"},
-    {file = "tklfp-0.1.1.tar.gz", hash = "sha256:0c8813c07d6b3c90c973f23275dd2bcd2f5fb2242565def55dd647d07e7cc002"},
+    {file = "tklfp-0.2.0-py3-none-any.whl", hash = "sha256:6e81624225cc4fecfbf5e42cb82e8aa800b91b84365e63c66e0e974f06f9c09e"},
+    {file = "tklfp-0.2.0.tar.gz", hash = "sha256:d8bbfe1b9778df67ea87d9937820f4177fa1604f12cda02ddad1e6ea5e2526fc"},
 ]
 toml = [
     {file = "toml-0.10.2-py2.py3-none-any.whl", hash = "sha256:806143ae5bfb6a3c6e736a764057db0e6a0e05e338b5630894a5f779cabb4f9b"},

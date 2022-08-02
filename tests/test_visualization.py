@@ -9,7 +9,7 @@ from cleosim.opto import (
     ChR2_four_state,
     default_blue,
 )
-from cleosim.coordinates import assign_coords_rand_rect_prism
+from cleosim.coordinates import assign_coords
 from cleosim.electrodes import Probe
 
 
@@ -23,7 +23,7 @@ def test_VideoVisualizer():
         threshold="v > 1 * volt",
         reset="v = 0 * volt",
     )
-    assign_coords_rand_rect_prism(ng, (0, 0), (0, 0), (0, 0))
+    assign_coords(ng, 0, 0, 0)
     opto = OptogeneticIntervention(
         "opto", FourStateModel(ChR2_four_state), default_blue, max_Irr0_mW_per_mm2=20
     )

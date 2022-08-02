@@ -2,7 +2,7 @@
 *.html
 # temp folders created with compiled C code from Brian running Cython
 tmp/*
-*/tmp/*
+**/tmp/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

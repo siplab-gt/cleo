@@ -23,17 +23,17 @@ class VideoVisualizer(InterfaceDevice):
 
     def __init__(
         self,
-        devices_to_plot: list[InterfaceDevice] = "all",
+        devices: Iterable[Union[InterfaceDevice, Tuple[InterfaceDevice, dict]]] = "all",
         dt: Quantity = 1 * ms,
     ) -> None:
         """
         Parameters
         ----------
-        devices_to_plot : list[InterfaceDevice], optional
-            list of devices to include in the plot, just as in the :func:`plot`
-            function, by default "all", which will include all recorders and
-            stimulators currently injected when this visualizer is injected into
-            the simulator
+        devices : Iterable[Union[InterfaceDevice, Tuple[InterfaceDevice, dict]]], optional
+            list of devices or (device, vis_kwargs) tuples to include in the plot,
+            just as in the :func:`plot` function, by default "all", which will
+            include all recorders and stimulators currently injected when this
+            visualizer is injected into the simulator.
         dt : Brian 2 temporal Quantity, optional
             length of each frame---that is, every `dt` the visualizer takes a
             snapshot of the network, by default 1*ms
@@ -42,16 +42,16 @@ class VideoVisualizer(InterfaceDevice):
         self.neuron_groups = []
         self._spike_mons = []
         self._num_old_spikes = []
-        self.devices_to_plot = devices_to_plot
+        self.devices = devices
         self.dt = dt
         # store data to generate video
         self._value_per_device_per_frame = []
         self._i_spikes_per_ng_per_frame: list[list[np.ndarray]] = []
 
     def init_for_simulator(self, simulator: CLSimulator):
-        if self.devices_to_plot == "all":
-            self.devices_to_plot = list(self.sim.recorders.values())
-            self.devices_to_plot.extend(list(self.sim.stimulators.values()))
+        if self.devices == "all":
+            self.devices = list(self.sim.recorders.values())
+            self.devices.extend(list(self.sim.stimulators.values()))
         # network op
         def snapshot(t):
             i_spikes_per_ng = [
@@ -59,7 +59,7 @@ class VideoVisualizer(InterfaceDevice):
             ]
             self._i_spikes_per_ng_per_frame.append(i_spikes_per_ng)
             device_values = []
-            for device in self.devices_to_plot:
+            for device in self.devices:
                 try:
                     device_values.append(device.value)
                 # not all devices (recorders!) have a value or any changing state to plot
@@ -106,7 +106,7 @@ class VideoVisualizer(InterfaceDevice):
         neuron_artists, device_artists = _plot(
             self.ax,
             self.neuron_groups,
-            devices_to_plot=self.devices_to_plot,
+            devices=self.devices,
             **plotargs,
         )
 
@@ -114,7 +114,7 @@ class VideoVisualizer(InterfaceDevice):
             device_values = self._value_per_device_per_frame[i]
             updated_artists = []
             for device, artists, value in zip(
-                self.devices_to_plot, device_artists, device_values
+                self.devices, device_artists, device_values
             ):
                 updated_artists_for_device = device.update_artists(artists, value)
                 updated_artists.extend(updated_artists_for_device)
@@ -164,7 +164,7 @@ def _plot(
     zlim: Tuple[float, float] = None,
     colors: Iterable = None,
     axis_scale_unit: Unit = mm,
-    devices_to_plot: Iterable[InterfaceDevice] = [],
+    devices: Iterable[Union[InterfaceDevice, Tuple[InterfaceDevice, dict]]] = [],
     invert_z: bool = True,
     scatterargs: dict = {},
 ) -> tuple[list[Artist], list[Artist]]:
@@ -177,12 +177,20 @@ def _plot(
     neuron_artists = []
     for i in range(len(neuron_groups)):
         ng = neuron_groups[i]
-        args = [ng.x / axis_scale_unit, ng.y / axis_scale_unit, ng.z / axis_scale_unit]
+        xyz = [ng.x / axis_scale_unit, ng.y / axis_scale_unit, ng.z / axis_scale_unit]
+        # mask neurons outside desired lims:
+        for i_dim, lim in enumerate([xlim, ylim, zlim]):
+            if lim is not None:
+                xyz[i_dim] = np.ma.masked_array(
+                    xyz[i_dim],
+                    np.logical_or(xyz[i_dim] < lim[0], xyz[i_dim] > lim[1]),
+                    dtype=float,
+                )
         kwargs = {"label": ng.name, "alpha": _neuron_alpha}
         if colors is not None:
             kwargs["color"] = colors[i]
         kwargs.update(scatterargs)
-        neuron_artists.append(ax.scatter(*args, **kwargs))
+        neuron_artists.append(ax.scatter(*xyz, **kwargs))
         ax.set_xlabel(f"x ({axis_scale_unit._dispname})")
         ax.set_ylabel(f"y ({axis_scale_unit._dispname})")
         ax.set_zlabel(f"z ({axis_scale_unit._dispname})")
@@ -192,15 +200,23 @@ def _plot(
     zlim = ax.get_zlim() if zlim is None else zlim
 
     ax.set(xlim=xlim, ylim=ylim, zlim=zlim)
-    ax.set_box_aspect(
-        (xlim[1] - xlim[0], ylim[1] - ylim[0], int(invert_z) * (zlim[0] - zlim[1]))
-    )
+    z_aspect = zlim[0] - zlim[1] if invert_z else zlim[1] - zlim[0]
+    ax.set_box_aspect((xlim[1] - xlim[0], ylim[1] - ylim[0], z_aspect))
 
     ax.legend()
 
     device_artists = []
-    for device in devices_to_plot:
-        device_artists.append(device.add_self_to_plot(ax, axis_scale_unit))
+    for item in devices:
+        if isinstance(item, InterfaceDevice):
+            device, plotargs = item, {}
+        elif type(item) == tuple:
+            device, plotargs = item
+        else:
+            raise Exception(
+                "InterfaceDevice or (InterfaceDevice, dict) expected."
+                f"Instead received {item}."
+            )
+        device_artists.append(device.add_self_to_plot(ax, axis_scale_unit, **plotargs))
 
     return neuron_artists, device_artists
 
@@ -212,7 +228,7 @@ def plot(
     zlim: Tuple[float, float] = None,
     colors: Iterable = None,
     axis_scale_unit: Unit = mm,
-    devices_to_plot: Iterable[InterfaceDevice] = [],
+    devices: Iterable[Union[InterfaceDevice, Tuple[InterfaceDevice, dict]]] = [],
     invert_z: bool = True,
     scatterargs: dict = {},
     **figargs: Any,
@@ -231,9 +247,10 @@ def plot(
         colors, one for each neuron group, automatically determined by default
     axis_scale_unit : Unit, optional
         Brian unit to scale lim params, by default mm
-    devices_to_plot : Iterable[InterfaceDevice], optional
-        devices to add to the plot; add_self_to_plot is called
-        for each. By default []
+    devices : Iterable[Union[InterfaceDevice, Tuple[InterfaceDevice, dict]]], optional
+        devices to add to the plot or (device, kwargs) tuples.
+        :meth:`~cleosim.InterfaceDevice.add_self_to_plot` is called
+        for each, using the kwargs dict if given. By default []
     invert_z : bool, optional
         whether to invert z-axis, by default True to reflect the convention
         that +z represents depth from cortex surface
@@ -257,7 +274,8 @@ def plot(
         zlim,
         colors,
         axis_scale_unit,
-        devices_to_plot,
+        devices,
         invert_z,
         scatterargs,
     )
+    return fig, ax

@@ -1,9 +1,11 @@
 """Contains LFP signals"""
 from __future__ import annotations
+from typing import Any
 
 from brian2 import NeuronGroup, mm, ms
 from brian2.monitors.spikemonitor import SpikeMonitor
 import numpy as np
+from nptyping import NDArray
 from tklfp import TKLFP
 
 from cleosim.electrodes.probes import Signal, Probe
@@ -15,7 +17,16 @@ class TKLFPSignal(Signal):
     Requires ``tklfp_type='exc'|'inh'`` to specify cell type
     on injection.
 
-    TKLFP is computed from spikes using the tklfp package"""
+    An ``orientation`` keyword argument can also be specified on
+    injection, which should be an array of shape ``(n_neurons, 3)``
+    representing which way is "up," that is, towards the surface of
+    the cortex, for each neuron. If a single vector is given, it is
+    taken to be the orientation for all neurons in the group. [0, 0, -1]
+    is the default, meaning the negative z axis is "up." As stated
+    elsewhere, CLEOSim's convention is that z=0 corresponds to the
+    cortical surface and increasing z values represent increasing depth.
+
+    TKLFP is computed from spikes using the tklfp package."""
 
     uLFP_threshold_uV: float
     """Threshold, in microvolts, above which the uLFP for a single
@@ -23,10 +34,13 @@ class TKLFPSignal(Signal):
     length of past spikes, since the uLFP from a long-past spike
     becomes negligible and is ignored."""
     save_history: bool
-    """Whether to record output from every timestep in :attr:`lfp_uV`
+    """Whether to record output from every timestep in :attr:`lfp_uV`.
     Output is stored every time :meth:`get_state` is called."""
-    lfp_uV: np.ndarray
-    """Approximated LFP from every timstep, recorded if :attr:`save_history`"""
+    t_ms: NDArray[(Any,), float]
+    """Times at which LFP is recorded, in ms, stored if :attr:`save_history`"""
+    lfp_uV: NDArray[(Any, Any), float]
+    """Approximated LFP from every call to :meth:`get_state`, recorded
+    if :attr:`save_history`. Shape is (n_samples, n_channels)."""
     _elec_coords_mm: np.ndarray
     _tklfps: list[TKLFP]
     _monitors: list[SpikeMonitor]
@@ -64,18 +78,29 @@ class TKLFPSignal(Signal):
         # need to invert z coords since cleosim uses an inverted z axis and
         # tklfp does not
         self._elec_coords_mm[:, 2] *= -1
+        self._init_saved_vars()
+
+    def _init_saved_vars(self):
         if self.save_history:
+            self.t_ms = np.empty((0,))
             self.lfp_uV = np.empty((0, self.probe.n))
+
+    def _update_saved_vars(self, t_ms, lfp_uV):
+        if self.save_history:
+            self.t_ms = np.concatenate([self.t_ms, [t_ms]])
+            self.lfp_uV = np.vstack([self.lfp_uV, lfp_uV])
 
     def connect_to_neuron_group(self, neuron_group: NeuronGroup, **kwparams):
         # inherit docstring
         # prep tklfp object
-        tklfp_type = kwparams.get("tklfp_type", "not given")
+        tklfp_type = kwparams.pop("tklfp_type", "not given")
         if tklfp_type not in ["exc", "inh"]:
             raise Exception(
                 "tklfp_type ('exc' or 'inh') must be passed as a keyword argument to "
                 "inject_recorder() when injecting an electrode with a TKLFPSignal."
             )
+        orientation = kwparams.pop("orientation", np.array([[0, 0, -1]])).copy()
+        orientation[:, 2] *= -1
 
         tklfp = TKLFP(
             neuron_group.x / mm,
@@ -83,20 +108,26 @@ class TKLFPSignal(Signal):
             -neuron_group.z / mm,  # invert neuron zs as well
             is_excitatory=tklfp_type == "exc",
             elec_coords_mm=self._elec_coords_mm,
+            orientation=orientation,
         )
-        self._tklfps.append(tklfp)
 
-        # prep buffers
+        # determine buffer length necessary for given neuron group
+        # if 0 (neurons are too far away to much influence LFP)
+        # then we ignore this neuron group
         buf_len = self._get_buffer_length(tklfp, **kwparams)
-        self._i_buffers.append([np.array([], dtype=int, ndmin=1)] * buf_len)
-        self._t_ms_buffers.append([np.array([], dtype=float, ndmin=1)] * buf_len)
-        self._buffer_positions.append(0)
 
-        # prep SpikeMonitor
-        mon = SpikeMonitor(neuron_group)
-        self._monitors.append(mon)
-        self._mon_spikes_already_seen.append(0)
-        self.brian_objects.add(mon)
+        if buf_len > 0:
+            # prep buffers
+            self._tklfps.append(tklfp)
+            self._i_buffers.append([np.array([], dtype=int, ndmin=1)] * buf_len)
+            self._t_ms_buffers.append([np.array([], dtype=float, ndmin=1)] * buf_len)
+            self._buffer_positions.append(0)
+
+            # prep SpikeMonitor
+            mon = SpikeMonitor(neuron_group)
+            self._monitors.append(mon)
+            self._mon_spikes_already_seen.append(0)
+            self.brian_objects.add(mon)
 
     def get_state(self) -> np.ndarray:
         tot_tklfp = 0
@@ -105,17 +136,15 @@ class TKLFPSignal(Signal):
         for i_mon in range(len(self._monitors)):
             self._update_spike_buffer(i_mon)
             tot_tklfp += self._tklfp_for_monitor(i_mon, now_ms)
-        out = tot_tklfp.reshape((-1,))  # return 1D array (vector)
-        if self.save_history:
-            self.lfp_uV = np.vstack([self.lfp_uV, out])
+        out = np.reshape(tot_tklfp, (-1,))  # return 1D array (vector)
+        self._update_saved_vars(now_ms, out)
         return out
 
     def reset(self, **kwargs) -> None:
         super().reset(**kwargs)
         for i_mon in range(len(self._monitors)):
             self._reset_buffer(i_mon)
-        if self.save_history:
-            self.lfp_uV = np.empty((0, self.probe.n))
+        self._init_saved_vars()
 
     def _reset_buffer(self, i_mon):
         mon = self._monitors[i_mon]

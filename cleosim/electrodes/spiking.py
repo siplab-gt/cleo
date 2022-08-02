@@ -74,14 +74,23 @@ class Spiking(Signal):
         self.half_detection_radius = half_detection_radius
         self.cutoff_probability = cutoff_probability
         self.save_history = save_history
-        if save_history:
-            self.t_ms = np.array([], dtype=float)
-            self.i = np.array([], dtype=np.uint)
-            self.t_samp_ms = np.array([], dtype=float)
+        self._init_saved_vars()
         self._monitors = []
         self._mon_spikes_already_seen = []
         self._dtct_prob_array = None
         self.i_probe_by_i_ng = bidict()
+
+    def _init_saved_vars(self):
+        if self.save_history:
+            self.t_ms = np.array([], dtype=float)
+            self.i = np.array([], dtype=np.uint)
+            self.t_samp_ms = np.array([], dtype=float)
+
+    def _update_saved_vars(self, t_ms, i, t_samp_ms):
+        if self.save_history:
+            self.i = np.concatenate([self.i, i])
+            self.t_ms = np.concatenate([self.t_ms, t_ms])
+            self.t_samp_ms = np.concatenate([self.t_samp_ms, [t_samp_ms]])
 
     def connect_to_neuron_group(
         self, neuron_group: NeuronGroup, **kwparams
@@ -189,13 +198,9 @@ class Spiking(Signal):
     def reset(self, **kwargs) -> None:
         # crucial that this be called after network restore
         # since that would reset monitors
-        for j in range(len(self._monitors)):
-            mon = self._monitors[j]
+        for j, mon in enumerate(self._monitors):
             self._mon_spikes_already_seen[j] = mon.num_spikes
-        if self.save_history:
-            self.t_ms = np.array([], dtype=float)
-            self.i = np.array([], dtype=np.uint)
-            self.t_samp_ms = np.array([], dtype=float)
+        self._init_saved_vars()
 
 
 class MultiUnitSpiking(Spiking):
@@ -224,10 +229,9 @@ class MultiUnitSpiking(Spiking):
     ) -> tuple[NDArray[np.uint], NDArray[float], NDArray[np.uint]]:
         # inherit docstring
         i_probe, t_ms = self._get_new_spikes()
+        t_samp_ms = self.probe.sim.network.t / ms
         i_c, t_ms, y = self._noisily_detect_spikes_per_channel(i_probe, t_ms)
-        if self.save_history:
-            self.i = np.concatenate((self.i, i_c))
-            self.t_ms = np.concatenate((self.t_ms, t_ms))
+        self._update_saved_vars(t_ms, i_c, t_samp_ms)
         return (i_c, t_ms, y)
 
     def _noisily_detect_spikes_per_channel(
@@ -285,9 +289,8 @@ class SortedSpiking(Spiking):
         i_probe, t_ms = self._noisily_detect_spikes(i_probe, t_ms)
         y = np.zeros(len(self.i_probe_by_i_ng), dtype=bool)
         y[i_probe] = 1
-        if self.save_history:
-            self.i = np.concatenate((self.i, i_probe))
-            self.t_ms = np.concatenate((self.t_ms, t_ms))
+        t_samp_ms = self.probe.sim.network.t / ms
+        self._update_saved_vars(t_ms, i_probe, t_samp_ms)
         return (i_probe, t_ms, y)
 
     def _noisily_detect_spikes(self, i_probe, t) -> Tuple[NDArray, NDArray]:
