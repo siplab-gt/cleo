@@ -15,15 +15,19 @@ Who is this package for?
     
     In short, determining the inputs to deliver to a system from its outputs. In neuroscience terms, making the stimulation parameters a function of the data recorded in real time.
 
-CLEOSim (Closed Loop, Electrophysiology, and Optogenetics Simulator) is a Python package developed primarily for those who want to prototype closed-loop control of neural activity *in silico*. Animal experiments are costly to set up and debug, especially with the added complexity of real-time intervention---our aim is to enable researchers, given a decent spiking model of the system of interest, to assess whether the type of control they desire is feasible and/or what configuration(s) would be most conducive to their goals.
+CLEOSim (Closed Loop, Electrophysiology, and Optogenetics Simulator) is a Python package developed to bridge theory and experiment for mesoscale neuroscience. We envision two primary uses cases:
 
-Because CLEOSim is built around the `Brian simulator <https://brian2.rtfd.io>`_, another potential user base for the package would be Brian users who for whatever reason would like a convenient way to inject recorders (e.g., electrodes) or stimulators (e.g., optogenetics) into the core network simulation.
+1. For prototyping closed-loop control of neural activity *in silico*. Animal experiments are costly to set up and debug, especially with the added complexity of real-time intervention---our aim is to enable researchers, given a decent spiking model of the system of interest, to assess whether the type of control they desire is feasible and/or what configuration(s) would be most conducive to their goals.
+
+2. The complexity of experimental interfaces means it's not always clear what a model would look like in a real experiment. CLEOSim can help anyone interested in observing or manipulating a model while taking into account the constraints present in real experiments. Because CLEOSim is built around the `Brian simulator <https://brian2.rtfd.io>`_, we especially hope this is helpful for existing Brian users who for whatever reason would like a convenient way to inject recorders (e.g., electrodes) or stimulators (e.g., optogenetics) into the core network simulation.
 
 Structure and design
 ^^^^^^^^^^^^^^^^^^^^
 CLEOSim wraps a spiking network simulator and allows for the injection of stimulators and/or recorders. The models used to emulate these devices are often non-trivial to implement or use in a flexible manner, so CLEOSim aims to make device injection and configuration as painless as possible, requiring minimal modification to the original network.
 
 CLEOSim also orchestrates communication between the simulator and a user-configured :class:`~cleosim.IOProcessor` object, modeling how experiment hardware takes samples, processes signals, and controls stimulation devices in real time.
+
+For an explanation of why we choose to prioritize spiking network models and how we chose Brian as the underlying simulator, see :ref:`overview:design rationale`.
 
 .. sidebar::
     Why closed-loop control in neuroscience?
@@ -32,28 +36,6 @@ CLEOSim also orchestrates communication between the simulator and a user-configu
     Closed-loop control in a *reactive* sense enables the experimenter to respond to discrete events of interest, such as the arrival of a traveling wave or sharp wave ripple, whereas *feedback* control deals with driving the system towards a desired point or along a desired state trajectory. 
     The latter has the effect of rejecting noise and disturbances, reducing variability across time and across trials, allowing the researcher to perform inference with less data and on a finer scale.
     Additionally, closed-loop control can compensate for model mismatch, allowing it to reach more complex targets where open-loop control based on imperfect models is bound to fail.
-
-Why not prototype with more abstract models?
-""""""""""""""""""""""""""""""""""""""""""""
-CLEOSim aims to be practical, and as such provides models at the level of abstraction corresponding to the variables the experimenter has available to manipulate. This means models of spatially defined, spiking neural networks.
-
-Of course, neuroscience is studied at many spatial and temporal scales. While other projects may be better suited for larger segments of the brain and/or longer timescales (such as `HNN <https://elifesciences.org/articles/51214>`_ or BMTK's `PopNet <https://alleninstitute.github.io/bmtk/popnet.html>`_ or `FilterNet <https://alleninstitute.github.io/bmtk/filternet.html>`_), this project caters to finer-grained models because they can directly simulate the effects of alternate experimental configurations. For example, how would the model change when swapping one opsin for another, using multiple opsins simultaneously, or with heterogeneous expression? How does recording or stimulating one cell type vs. another affect the experiment? Would using a more sophisticated control algorithm be worth the extra compute time, and thus later stimulus delivery, compared to a simpler controller? 
-
-Questions like these could be answered using an abstract dynamical system model of a neural circuit, but they would require the extra step of mapping the afore-mentioned details to a suitable abstraction---e.g., estimating a transfer function to model optogenetic stimulation for a given opsin and light configuration. Thus, we haven't emphasized these sorts of models so far in our development of CLEOSim, though they should be possible to implement in Brian if you are interested. For example, one could develop a Poisson linear dynamical system (PLDS), record spiking output, and configure stimulation to act directly on the system's latent state.
-
-And just as experiment prototyping could be done on a more abstract level, it could also be done on an even more realistic level, which we did not deem necessary. That brings us to the next point...
-
-Why Brian?
-""""""""""
-Brian is a relatively new spiking neural network simulator written in Python. Here are some of its advantages:
-
-* Flexibility: allowing (and requiring!) the user to define models mathematically rather than selecting from a pre-defined library of cell types and features. This enables us to define arbitrary models for recorders and stimulators and easily interface with the simulation
-* Ease of use: it's all just Python
-* Speed
-
-`NEST <https://www.nest-simulator.org/>`_ is a popular alternative to Brian also strong in point neuron simulations. However, it appears to be less flexible, and thus harder to extend. `NEURON <https://www.neuron.yale.edu/neuron/>`_ is another popular alternative to Brian. Its main advantage is its first-class support of detailed, morphological, multi-compartment neurons. In fact, strong alternatives to Brian for this project were BioNet (`docs <https://alleninstitute.github.io/bmtk/bionet.html>`_, `paper <https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0201630>`_) and NetPyNE (`docs <http://netpyne.org/index.html>`_, `paper <https://elifesciences.org/articles/44494>`_), which already offer a high-level interface to NEURON with extracellular potential recording. Optogenetics could be incorporated with `pre-existing .hoc code <https://github.com/ProjectPyRhO/PyRhO/blob/master/pyrho/NEURON/RhO4c.mod>`_, though the light model would need to be implemented. From brief examination of the `source code of BioNet <https://github.com/AllenInstitute/bmtk/blob/8c235eabbfa963a3fe163d6ba6e5ad67ca5ad7c3/bmtk/simulator/bionet/modules/sim_module.py#L44>`_, it appears that closed-loop stimulation would not be too difficult to add. It is unclear for NetPyNE.
-
-In the end, we chose Brian since our priority was to model circuit/population-level dynamics over molecular/intra-neuron dynamics. Also, Brian does have support for multi-compartment neurons, albeit less fully featured, if that is needed.
 
 Installation
 ------------
@@ -135,7 +117,7 @@ Out of the box you can access a four-state Markov model of channelrhodopsin-2 (C
         location=(0, 0, 0.5) * mm,
     )
 
-Note, however, that for Markov models of opsin dynamics to be realistic, the target neurons must have membrane potentials in realistic ranges, including an upswing during spiking. If you need to interface with a model without these features, you may want to use the simplified :class:`~cleosim.opto.ProportionalCurrentModel`. You can find more details, including a comparison between the two model types, in the :ref:`optogenetics tutorial <tutorials/optogenetics:Appendix: simplified opsin model>`.
+Note, however, that Markov opsin dynamics models require target neurons to have membrane potentials in realistic ranges and an `Iopto` term defined in amperes. If you need to interface with a model without these features, you may want to use the simplified :class:`~cleosim.opto.ProportionalCurrentModel`. You can find more details, including a comparison between the two model types, in the :ref:`optogenetics tutorial <tutorials/optogenetics:Appendix: alternative opsin and neuron models>`.
     
 These model and parameter settings were designed to be flexible enough that an interested user should be able to imitate and replace them with other opsins, light sources, etc. See the :doc:`tutorials/optogenetics` tutorial for more detail.
 
@@ -180,6 +162,32 @@ To facilitate access to data after the simulation, many classes offer a ``save_h
     plt.plot(sorted_spikes.t_ms, sorted_spikes.i)
 
 
+Design rationale
+----------------
+
+Why not prototype with more abstract models?
+""""""""""""""""""""""""""""""""""""""""""""
+CLEOSim aims to be practical, and as such provides models at the level of abstraction corresponding to the variables the experimenter has available to manipulate. This means models of spatially defined, spiking neural networks.
+
+Of course, neuroscience is studied at many spatial and temporal scales. While other projects may be better suited for larger segments of the brain and/or longer timescales (such as `HNN <https://elifesciences.org/articles/51214>`_ or BMTK's `PopNet <https://alleninstitute.github.io/bmtk/popnet.html>`_ or `FilterNet <https://alleninstitute.github.io/bmtk/filternet.html>`_), this project caters to finer-grained models because they can directly simulate the effects of alternate experimental configurations. For example, how would the model change when swapping one opsin for another, using multiple opsins simultaneously, or with heterogeneous expression? How does recording or stimulating one cell type vs. another affect the experiment? Would using a more sophisticated control algorithm be worth the extra compute time, and thus later stimulus delivery, compared to a simpler controller? 
+
+Questions like these could be answered using an abstract dynamical system model of a neural circuit, but they would require the extra step of mapping the afore-mentioned details to a suitable abstraction---e.g., estimating a transfer function to model optogenetic stimulation for a given opsin and light configuration. Thus, we haven't emphasized these sorts of models so far in our development of CLEOSim, though they should be possible to implement in Brian if you are interested. For example, one could develop a Poisson linear dynamical system (PLDS), record spiking output, and configure stimulation to act directly on the system's latent state.
+
+And just as experiment prototyping could be done on a more abstract level, it could also be done on an even more realistic level, which we did not deem necessary. That brings us to the next point...
+
+Why Brian?
+""""""""""
+Brian is a relatively new spiking neural network simulator written in Python. Here are some of its advantages:
+
+* Flexibility: allowing (and requiring!) the user to define models mathematically rather than selecting from a pre-defined library of cell types and features. This enables us to define arbitrary models for recorders and stimulators and easily interface with the simulation
+* Ease of use: it's all just Python
+* Speed
+
+`NEST <https://www.nest-simulator.org/>`_ is a popular alternative to Brian also strong in point neuron simulations. However, it appears to be less flexible, and thus harder to extend. `NEURON <https://www.neuron.yale.edu/neuron/>`_ is another popular alternative to Brian. Its main advantage is its first-class support of detailed, morphological, multi-compartment neurons. In fact, strong alternatives to Brian for this project were BioNet (`docs <https://alleninstitute.github.io/bmtk/bionet.html>`_, `paper <https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0201630>`_) and NetPyNE (`docs <http://netpyne.org/index.html>`_, `paper <https://elifesciences.org/articles/44494>`_), which already offer a high-level interface to NEURON with extracellular potential recording. Optogenetics could be incorporated with `pre-existing .hoc code <https://github.com/ProjectPyRhO/PyRhO/blob/master/pyrho/NEURON/RhO4c.mod>`_, though the light model would need to be implemented. From brief examination of the `source code of BioNet <https://github.com/AllenInstitute/bmtk/blob/8c235eabbfa963a3fe163d6ba6e5ad67ca5ad7c3/bmtk/simulator/bionet/modules/sim_module.py#L44>`_, it appears that closed-loop stimulation would not be too difficult to add. It is unclear for NetPyNE.
+
+In the end, we chose Brian since our priority was to model circuit/population-level dynamics over molecular/intra-neuron dynamics. Also, Brian does have support for multi-compartment neurons, albeit less fully featured, if that is needed.
+
+
 Future development
 ------------------
 Here are some features which are missing but could be useful to add:
@@ -190,4 +198,3 @@ Here are some features which are missing but could be useful to add:
 * A more accurate LFP signal (only usable for morphological neurons) based on the volume conductor forward model as in `LFPy <https://lfpy.readthedocs.io/en/latest/index.html>`_ or `Vertex <https://github.com/haeste/Vertex_2>`_
 * The `Mazzoni-Lindén LFP approximation <https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1004584>`_ for LIF point-neuron networks
 * Imaging as a recording modality
-* Fix random coordinate generation for cylindrical volumes and add a grid option
