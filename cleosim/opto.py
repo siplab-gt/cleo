@@ -504,9 +504,9 @@ class OptogeneticIntervention(Stimulator):
         # to all points
         # filter out points with <0.001 transmittance to make plotting faster
 
-        fiber_T_thresh = kwargs.get("fiber_T_thresh", 0.001)
+        T_threshold = kwargs.get("T_threshold", 0.001)
         n_points = kwargs.get("n_points", 1e4)
-        r_thresh, zc_thresh = self._find_rz_thresholds(fiber_T_thresh)
+        r_thresh, zc_thresh = self._find_rz_thresholds(T_threshold)
         r, theta, zc = uniform_cylinder_rθz(n_points, r_thresh, zc_thresh)
 
         T = self._Foutz12_transmittance(r, zc)
@@ -514,7 +514,7 @@ class OptogeneticIntervention(Stimulator):
         end = self.location + zc_thresh * self.dir_uvec
         x, y, z = xyz_from_rθz(r, theta, zc, self.location, end)
 
-        idx_to_plot = T >= fiber_T_thresh
+        idx_to_plot = T >= T_threshold
         x = x[idx_to_plot]
         y = y[idx_to_plot]
         z = z[idx_to_plot]
@@ -544,7 +544,7 @@ class OptogeneticIntervention(Stimulator):
 
     def _find_rz_thresholds(self, thresh):
         """find r and z thresholds for visualization purposes"""
-        res_mm = 0.1
+        res_mm = 0.01
         zc = np.arange(20, 0, -res_mm) * mm  # ascending T
         T = self._Foutz12_transmittance(0 * mm, zc)
         zc_thresh = zc[np.searchsorted(T, thresh)]
@@ -552,7 +552,8 @@ class OptogeneticIntervention(Stimulator):
         r = np.arange(20, 0, -res_mm) * mm
         T = self._Foutz12_transmittance(r, zc_thresh / 2)
         r_thresh = r[np.searchsorted(T, thresh)]
-        return r_thresh, zc_thresh
+        # multiply by 1.2 just in case
+        return r_thresh * 1.2, zc_thresh
 
     def update_artists(
         self, artists: list[Artist], value, *args, **kwargs
