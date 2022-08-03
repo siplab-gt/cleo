@@ -170,7 +170,7 @@ dev = ["pip-tools (==6.5.1)", "pytest (==7.1.1)", "flake8 (==4.0.1)", "tox (==3.
 
 [[package]]
 name = "brian2"
-version = "2.5.0.3"
+version = "2.5.1"
 description = "A clock-driven simulator for spiking neural networks"
 category = "main"
 optional = false
@@ -1954,24 +1954,7 @@ bleach = [
     {file = "bleach-5.0.0-py3-none-any.whl", hash = "sha256:08a1fe86d253b5c88c92cc3d810fd8048a16d15762e1e5b74d502256e5926aa1"},
     {file = "bleach-5.0.0.tar.gz", hash = "sha256:c6d6cc054bdc9c83b48b8083e236e5f00f238428666d2ce2e083eaa5fd568565"},
 ]
-brian2 = [
-    {file = "Brian2-2.5.0.3-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:39836b6098a4f3a0f2ed5a2299e597fee915f591c0ee599c60611766a0046e21"},
-    {file = "Brian2-2.5.0.3-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:3769f1d1395f8c8be78cbadd1114383e733f2674dc472c75b233e9c7882ef41e"},
-    {file = "Brian2-2.5.0.3-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:4d84213d7ba6613c74176116a31e5ab80efa4a51ab03d7139defacb8ddd09843"},
-    {file = "Brian2-2.5.0.3-cp310-cp310-win_amd64.whl", hash = "sha256:529eca3c9f4a0ef9cbc0632f74b16f6e9bed6a88fdd44b438c3ab047815197b1"},
-    {file = "Brian2-2.5.0.3-cp37-cp37m-macosx_10_9_x86_64.whl", hash = "sha256:5751523943bc77bd46abfbe854a0eb14860381cfbb8f06edbaa7ab2e40e61518"},
-    {file = "Brian2-2.5.0.3-cp37-cp37m-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:426925f0664dd59cc158f9c072d79cac125524a5a81cbaea7cfb6cbe115b4295"},
-    {file = "Brian2-2.5.0.3-cp37-cp37m-win_amd64.whl", hash = "sha256:006640d2c1728625db079d999426255b7c17280cca8045e20c670203a27bb4d9"},
-    {file = "Brian2-2.5.0.3-cp38-cp38-macosx_10_9_universal2.whl", hash = "sha256:6d1ea91c8c64e5ca408f9374c6c74ff690b8e3f4939903d91e5d170a49c812fe"},
-    {file = "Brian2-2.5.0.3-cp38-cp38-macosx_10_9_x86_64.whl", hash = "sha256:c58cafdac54150e50e542379b3bd2a3175bb9c49cd840d0c5fe64956f0fe2dcc"},
-    {file = "Brian2-2.5.0.3-cp38-cp38-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:79afcef603f980a3d72c0d235a0822d51aa6f6929b2cdb5c917763fc7d670c76"},
-    {file = "Brian2-2.5.0.3-cp38-cp38-win_amd64.whl", hash = "sha256:2e3bad75ad78b4fbfeb7b141f47ade02f5db9d0c43d522b2b9641ff94afb9725"},
-    {file = "Brian2-2.5.0.3-cp39-cp39-macosx_10_9_universal2.whl", hash = "sha256:ba09f6587f8b8b1d8897a0533103cd335ec18608359cf99638165072cae6c104"},
-    {file = "Brian2-2.5.0.3-cp39-cp39-macosx_10_9_x86_64.whl", hash = "sha256:5afa2eeb93a735c23514803e507572c63b8c1bfa74a4b1878b5b3b9b9a5f81c4"},
-    {file = "Brian2-2.5.0.3-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:78cabc406dead2bd8eb1a2cbe87f5ef9f847ecfef045da9689630203d49bd0d9"},
-    {file = "Brian2-2.5.0.3-cp39-cp39-win_amd64.whl", hash = "sha256:90937931c2bc3907b26b648ea079aca59b4596f963cc773c70fd7d63e42aa02e"},
-    {file = "Brian2-2.5.0.3.tar.gz", hash = "sha256:12a661d8e4fe13ede2c5b8e866ccad635a7339ee518096dfeaabd0ffa55f3b4d"},
-]
+brian2 = []
 certifi = [
     {file = "certifi-2021.10.8-py2.py3-none-any.whl", hash = "sha256:d62a0163eb4c2344ac042ab2bdf75399a71a2d8c7d47eac2e2ee91b9d6339569"},
     {file = "certifi-2021.10.8.tar.gz", hash = "sha256:78884e7c1d4b00ce3cea67b44566851c4343c120abd683433ce934a68ea58872"},
