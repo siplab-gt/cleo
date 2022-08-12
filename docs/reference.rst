@@ -1,9 +1,6 @@
 Reference
 =============
 
-.. toctree::
-   :maxdepth: 4
-
 cleosim module
 -------------------
 
