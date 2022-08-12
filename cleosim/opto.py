@@ -130,7 +130,7 @@ class OpsinModel(ABC):
             ].unit.has_same_dimensions(unit):
                 raise BrianObjectException(
                     (
-                        f"{default_name} : {unit.name} needed in the model of NeuronGroup "
+                        f"{var_name} : {unit.name} needed in the model of NeuronGroup "
                         f"{neuron_group.name} to connect OptogeneticIntervention."
                     ),
                     neuron_group,
@@ -303,6 +303,8 @@ class OptogeneticIntervention(Stimulator):
     T_threshold : float, optional
         The transmittance below which no points are plotted. By default
         1e-3.
+    intensity : float, optional
+        How bright the light appears, should be between 0 and 1. By default 0.5.
     rasterized : bool, optional
         Whether to render as rasterized in vector output, True by default.
         Useful since so many points makes later rendering and editing slow.
@@ -506,6 +508,7 @@ class OptogeneticIntervention(Stimulator):
 
         T_threshold = kwargs.get("T_threshold", 0.001)
         n_points = kwargs.get("n_points", 1e4)
+        intensity = kwargs.get("intensity", 0.5)
         r_thresh, zc_thresh = self._find_rz_thresholds(T_threshold)
         r, theta, zc = uniform_cylinder_rθz(n_points, r_thresh, zc_thresh)
 
@@ -524,8 +527,8 @@ class OptogeneticIntervention(Stimulator):
             y / axis_scale_unit,
             z / axis_scale_unit,
             c=T,
-            cmap=self._alpha_cmap_for_wavelength(),
-            marker=",",
+            cmap=self._alpha_cmap_for_wavelength(intensity),
+            marker="o",
             edgecolors="none",
             label=self.name,
         )
