@@ -1,11 +1,6 @@
 Overview
 ========
 
-.. contents::
-    :local:
-    :depth: 4
-
-
 Introduction
 ------------
 Who is this package for?

@@ -31,7 +31,7 @@ author = "Kyle Johnsen, Nathan Cruzado"
 import sphinx_rtd_theme
 
 extensions = [
-    "sphinx_rtd_theme",
+    "furo",
     "sphinx.ext.autodoc",
     "sphinx.ext.autosectionlabel",
     "sphinx.ext.napoleon",
@@ -72,7 +72,7 @@ napoleon_custom_sections = [("Visualization kwargs", "params_style")]
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-html_theme = "sphinx_rtd_theme"
+html_theme = "furo"
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
@@ -86,5 +86,22 @@ favicons = [
         "sizes": "16x16",
         "static-file": "favicon.png",
     },
-
 ]
+
+html_theme_options = {
+    # "show_nav_level": 2,
+    # for Furo:
+    "light_css_variables": {
+        "color-brand-primary": "#C500CC",
+        "color-brand-content": "#C500CC",
+        # "color-brand-primary": "#8000b4",
+        # "color-brand-content": "#8000b4",
+    },
+    "dark_css_variables": {
+        # "color-brand-primary": "#C500CC",
+        # "color-brand-content": "#C500CC",
+        "color-brand-primary": "#df87e1",
+        "color-brand-content": "#df87e1",
+    },
+    "sidebar_hide_name": True,
+}
