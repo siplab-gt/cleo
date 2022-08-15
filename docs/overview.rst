@@ -53,7 +53,7 @@ You'll need your model in a Brian :class:`~brian2.core.network.Network` object b
     net = brian2.Network(...)
 
 CLSimulator
-^^^^^^^^^^^^^^^
+^^^^^^^^^^^
 Once you have a network model, you can construct a :class:`~cleosim.CLSimulator` object::
 
     sim = cleosim.CLSimulator(net)
@@ -161,7 +161,7 @@ Design rationale
 ----------------
 
 Why not prototype with more abstract models?
-""""""""""""""""""""""""""""""""""""""""""""
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 CLEOSim aims to be practical, and as such provides models at the level of abstraction corresponding to the variables the experimenter has available to manipulate. This means models of spatially defined, spiking neural networks.
 
 Of course, neuroscience is studied at many spatial and temporal scales. While other projects may be better suited for larger segments of the brain and/or longer timescales (such as `HNN <https://elifesciences.org/articles/51214>`_ or BMTK's `PopNet <https://alleninstitute.github.io/bmtk/popnet.html>`_ or `FilterNet <https://alleninstitute.github.io/bmtk/filternet.html>`_), this project caters to finer-grained models because they can directly simulate the effects of alternate experimental configurations. For example, how would the model change when swapping one opsin for another, using multiple opsins simultaneously, or with heterogeneous expression? How does recording or stimulating one cell type vs. another affect the experiment? Would using a more sophisticated control algorithm be worth the extra compute time, and thus later stimulus delivery, compared to a simpler controller? 
@@ -171,7 +171,7 @@ Questions like these could be answered using an abstract dynamical system model 
 And just as experiment prototyping could be done on a more abstract level, it could also be done on an even more realistic level, which we did not deem necessary. That brings us to the next point...
 
 Why Brian?
-""""""""""
+^^^^^^^^^^
 Brian is a relatively new spiking neural network simulator written in Python. Here are some of its advantages:
 
 * Flexibility: allowing (and requiring!) the user to define models mathematically rather than selecting from a pre-defined library of cell types and features. This enables us to define arbitrary models for recorders and stimulators and easily interface with the simulation
