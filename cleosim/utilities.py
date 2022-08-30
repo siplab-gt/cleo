@@ -195,5 +195,6 @@ def style_plots_for_docs():
 
     plt.style.use("dark_background")
     plt.rc("savefig", transparent=False)
-    for obj in ["figure", "axes"]:
-        plt.rc(obj, facecolor="131416", edgecolor="131416")
+    for obj in ["figure", "axes", "savefig"]:
+        plt.rc(obj, facecolor="131416")  # color of Furo dark background
+    plt.rc("axes.spines", top=False, right=False)
