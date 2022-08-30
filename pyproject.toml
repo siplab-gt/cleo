@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "cleosim"
-version = "0.6.0"
+version = "0.7.0"
 description = "Closed Loop, Electrophysiology, and Optogenetics Simulator: testbed and prototyping kit"
 authors = [
     "Kyle Johnsen <kyle@kjohnsen.org>",
@@ -36,10 +36,10 @@ flake8-docstrings = "^1.6.0"
 flake8-pytest-style = "^1.6.0"
 nbmake = "^1.2"
 Sphinx = "^4.0"
-sphinx-rtd-theme = "^1.0.0"
 sphinx-copybutton = "^0.4.0"
 myst-nb = "^0.13.1"
 sphinx-favicon = "^0.2"
+furo = "^2022.6.21"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

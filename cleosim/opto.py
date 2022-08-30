@@ -2,8 +2,16 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Tuple, Any
+import warnings
 
-from brian2 import Synapses, NeuronGroup
+from brian2 import (
+    Synapses,
+    NeuronGroup,
+    Unit,
+    BrianObjectException,
+    get_unit,
+    Equations,
+)
 from brian2.units import (
     mm,
     mm2,
@@ -22,7 +30,6 @@ from brian2.units import (
 )
 from brian2.units.allunits import meter2, radian
 import brian2.units.unitsafefunctions as usf
-from brian2.core.base import BrianObjectException
 import numpy as np
 import matplotlib
 from matplotlib import colors
@@ -67,19 +74,28 @@ class OpsinModel(ABC):
     Should contain a `rho_rel` term reflecting relative expression 
     levels. Will likely also contain special NeuronGroup-dependent
     symbols such as V_VAR_NAME to be replaced on injection in 
-    :meth:`get_modified_model_for_ng`."""
+    :meth:`~OpsinModel.modify_model_and_params_for_ng`."""
 
     params: dict
     """Parameter values for model, passed in as a namespace dict"""
 
-    @abstractmethod
-    def get_modified_model_for_ng(
-        self, neuron_group: NeuronGroup, injct_params: dict
-    ) -> str:
+    required_vars: list[Tuple[str, Unit]]
+    """Default names of state variables required in the neuron group,
+    along with units, e.g., [('Iopto', amp)].
+    
+    It is assumed that non-default values can be passed in on injection
+    as a keyword argument ``[default_name]_var_name=[non_default_name]``
+    and that these are found in the model string as 
+    ``[DEFAULT_NAME]_VAR_NAME`` before replacement."""
+
+    def modify_model_and_params_for_ng(
+        self, neuron_group: NeuronGroup, injct_params: dict, model="class-defined"
+    ) -> Tuple[Equations, dict]:
         """Adapt model for given neuron group on injection
 
-        This is mainly to enable the specification of variable names
-        differently for each neuron group.
+        This enables the specification of variable names
+        differently for each neuron group, allowing for custom names
+        and avoiding conflicts.
 
         Parameters
         ----------
@@ -89,13 +105,66 @@ class OpsinModel(ABC):
             kwargs passed in on injection, could contain variable
             names to plug into the model
 
+        Keyword Args
+        ------------
+        model : str, optional
+            Model to start with, by default that defined for the class.
+            This allows for prior string manipulations before it can be
+            parsed as an `Equations` object.
+
         Returns
         -------
-        str
-            A string containing modified model equations for use
+        Equations, dict
+            A tuple containing an Equations object
+            and a parameter dictionary, constructed from :attr:`~model`
+            and :attr:`~params`, respectively, with modified names for use
             in :attr:`~cleosim.opto.OptogeneticIntervention.opto_syns`
         """
-        pass
+        if model == "class-defined":
+            model = self.model
+
+        for default_name, unit in self.required_vars:
+            var_name = injct_params.get(f"{default_name}_var_name", default_name)
+            if var_name not in neuron_group.variables or not neuron_group.variables[
+                var_name
+            ].unit.has_same_dimensions(unit):
+                raise BrianObjectException(
+                    (
+                        f"{var_name} : {unit.name} needed in the model of NeuronGroup "
+                        f"{neuron_group.name} to connect OptogeneticIntervention."
+                    ),
+                    neuron_group,
+                )
+            # opsin synapse model needs modified names
+            to_replace = f"{default_name}_var_name".upper()
+            model = model.replace(to_replace, var_name)
+
+        # Synapse variable and parameter names cannot be the same as any
+        # neuron group variable name
+        return self._fix_name_conflicts(model, neuron_group)
+
+    def _fix_name_conflicts(
+        self, modified_model: str, neuron_group: NeuronGroup
+    ) -> Tuple[str, dict]:
+        modified_params = self.params.copy()
+        rename = lambda x: f"{x}_syn"
+
+        # get variables to rename
+        opsin_eqs = Equations(modified_model)
+        substitutions = {}
+        for var in opsin_eqs.names:
+            if var in neuron_group.variables:
+                substitutions[var] = rename(var)
+
+        # and parameters
+        for param in self.params.keys():
+            if param in neuron_group.variables:
+                substitutions[param] = rename(param)
+                modified_params[rename(param)] = modified_params[param]
+                del modified_params[param]
+
+        mod_opsin_eqs = opsin_eqs.substitute(**substitutions)
+        return mod_opsin_eqs, modified_params
 
     def init_opto_syn_vars(self, opto_syn: Synapses) -> None:
         """Initializes appropriate variables in Synapses implementing the model
@@ -113,6 +182,8 @@ class OpsinModel(ABC):
 class MarkovModel(OpsinModel):
     """Base class for Markov state models à la Evans et al., 2016"""
 
+    required_vars: list[Tuple[str, Unit]] = [("Iopto", amp), ("v", volt)]
+
     def __init__(self, params: dict) -> None:
         """
         Parameters
@@ -122,33 +193,6 @@ class MarkovModel(OpsinModel):
         """
         super().__init__()
         self.params = params
-
-    def _check_vars_on_injection(self, neuron_group, injct_params):
-        Iopto_var_name = injct_params.get("Iopto_var_name", "Iopto")
-        v_var_name = injct_params.get("v_var_name", "v")
-        for variable, unit in zip([v_var_name, Iopto_var_name], [volt, amp]):
-            if (
-                variable not in neuron_group.variables
-                or neuron_group.variables[variable].unit != unit
-            ):
-                raise BrianObjectException(
-                    (
-                        f"{variable} : {unit.name} needed in the model of NeuronGroup"
-                        f"{neuron_group.name} to connect OptogeneticIntervention."
-                    ),
-                    neuron_group,
-                )
-
-    def get_modified_model_for_ng(
-        self, neuron_group: NeuronGroup, injct_params: dict
-    ) -> str:
-        self._check_vars_on_injection(neuron_group, injct_params)
-        Iopto_var_name = injct_params.get("Iopto_var_name", "Iopto")
-        v_var_name = injct_params.get("v_var_name", "v")
-        # opsin synapse model needs modified names
-        return self.model.replace("IOPTO_VAR_NAME", Iopto_var_name).replace(
-            "V_VAR_NAME", v_var_name
-        )
 
 
 class FourStateModel(MarkovModel):
@@ -190,6 +234,7 @@ class FourStateModel(MarkovModel):
 class ProportionalCurrentModel(OpsinModel):
     """A simple model delivering current proportional to light intensity"""
 
+    # would be IOPTO_UNIT but that throws off Equation parsing
     model: str = """
         IOPTO_VAR_NAME_post = gain * Irr * rho_rel : IOPTO_UNIT (summed)
         rho_rel : 1
@@ -205,31 +250,17 @@ class ProportionalCurrentModel(OpsinModel):
         """
         self.params = {"gain": Iopto_per_mW_per_mm2 / (mwatt / mm2)}
         if isinstance(Iopto_per_mW_per_mm2, Quantity):
-            self._Iopto_dim = Iopto_per_mW_per_mm2.get_best_unit().dim
-            self._Iopto_dim_name = self._Iopto_dim._str_representation(python_code=True)
+            self._Iopto_unit = get_unit(Iopto_per_mW_per_mm2.dim)
         else:
-            self._Iopto_dim = radian.dim
-            self._Iopto_dim_name = self._Iopto_dim._str_representation(
-                python_code=False
-            )
+            self._Iopto_unit = radian
+        self.required_vars = [("Iopto", self._Iopto_unit)]
 
-    def get_modified_model_for_ng(
+    def modify_model_and_params_for_ng(
         self, neuron_group: NeuronGroup, injct_params: dict
-    ) -> str:
-        Iopto_var_name = injct_params.get("Iopto_var_name", "Iopto")
-        if (
-            Iopto_var_name not in neuron_group.variables
-            or neuron_group.variables[Iopto_var_name].dim != self._Iopto_dim
-        ):
-            raise BrianObjectException(
-                (
-                    f"{Iopto_var_name} : {self._Iopto_dim_name} needed in the model of NeuronGroup"
-                    f"{neuron_group.name} to connect OptogeneticIntervention."
-                ),
-                neuron_group,
-            )
-        return self.model.replace("IOPTO_VAR_NAME", Iopto_var_name).replace(
-            "IOPTO_UNIT", self._Iopto_dim_name
+    ) -> Tuple[Equations, dict]:
+        mod_model = self.model.replace("IOPTO_UNIT", self._Iopto_unit.name)
+        return super().modify_model_and_params_for_ng(
+            neuron_group, injct_params, model=mod_model
         )
 
 
@@ -272,6 +303,11 @@ class OptogeneticIntervention(Stimulator):
     T_threshold : float, optional
         The transmittance below which no points are plotted. By default
         1e-3.
+    intensity : float, optional
+        How bright the light appears, should be between 0 and 1. By default 0.5.
+    rasterized : bool, optional
+        Whether to render as rasterized in vector output, True by default.
+        Useful since so many points makes later rendering and editing slow.
     """
 
     opto_syns: dict[str, Synapses]
@@ -343,7 +379,7 @@ class OptogeneticIntervention(Stimulator):
             )
             Rz = self.light_model_params["R0"] + z * np.tan(
                 theta_div
-            )  # radius as light spreads("apparent radius" from original code)
+            )  # radius as light spreads ("apparent radius" from original code)
             C = (self.light_model_params["R0"] / Rz) ** 2
         else:
             Rz = self.light_model_params["R0"]  # "apparent radius"
@@ -354,14 +390,14 @@ class OptogeneticIntervention(Stimulator):
         else:
             G = 1
 
-        def kubelka_munk(dist):
+        if scatter:
             S = self.light_model_params["S"]
             a = 1 + self.light_model_params["K"] / S
             b = np.sqrt(a**2 - 1)
             dist = np.sqrt(r**2 + z**2)
-            return b / (a * np.sinh(b * S * dist) + b * np.cosh(b * S * dist))
-
-        M = kubelka_munk(np.sqrt(r**2 + z**2)) if scatter else 1
+            M = b / (a * np.sinh(b * S * dist) + b * np.cosh(b * S * dist))
+        else:
+            M = 1
 
         T = G * C * M
         T[z < 0] = 0
@@ -370,27 +406,17 @@ class OptogeneticIntervention(Stimulator):
     def _get_rz_for_xyz(self, x, y, z):
         """Assumes x, y, z already have units"""
 
-        def flatten_if_needed(var):
-            if len(var.shape) != 1:
-                return var.flatten()
-            else:
-                return var
-
         # have to add unit back on since it's stripped by vstack
-        coords = (
-            np.vstack(
-                [flatten_if_needed(x), flatten_if_needed(y), flatten_if_needed(z)]
-            ).T
-            * meter
-        )
+        coords = np.column_stack([x, y, z]) * meter
         rel_coords = coords - self.location  # relative to fiber location
         # must use brian2's dot function for matrix multiply to preserve
         # units correctly.
         zc = usf.dot(rel_coords, self.dir_uvec)  # distance along cylinder axis
         # just need length (norm) of radius vectors
         # not using np.linalg.norm because it strips units
-        r = np.sqrt(np.sum((rel_coords - zc[..., np.newaxis] * self.dir_uvec.T)**2, axis=1))
-        r = r.reshape((-1, 1))
+        r = np.sqrt(
+            np.sum((rel_coords - zc[..., np.newaxis] * self.dir_uvec.T) ** 2, axis=1)
+        )
         return r, zc
 
     def connect_to_neuron_group(
@@ -421,9 +447,10 @@ class OptogeneticIntervention(Stimulator):
             membrane potential
         """
         # get modified opsin model string (i.e., with names/units specified)
-        modified_opsin_model = self.opsin_model.get_modified_model_for_ng(
-            neuron_group, kwparams
-        )
+        (
+            mod_opsin_model,
+            mod_opsin_params,
+        ) = self.opsin_model.modify_model_and_params_for_ng(neuron_group, kwparams)
 
         # fmt: off
         # Ephoton = h*c/lambda
@@ -434,17 +461,19 @@ class OptogeneticIntervention(Stimulator):
         )
         # fmt: on
 
-        light_model = """
+        light_model = Equations(
+            """
             Irr = Irr0*T : watt/meter**2
             Irr0 : watt/meter**2 
             T : 1
             phi = Irr / Ephoton : 1/second/meter**2
-        """
+            """
+        )
 
         opto_syn = Synapses(
             neuron_group,
-            model=modified_opsin_model + light_model,
-            namespace=self.opsin_model.params,
+            model=mod_opsin_model + light_model,
+            namespace=mod_opsin_params,
             name=f"synapses_{self.name}_{neuron_group.name}",
             method="rk2",
         )
@@ -463,8 +492,9 @@ class OptogeneticIntervention(Stimulator):
         # calculate transmittance coefficient for each point
         r, z = self._get_rz_for_xyz(neuron_group.x, neuron_group.y, neuron_group.z)
         T = self._Foutz12_transmittance(r, z).flatten()
+        assert len(T) == len(neuron_group)
         # reduce to subset expressing opsin before assigning
-        T = [T[k] for k in opto_syn.i]
+        T = T[opto_syn.i]
 
         opto_syn.T = T
 
@@ -476,17 +506,18 @@ class OptogeneticIntervention(Stimulator):
         # to all points
         # filter out points with <0.001 transmittance to make plotting faster
 
-        fiber_T_thresh = kwargs.get('fiber_T_thresh', 0.001)
-        n_points = kwargs.get('n_points', 1e4)
-        r_thresh, zc_thresh = self._find_rz_thresholds(fiber_T_thresh)
+        T_threshold = kwargs.get("T_threshold", 0.001)
+        n_points = kwargs.get("n_points", 1e4)
+        intensity = kwargs.get("intensity", 0.5)
+        r_thresh, zc_thresh = self._find_rz_thresholds(T_threshold)
         r, theta, zc = uniform_cylinder_rθz(n_points, r_thresh, zc_thresh)
 
         T = self._Foutz12_transmittance(r, zc)
 
-        end = self.location + zc_thresh*self.dir_uvec
+        end = self.location + zc_thresh * self.dir_uvec
         x, y, z = xyz_from_rθz(r, theta, zc, self.location, end)
 
-        idx_to_plot = T >= fiber_T_thresh
+        idx_to_plot = T >= T_threshold
         x = x[idx_to_plot]
         y = y[idx_to_plot]
         z = z[idx_to_plot]
@@ -496,11 +527,17 @@ class OptogeneticIntervention(Stimulator):
             y / axis_scale_unit,
             z / axis_scale_unit,
             c=T,
-            cmap=self._alpha_cmap_for_wavelength(),
-            marker=",",
+            cmap=self._alpha_cmap_for_wavelength(intensity),
+            marker="o",
             edgecolors="none",
             label=self.name,
         )
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore", message=".*Rasterization.*will be ignored.*"
+            )
+            # to make manageable in SVGs
+            point_cloud.set_rasterized(kwargs.get("rasterized", True))
         handles = ax.get_legend().legendHandles
         c = wavelength_to_rgb(self.light_model_params["wavelength"] / nmeter)
         opto_patch = matplotlib.patches.Patch(color=c, label=self.name)
@@ -510,7 +547,7 @@ class OptogeneticIntervention(Stimulator):
 
     def _find_rz_thresholds(self, thresh):
         """find r and z thresholds for visualization purposes"""
-        res_mm = 0.1
+        res_mm = 0.01
         zc = np.arange(20, 0, -res_mm) * mm  # ascending T
         T = self._Foutz12_transmittance(0 * mm, zc)
         zc_thresh = zc[np.searchsorted(T, thresh)]
@@ -518,8 +555,8 @@ class OptogeneticIntervention(Stimulator):
         r = np.arange(20, 0, -res_mm) * mm
         T = self._Foutz12_transmittance(r, zc_thresh / 2)
         r_thresh = r[np.searchsorted(T, thresh)]
-        return r_thresh, zc_thresh
-
+        # multiply by 1.2 just in case
+        return r_thresh * 1.2, zc_thresh
 
     def update_artists(
         self, artists: list[Artist], value, *args, **kwargs
@@ -553,14 +590,10 @@ class OptogeneticIntervention(Stimulator):
         ----------
         Irr0_mW_per_mm2 : float
             Desired light intensity for light source
-
-        Raises
-        ------
-        ValueError
-            When intensity is negative
         """
         if Irr0_mW_per_mm2 < 0:
-            raise ValueError(f"{self.name}: light intensity Irr0 must be nonnegative")
+            warnings.warn(f"{self.name}: negative light intensity Irr0 clipped to 0")
+            Irr0_mW_per_mm2 = 0
         if (
             self.max_Irr0_mW_per_mm2 is not None
             and Irr0_mW_per_mm2 > self.max_Irr0_mW_per_mm2

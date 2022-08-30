@@ -4,6 +4,7 @@ from math import ceil, floor
 
 from scipy import linalg
 import numpy as np
+from matplotlib import pyplot as plt
 
 from brian2 import second
 from brian2.groups.group import get_dtype
@@ -184,3 +185,16 @@ def wavelength_to_rgb(wavelength_nm, gamma=0.8):
         G = 0.0
         B = 0.0
     return (R, G, B)
+
+
+def style_plots_for_docs():
+    # some hacky workaround for params not being updated until after first plot
+    f = plt.figure()
+    plt.plot()
+    plt.close(f)
+
+    plt.style.use("dark_background")
+    plt.rc("savefig", transparent=False)
+    for obj in ["figure", "axes", "savefig"]:
+        plt.rc(obj, facecolor="131416")  # color of Furo dark background
+    plt.rc("axes.spines", top=False, right=False)

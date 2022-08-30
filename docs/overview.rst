@@ -1,25 +1,19 @@
 Overview
 ========
 
-.. contents::
-    :local:
-    :depth: 4
-
-
 Introduction
 ------------
 Who is this package for?
 ^^^^^^^^^^^^^^^^^^^^^^^^
-.. sidebar::
-    What is closed-loop control? 
-    
-    In short, determining the inputs to deliver to a system from its outputs. In neuroscience terms, making the stimulation parameters a function of the data recorded in real time.
-
 CLEOSim (Closed Loop, Electrophysiology, and Optogenetics Simulator) is a Python package developed to bridge theory and experiment for mesoscale neuroscience. We envision two primary uses cases:
 
 1. For prototyping closed-loop control of neural activity *in silico*. Animal experiments are costly to set up and debug, especially with the added complexity of real-time intervention---our aim is to enable researchers, given a decent spiking model of the system of interest, to assess whether the type of control they desire is feasible and/or what configuration(s) would be most conducive to their goals.
 
 2. The complexity of experimental interfaces means it's not always clear what a model would look like in a real experiment. CLEOSim can help anyone interested in observing or manipulating a model while taking into account the constraints present in real experiments. Because CLEOSim is built around the `Brian simulator <https://brian2.rtfd.io>`_, we especially hope this is helpful for existing Brian users who for whatever reason would like a convenient way to inject recorders (e.g., electrodes) or stimulators (e.g., optogenetics) into the core network simulation.
+
+.. admonition:: What is closed-loop control? 
+    
+    In short, determining the inputs to deliver to a system from its outputs. In neuroscience terms, making the stimulation parameters a function of the data recorded in real time.
 
 Structure and design
 ^^^^^^^^^^^^^^^^^^^^
@@ -29,8 +23,7 @@ CLEOSim also orchestrates communication between the simulator and a user-configu
 
 For an explanation of why we choose to prioritize spiking network models and how we chose Brian as the underlying simulator, see :ref:`overview:design rationale`.
 
-.. sidebar::
-    Why closed-loop control in neuroscience?
+.. admonition:: Why closed-loop control in neuroscience?
 
     Fast, real-time, closed-loop control of neural activity enables intervention in processes that are too fast or unpredictable to control manually or with pre-defined stimulation, such as sensory information processing, motor planning, and oscillatory activity. 
     Closed-loop control in a *reactive* sense enables the experimenter to respond to discrete events of interest, such as the arrival of a traveling wave or sharp wave ripple, whereas *feedback* control deals with driving the system towards a desired point or along a desired state trajectory. 
@@ -58,7 +51,7 @@ You'll need your model in a Brian :class:`~brian2.core.network.Network` object b
     net = brian2.Network(...)
 
 CLSimulator
-^^^^^^^^^^^^^^^
+^^^^^^^^^^^
 Once you have a network model, you can construct a :class:`~cleosim.CLSimulator` object::
 
     sim = cleosim.CLSimulator(net)
@@ -166,7 +159,7 @@ Design rationale
 ----------------
 
 Why not prototype with more abstract models?
-""""""""""""""""""""""""""""""""""""""""""""
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 CLEOSim aims to be practical, and as such provides models at the level of abstraction corresponding to the variables the experimenter has available to manipulate. This means models of spatially defined, spiking neural networks.
 
 Of course, neuroscience is studied at many spatial and temporal scales. While other projects may be better suited for larger segments of the brain and/or longer timescales (such as `HNN <https://elifesciences.org/articles/51214>`_ or BMTK's `PopNet <https://alleninstitute.github.io/bmtk/popnet.html>`_ or `FilterNet <https://alleninstitute.github.io/bmtk/filternet.html>`_), this project caters to finer-grained models because they can directly simulate the effects of alternate experimental configurations. For example, how would the model change when swapping one opsin for another, using multiple opsins simultaneously, or with heterogeneous expression? How does recording or stimulating one cell type vs. another affect the experiment? Would using a more sophisticated control algorithm be worth the extra compute time, and thus later stimulus delivery, compared to a simpler controller? 
@@ -176,7 +169,7 @@ Questions like these could be answered using an abstract dynamical system model 
 And just as experiment prototyping could be done on a more abstract level, it could also be done on an even more realistic level, which we did not deem necessary. That brings us to the next point...
 
 Why Brian?
-""""""""""
+^^^^^^^^^^
 Brian is a relatively new spiking neural network simulator written in Python. Here are some of its advantages:
 
 * Flexibility: allowing (and requiring!) the user to define models mathematically rather than selecting from a pre-defined library of cell types and features. This enables us to define arbitrary models for recorders and stimulators and easily interface with the simulation

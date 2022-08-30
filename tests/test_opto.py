@@ -102,7 +102,7 @@ def test_v_and_Iopto_in_model(opto, opto2):
 
 
 @pytest.mark.slow
-def test_opsin_model(opto, neurons):
+def test_markov_opsin_model(opto, neurons):
     sim = CLSimulator(Network(neurons))
     sim.inject_stimulator(opto, neurons)
     opsyn = opto.opto_syns[neurons.name]
@@ -213,3 +213,52 @@ def test_simple_opto_amps():
     opto.update(1)
     sim.run(1 * ms)
     assert ng.v > 0 * volt
+
+
+def _prep_markov_opto(ng_model, opto):
+    ng = NeuronGroup(3, ng_model)
+    sim = CLSimulator(Network(ng))
+    assign_coords_grid_rect_prism(ng, (0, 0), (0, 0), (0, 0), shape=(3, 1, 1))
+    sim.inject_stimulator(opto, ng)
+    return ng, sim
+
+
+@pytest.mark.slow
+def test_opto_syn_var_name_conflict(opto):
+    ng, sim = _prep_markov_opto(
+        """
+        dHp/dt = 0*Hz : 1  # diff eq
+        dfv/dt = 0*Hz : 1
+        Ga1 = O1*Hz : hertz  # constant
+        O1 : 1
+        dv/dt = 0*mV/ms : volt
+        Iopto : amp
+        """,
+        opto,
+    )
+    opto_syn_vars = opto.opto_syns[ng.name].equations.names
+    for var in ["Hp", "fv", "Ga1", "O1"]:
+        assert not var in opto_syn_vars
+        assert f"{var}_syn" in opto_syn_vars
+    sim.run(0.1 * ms)
+
+
+@pytest.mark.slow
+def test_opto_syn_param_name_conflict(opto):
+    # put 4-state model param names in neuron group vars
+    ng, sim = _prep_markov_opto(
+        """
+        dg0/dt = 0*Hz : 1  # diff eq
+        dphim/dt = 0*Hz : 1
+        p = v1*Hz : hertz  # constant
+        v1 : 1
+        dv/dt = 0*mV/ms : volt
+        Iopto : amp
+        """,
+        opto,
+    )
+    opto_syn = opto.opto_syns[ng.name]
+    for param in ["g0", "phim", "p", "v1"]:
+        assert not param in opto_syn.equations.names
+        assert f"{param}_syn" in opto_syn.namespace
+    sim.run(0.1 * ms)
