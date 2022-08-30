@@ -590,14 +590,10 @@ class OptogeneticIntervention(Stimulator):
         ----------
         Irr0_mW_per_mm2 : float
             Desired light intensity for light source
-
-        Raises
-        ------
-        ValueError
-            When intensity is negative
         """
         if Irr0_mW_per_mm2 < 0:
-            raise ValueError(f"{self.name}: light intensity Irr0 must be nonnegative")
+            warnings.warn(f"{self.name}: negative light intensity Irr0 clipped to 0")
+            Irr0_mW_per_mm2 = 0
         if (
             self.max_Irr0_mW_per_mm2 is not None
             and Irr0_mW_per_mm2 > self.max_Irr0_mW_per_mm2
