@@ -5,16 +5,15 @@ Introduction
 ------------
 Who is this package for?
 ^^^^^^^^^^^^^^^^^^^^^^^^
-.. sidebar::
-    What is closed-loop control? 
-    
-    In short, determining the inputs to deliver to a system from its outputs. In neuroscience terms, making the stimulation parameters a function of the data recorded in real time.
-
 CLEOSim (Closed Loop, Electrophysiology, and Optogenetics Simulator) is a Python package developed to bridge theory and experiment for mesoscale neuroscience. We envision two primary uses cases:
 
 1. For prototyping closed-loop control of neural activity *in silico*. Animal experiments are costly to set up and debug, especially with the added complexity of real-time intervention---our aim is to enable researchers, given a decent spiking model of the system of interest, to assess whether the type of control they desire is feasible and/or what configuration(s) would be most conducive to their goals.
 
 2. The complexity of experimental interfaces means it's not always clear what a model would look like in a real experiment. CLEOSim can help anyone interested in observing or manipulating a model while taking into account the constraints present in real experiments. Because CLEOSim is built around the `Brian simulator <https://brian2.rtfd.io>`_, we especially hope this is helpful for existing Brian users who for whatever reason would like a convenient way to inject recorders (e.g., electrodes) or stimulators (e.g., optogenetics) into the core network simulation.
+
+.. admonition:: What is closed-loop control? 
+    
+    In short, determining the inputs to deliver to a system from its outputs. In neuroscience terms, making the stimulation parameters a function of the data recorded in real time.
 
 Structure and design
 ^^^^^^^^^^^^^^^^^^^^
@@ -24,8 +23,7 @@ CLEOSim also orchestrates communication between the simulator and a user-configu
 
 For an explanation of why we choose to prioritize spiking network models and how we chose Brian as the underlying simulator, see :ref:`overview:design rationale`.
 
-.. sidebar::
-    Why closed-loop control in neuroscience?
+.. admonition:: Why closed-loop control in neuroscience?
 
     Fast, real-time, closed-loop control of neural activity enables intervention in processes that are too fast or unpredictable to control manually or with pre-defined stimulation, such as sensory information processing, motor planning, and oscillatory activity. 
     Closed-loop control in a *reactive* sense enables the experimenter to respond to discrete events of interest, such as the arrival of a traveling wave or sharp wave ripple, whereas *feedback* control deals with driving the system towards a desired point or along a desired state trajectory. 
