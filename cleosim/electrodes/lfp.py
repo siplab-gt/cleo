@@ -23,7 +23,7 @@ class TKLFPSignal(Signal):
     the cortex, for each neuron. If a single vector is given, it is
     taken to be the orientation for all neurons in the group. [0, 0, -1]
     is the default, meaning the negative z axis is "up." As stated
-    elsewhere, CLEOSim's convention is that z=0 corresponds to the
+    elsewhere, Cleo's convention is that z=0 corresponds to the
     cortical surface and increasing z values represent increasing depth.
 
     TKLFP is computed from spikes using the tklfp package."""
