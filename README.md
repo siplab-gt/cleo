@@ -35,7 +35,7 @@ Cleo allows for flexible I/O processing in real time, enabling the simulation of
 ## <img align="bottom" src="https://user-images.githubusercontent.com/19983357/167461111-b0a3746c-03fa-47b7-a9a9-7b651157044f.png" alt="CL icon" > Electrode recording
 Cleo provides functions for configuring electrode arrays and placing them in arbitrary locations in the simulation. The user can then specify parameters for probabilistic spike detection or a spike-based LFP approximation developed by [Teleńczuk et al., 2020](https://www.sciencedirect.com/science/article/pii/S0165027020302946).
 
-## <img align="bottom" src="https://user-images.githubusercontent.com/19983357/167461525-1f84e8ae-498b-4b52-9909-dade375f2006.png" alt="CL icon" > Optogenetic stimulation
+## <img align="bottom" src="https://user-images.githubusercontent.com/19983357/187728089-62fae854-1d69-4e8f-a597-a25934ca3eaa.png" alt="CL icon" > Optogenetic stimulation
 By providing an optic fiber-light propagation model, Cleo enables users to flexibly add photostimulation to their model. Both a four-state Markov state model of opsin dynamics is available, as well as a minimal proportional current option for compatibility with simple neuron models. Parameters are provided for the common blue light/ChR2 setup.
 
 ## Getting started
