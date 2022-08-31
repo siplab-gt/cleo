@@ -23,7 +23,7 @@ This package was developed by [Kyle Johnsen](https://kjohnsen.org) and Nathan Cr
   <img 
       style="display: block; 
              width: 90%;"
-      src="https://user-images.githubusercontent.com/19983357/167451424-5d04d3df-d8d0-42ae-9cc9-8b9a74da5eb2.png" 
+      src="https://user-images.githubusercontent.com/19983357/187724696-b880a884-1c32-4bad-8b2c-acdd4add44d0.png" 
       alt="logo">
   </img>
 </p>
@@ -56,7 +56,7 @@ Those using Cleo to simulate closed-loop control experiments may be interested i
   <img 
       style="display: block; 
              width: 100%;"
-      src="https://user-images.githubusercontent.com/19983357/167465825-363ad169-bc2e-412f-a8ab-12f960769e9b.png" 
+      src="https://user-images.githubusercontent.com/19983357/187723498-f0f03da8-096a-46eb-90df-28da55dce7a0.png" 
       alt="CLOCTools and Cleo">
   </img>
 </p>
