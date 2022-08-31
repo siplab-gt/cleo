@@ -1,77 +1,77 @@
 Reference
 =============
 
-cleosim module
+cleo module
 -------------------
 
-.. automodule:: cleosim
+.. automodule:: cleo
    :members:
    :imported-members:
    :undoc-members:
    :show-inheritance:
 
-cleosim.coordinates module
+cleo.coords module
 --------------------------
 
-.. automodule:: cleosim.coordinates
+.. automodule:: cleo.coords
    :members:
    :undoc-members:
    :show-inheritance:
 
-cleosim.electrodes module
+cleo.electrodes module
 --------------------------
 
-.. automodule:: cleosim.electrodes
+.. automodule:: cleo.electrodes
    :members:
    :imported-members:
    :undoc-members:
    :show-inheritance:
 
-cleosim.opto module
+cleo.opto module
 -------------------
 
-.. automodule:: cleosim.opto
+.. automodule:: cleo.opto
    :members:
    :undoc-members:
    :show-inheritance:
 
-cleosim.processing module
+cleo.processing module
 --------------------------
 
-.. automodule:: cleosim.processing
+.. automodule:: cleo.processing
    :members:
    :imported-members:
    :undoc-members:
    :show-inheritance:
 
-cleosim.visualization module
+cleo.viz module
 ----------------------------
 
-.. automodule:: cleosim.visualization
+.. automodule:: cleo.viz
    :members:
    :undoc-members:
    :show-inheritance:
 
-cleosim.recorders module
+cleo.recorders module
 ------------------------
 
-.. automodule:: cleosim.recorders
+.. automodule:: cleo.recorders
    :members:
    :undoc-members:
    :show-inheritance:
 
-cleosim.stimulators module
+cleo.stimulators module
 --------------------------
 
-.. automodule:: cleosim.stimulators
+.. automodule:: cleo.stimulators
    :members:
    :undoc-members:
    :show-inheritance:
 
-cleosim.utilities module
+cleo.utilities module
 ------------------------
 
-.. automodule:: cleosim.utilities
+.. automodule:: cleo.utilities
    :members:
    :undoc-members:
    :show-inheritance:

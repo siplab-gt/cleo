@@ -3,7 +3,7 @@
 import pytest
 from brian2 import NeuronGroup
 
-from cleosim.stimulators import StateVariableSetter
+from cleo.stimulators import StateVariableSetter
 
 
 @pytest.fixture

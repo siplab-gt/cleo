@@ -9,9 +9,9 @@ from brian2 import (
     Network,
     prefs,
 )
-from cleosim import CLSimulator
-from cleosim.opto import *
-from cleosim.coordinates import assign_coords_rand_rect_prism
+from cleo import CLSimulator
+from cleo.opto import *
+from cleo.coords import assign_coords_rand_rect_prism
 
 
 neuron_params = {

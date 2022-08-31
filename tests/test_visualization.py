@@ -1,16 +1,16 @@
 from brian2 import NeuronGroup, Network, ms, mm
 import pytest
 
-from cleosim import CLSimulator
-from cleosim.visualization import VideoVisualizer
-from cleosim.opto import (
+from cleo import CLSimulator
+from cleo.viz import VideoVisualizer
+from cleo.opto import (
     OptogeneticIntervention,
     FourStateModel,
     ChR2_four_state,
     default_blue,
 )
-from cleosim.coordinates import assign_coords
-from cleosim.electrodes import Probe
+from cleo.coords import assign_coords
+from cleo.electrodes import Probe
 
 
 @pytest.mark.slow

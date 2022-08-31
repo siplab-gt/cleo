@@ -1,12 +1,12 @@
 import pytest
 from brian2 import NeuronGroup, Network, ms
 
-from cleosim.recorders import (
+from cleo.recorders import (
     RateRecorder,
     VoltageRecorder,
     GroundTruthSpikeRecorder,
 )
-from cleosim import CLSimulator
+from cleo import CLSimulator
 
 
 @pytest.fixture

@@ -19,7 +19,7 @@ Structure and design
 ^^^^^^^^^^^^^^^^^^^^
 Cleo wraps a spiking network simulator and allows for the injection of stimulators and/or recorders. The models used to emulate these devices are often non-trivial to implement or use in a flexible manner, so Cleo aims to make device injection and configuration as painless as possible, requiring minimal modification to the original network.
 
-Cleo also orchestrates communication between the simulator and a user-configured :class:`~cleosim.IOProcessor` object, modeling how experiment hardware takes samples, processes signals, and controls stimulation devices in real time.
+Cleo also orchestrates communication between the simulator and a user-configured :class:`~cleo.IOProcessor` object, modeling how experiment hardware takes samples, processes signals, and controls stimulation devices in real time.
 
 For an explanation of why we choose to prioritize spiking network models and how we chose Brian as the underlying simulator, see :ref:`overview:design rationale`.
 
@@ -32,7 +32,7 @@ For an explanation of why we choose to prioritize spiking network models and how
 
 Installation
 ------------
-Make sure you have Python >=3.7, then use pip: ``pip install cleosim``
+Make sure you have Python >=3.7, then use pip: ``pip install cleo``
 
 Or, if you're a developer, `install poetry <https://python-poetry.org/docs/>`_ and run ``poetry install`` from the repository root.
 
@@ -44,7 +44,7 @@ Brian network model
 ^^^^^^^^^^^^^^^^^^^
 The starting point for using Cleo is a Brian spiking neural network model of the system of interest. For those new to Brian, the `docs <https://brian2.rtfd.io>`_ are a great resource. If you have a model built with another simulator or modeling language, you may be able to `import it to Brian via NeuroML <https://brian2tools.readthedocs.io/en/stable/user/nmlimport.html>`_.
 
-Perhaps the biggest change you may have to make to an existing model to make it compatible with Cleo's optogenetics and electrode recording is to give the neurons of interest coordinates in space. See the :doc:`tutorials` or the :mod:`cleosim.coordinates` module for more info.
+Perhaps the biggest change you may have to make to an existing model to make it compatible with Cleo's optogenetics and electrode recording is to give the neurons of interest coordinates in space. See the :doc:`tutorials` or the :mod:`cleo.coords` module for more info.
 
 You'll need your model in a Brian :class:`~brian2.core.network.Network` object before you move on. E.g.,::
 
@@ -52,17 +52,17 @@ You'll need your model in a Brian :class:`~brian2.core.network.Network` object b
 
 CLSimulator
 ^^^^^^^^^^^
-Once you have a network model, you can construct a :class:`~cleosim.CLSimulator` object::
+Once you have a network model, you can construct a :class:`~cleo.CLSimulator` object::
 
-    sim = cleosim.CLSimulator(net)
+    sim = cleo.CLSimulator(net)
 
 The simulator object wraps the Brian network and coordinates device injection, processing input and output, and running the simulation.
 
 Recording
 ^^^^^^^^^
-Recording devices take measurements of the Brian network. Some extremely simple implementations (which do little more than wrap Brian monitors) are available in the :mod:`cleosim.recorders` module. 
+Recording devices take measurements of the Brian network. Some extremely simple implementations (which do little more than wrap Brian monitors) are available in the :mod:`cleo.recorders` module. 
 
-To use a :class:`~cleosim.Recorder`, you must inject it into the simulator via :meth:`~cleosim.CLSimulator.inject_recorder`::
+To use a :class:`~cleo.Recorder`, you must inject it into the simulator via :meth:`~cleo.CLSimulator.inject_recorder`::
 
     rec = MyRecorder('recorder_name', ...)  # note that all devices need a unique name
     sim.inject_recorder(rec, neuron_group1, neuron_group2, ...)  # can pass in additional arguments
@@ -73,7 +73,7 @@ Electrodes
 """"""""""
 Electrode recording is the main recording modality currently implemented in Cleo. See the :doc:`tutorials/electrodes` tutorial for more detail, but in brief, usages consists of:
 
-#. Constructing a :class:`~cleosim.electrodes.Probe` object with coordinates at the desired contact locations
+#. Constructing a :class:`~cleo.electrodes.Probe` object with coordinates at the desired contact locations
 
    * Convenience functions for generating shank probe coordinates exist. See :ref:`tutorials/electrodes:Specifying electrode coordinates`.
 
@@ -98,11 +98,11 @@ As with recorders, you can inject stimulators per neuron group to produce a targ
 
 Optogenetics
 """"""""""""
-Optogenetics is the main stimulator device currently implemented by Cleo. This take the form of an :class:`~cleosim.opto.OptogeneticIntervention`, which, on injection, adds a light source at the specified location and transfects the neurons (via Brian "synapses" that deliver current according to an opsin model, leaving the neuron model equations untouched).
+Optogenetics is the main stimulator device currently implemented by Cleo. This take the form of an :class:`~cleo.opto.OptogeneticIntervention`, which, on injection, adds a light source at the specified location and transfects the neurons (via Brian "synapses" that deliver current according to an opsin model, leaving the neuron model equations untouched).
 
 Out of the box you can access a four-state Markov model of channelrhodopsin-2 (ChR2) and parameters for a 473-nm blue optic fiber light source.::
 
-    from cleosim.opto import *
+    from cleo.opto import *
     opto = OptogeneticIntervention(
         name="...",
         opsin_model=FourStateModel(params=ChR2_four_state),
@@ -110,17 +110,17 @@ Out of the box you can access a four-state Markov model of channelrhodopsin-2 (C
         location=(0, 0, 0.5) * mm,
     )
 
-Note, however, that Markov opsin dynamics models require target neurons to have membrane potentials in realistic ranges and an `Iopto` term defined in amperes. If you need to interface with a model without these features, you may want to use the simplified :class:`~cleosim.opto.ProportionalCurrentModel`. You can find more details, including a comparison between the two model types, in the :ref:`optogenetics tutorial <tutorials/optogenetics:Appendix: alternative opsin and neuron models>`.
+Note, however, that Markov opsin dynamics models require target neurons to have membrane potentials in realistic ranges and an `Iopto` term defined in amperes. If you need to interface with a model without these features, you may want to use the simplified :class:`~cleo.opto.ProportionalCurrentModel`. You can find more details, including a comparison between the two model types, in the :ref:`optogenetics tutorial <tutorials/optogenetics:Appendix: alternative opsin and neuron models>`.
     
 These model and parameter settings were designed to be flexible enough that an interested user should be able to imitate and replace them with other opsins, light sources, etc. See the :doc:`tutorials/optogenetics` tutorial for more detail.
 
 IO Processor
 ^^^^^^^^^^^^
-Just as in a real experiment where the experiment hardware must be connected to signal processing equipment and/or computers for recording and control, the :class:`~cleosim.CLSimulator` must be connected to an :class:`~cleosim.IOProcessor`::
+Just as in a real experiment where the experiment hardware must be connected to signal processing equipment and/or computers for recording and control, the :class:`~cleo.CLSimulator` must be connected to an :class:`~cleo.IOProcessor`::
 
     sim.set_io_processor(...)
 
-If you are only recording, you may want to use the :class:`~cleosim.processing.RecordOnlyProcessor`. Otherwise you will want to implement the :class:`~cleosim.processing.LatencyIOProcessor`, which not only takes samples at the specified rate, but processes the data and delivers input to the network after a user-defined delay, emulating the latency inherent in real experiments. You define your processor by creating a subclass and defining the :meth:`~cleosim.processing.LatencyIOProcessor.process` function::
+If you are only recording, you may want to use the :class:`~cleo.processing.RecordOnlyProcessor`. Otherwise you will want to implement the :class:`~cleo.processing.LatencyIOProcessor`, which not only takes samples at the specified rate, but processes the data and delivers input to the network after a user-defined delay, emulating the latency inherent in real experiments. You define your processor by creating a subclass and defining the :meth:`~cleo.processing.LatencyIOProcessor.process` function::
 
     class MyProcessor(LatencyIOProcessor):
 
@@ -140,15 +140,15 @@ See :doc:`tutorials/on_off_ctrl` for a minimal working example or :doc:`tutorial
 
 Running experiments
 ^^^^^^^^^^^^^^^^^^^
-Use CLSimulator's :meth:`~cleosim.CLSimulator.run` function with the desired duration::
+Use CLSimulator's :meth:`~cleo.CLSimulator.run` function with the desired duration::
 
     sim.run(500*ms, ...)  # kwargs are passed to Brian's run function
 
-Use CLSimulator's :meth:`~cleosim.CLSimulator.reset` function to restore the default state (right after initialization/injection) for the network and all devices. This could be useful for running a simulation multiple times under different conditions.
+Use CLSimulator's :meth:`~cleo.CLSimulator.reset` function to restore the default state (right after initialization/injection) for the network and all devices. This could be useful for running a simulation multiple times under different conditions.
 
 To facilitate access to data after the simulation, many classes offer a ``save_history`` option on construction. If true, that object will store relevant variables as attributes. For example,::
 
-    sorted_spikes = cleosim.electrodes.SortedSpiking(...)
+    sorted_spikes = cleo.electrodes.SortedSpiking(...)
     ...
     sim.run(...)
 

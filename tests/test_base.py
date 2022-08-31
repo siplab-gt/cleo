@@ -10,7 +10,7 @@ from brian2 import (
     BrianObjectException,
 )
 
-from cleosim import CLSimulator, IOProcessor, Recorder, Stimulator
+from cleo import CLSimulator, IOProcessor, Recorder, Stimulator
 
 
 class MyStim(Stimulator):
