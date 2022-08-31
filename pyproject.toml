@@ -15,6 +15,9 @@ classifiers = [
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
 ]
+packages = [
+    { include = "cleo" },
+]
 
 [tool.poetry.dependencies]
 python = ">=3.7,<3.10"
