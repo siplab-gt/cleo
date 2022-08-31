@@ -5,9 +5,9 @@ from brian2 import NeuronGroup, Network, mV, pamp, namp
 from brian2.core.base import BrianObjectException
 
 
-from cleosim import CLSimulator
-from cleosim.opto import *
-from cleosim.coordinates import assign_coords_grid_rect_prism
+from cleo import CLSimulator
+from cleo.opto import *
+from cleo.coords import assign_coords_grid_rect_prism
 
 model = """
     dv/dt = (-(v - -70*mV) + 100*Mohm*Iopto) / (10*ms) : volt

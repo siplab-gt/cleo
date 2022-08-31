@@ -35,10 +35,10 @@ jobs:
       - name: Install poetry
         run: pipx install poetry
       - name: Set up Python
-        uses: actions/setup-python@v3
+        uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python }}
-          cache: 'poetry'
+          cache: "poetry"
       - run: poetry install --no-interaction
       - name: test
         run: poetry run pytest --ignore=docs/tutorials/lqr_ctrl_ldsctrlest.ipynb --ignore=docs/tutorials/video_visualization.ipynb

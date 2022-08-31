@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from cleosim.processing import ConstantDelay, GaussianDelay
+from cleo.ioproc import ConstantDelay, GaussianDelay
 
 
 def test_ConstantDelay():

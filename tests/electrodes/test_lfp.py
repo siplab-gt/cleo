@@ -5,10 +5,10 @@ import numpy as np
 from brian2.input.poissongroup import PoissonGroup
 from tklfp import TKLFP
 
-from cleosim import CLSimulator
-from cleosim.processing import RecordOnlyProcessor
-from cleosim.electrodes import linear_shank_coords, concat_coords, TKLFPSignal, Probe
-from cleosim.coordinates import assign_coords_rand_rect_prism, assign_coords
+from cleo import CLSimulator
+from cleo.ioproc import RecordOnlyProcessor
+from cleo.ephys import linear_shank_coords, concat_coords, TKLFPSignal, Probe
+from cleo.coords import assign_coords_rand_rect_prism, assign_coords
 
 
 def _groups_types_ei(n_e, n_i):
@@ -38,7 +38,7 @@ def _groups_types_ei(n_e, n_i):
     "groups_and_types,signal_positive",
     [
         # sig_pos is for .8, .4, 0, -.4 mm with respect to the neuron
-        # or 0, .4, .8, 1.2 mm in cleosim depth coordinates
+        # or 0, .4, .8, 1.2 mm in cleo depth coordinates
         (_groups_types_ei(0, 100), [1, 0, 1, 0]),
         (_groups_types_ei(100, 0), [0, 1, 1, 0]),
         # lower excitation should let I dominate
@@ -145,7 +145,7 @@ def test_TKLFP_orientation(seed, is_exc):
     sgg._N = n_nrns  # hack for assign_coords to work
     assign_coords(sgg, c_mm[:, 0], c_mm[:, 1], c_mm[:, 2])
 
-    # cleosim setup
+    # cleo setup
     sim = CLSimulator(Network(sgg))
     tklfp_signal = TKLFPSignal("tklfp", save_history=True)
     probe = Probe("probe", elec_coords, [tklfp_signal])

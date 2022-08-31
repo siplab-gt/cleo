@@ -2,9 +2,9 @@
 import numpy as np
 
 from brian2 import SpikeGeneratorGroup, ms, mm, Network
-from cleosim import CLSimulator
-from cleosim.electrodes import *
-from cleosim.processing import RecordOnlyProcessor
+from cleo import CLSimulator
+from cleo.ephys import *
+from cleo.ioproc import RecordOnlyProcessor
 
 
 def _spike_generator_group(z_coords_mm, indices=None, times_ms=None, **kwparams):

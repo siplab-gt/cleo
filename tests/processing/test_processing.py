@@ -1,10 +1,10 @@
-"""Tests for cleosim/processing/__init__.py"""
+"""Tests for cleo/processing/__init__.py"""
 from typing import Any, Tuple
 
 from brian2 import Network, PoissonGroup, ms, Hz
 
-from cleosim import CLSimulator
-from cleosim.processing import LatencyIOProcessor, ProcessingBlock, ConstantDelay
+from cleo import CLSimulator
+from cleo.ioproc import LatencyIOProcessor, ProcessingBlock, ConstantDelay
 
 
 class MyProcessingBlock(ProcessingBlock):

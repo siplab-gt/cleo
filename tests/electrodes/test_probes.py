@@ -5,9 +5,9 @@ from typing import Tuple, Any
 import pytest
 from brian2 import NeuronGroup, mm, Network, StateMonitor, umeter, np
 
-import cleosim
-from cleosim import CLSimulator
-from cleosim.electrodes import (
+import cleo
+from cleo import CLSimulator
+from cleo.ephys import (
     Probe,
     linear_shank_coords,
     Signal,
