@@ -7,7 +7,7 @@ from brian2 import NeuronGroup, mm, Network, StateMonitor, umeter, np
 
 import cleo
 from cleo import CLSimulator
-from cleo.electrodes import (
+from cleo.ephys import (
     Probe,
     linear_shank_coords,
     Signal,

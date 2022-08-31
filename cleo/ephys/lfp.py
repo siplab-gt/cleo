@@ -8,7 +8,7 @@ import numpy as np
 from nptyping import NDArray
 from tklfp import TKLFP
 
-from cleo.electrodes.probes import Signal, Probe
+from cleo.ephys.probes import Signal, Probe
 
 
 class TKLFPSignal(Signal):

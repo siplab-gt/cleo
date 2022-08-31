@@ -10,7 +10,7 @@ import numpy as np
 # import numpy.typing as npt
 from nptyping import NDArray
 
-from cleo.electrodes.probes import Signal
+from cleo.ephys.probes import Signal
 
 
 class Spiking(Signal):

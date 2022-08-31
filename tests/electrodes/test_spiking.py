@@ -3,7 +3,7 @@ import numpy as np
 
 from brian2 import SpikeGeneratorGroup, ms, mm, Network
 from cleo import CLSimulator
-from cleo.electrodes import *
+from cleo.ephys import *
 from cleo.processing import RecordOnlyProcessor
 
 

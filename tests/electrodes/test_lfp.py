@@ -7,7 +7,7 @@ from tklfp import TKLFP
 
 from cleo import CLSimulator
 from cleo.processing import RecordOnlyProcessor
-from cleo.electrodes import linear_shank_coords, concat_coords, TKLFPSignal, Probe
+from cleo.ephys import linear_shank_coords, concat_coords, TKLFPSignal, Probe
 from cleo.coords import assign_coords_rand_rect_prism, assign_coords
 
 

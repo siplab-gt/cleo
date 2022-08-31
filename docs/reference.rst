@@ -18,10 +18,10 @@ cleo.coords module
    :undoc-members:
    :show-inheritance:
 
-cleo.electrodes module
+cleo.ephys module
 --------------------------
 
-.. automodule:: cleo.electrodes
+.. automodule:: cleo.ephys
    :members:
    :imported-members:
    :undoc-members:

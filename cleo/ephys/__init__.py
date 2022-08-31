@@ -1,7 +1,7 @@
 """Contains probes, coordinate convenience functions, signals, spiking, and LFP"""
-from cleo.electrodes.lfp import TKLFPSignal
-from cleo.electrodes.spiking import MultiUnitSpiking, SortedSpiking, Spiking
-from cleo.electrodes.probes import (
+from cleo.ephys.lfp import TKLFPSignal
+from cleo.ephys.spiking import MultiUnitSpiking, SortedSpiking, Spiking
+from cleo.ephys.probes import (
     Probe,
     Signal,
     concat_coords,

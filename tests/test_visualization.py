@@ -10,7 +10,7 @@ from cleo.opto import (
     default_blue,
 )
 from cleo.coords import assign_coords
-from cleo.electrodes import Probe
+from cleo.ephys import Probe
 
 
 @pytest.mark.slow

@@ -1,5 +1,5 @@
 # auto-import submodules
-import cleo.electrodes
+import cleo.ephys
 import cleo.opto
 import cleo.coords
 import cleo.stimulators

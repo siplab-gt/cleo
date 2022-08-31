@@ -73,7 +73,7 @@ Electrodes
 """"""""""
 Electrode recording is the main recording modality currently implemented in Cleo. See the :doc:`tutorials/electrodes` tutorial for more detail, but in brief, usages consists of:
 
-#. Constructing a :class:`~cleo.electrodes.Probe` object with coordinates at the desired contact locations
+#. Constructing a :class:`~cleo.ephys.Probe` object with coordinates at the desired contact locations
 
    * Convenience functions for generating shank probe coordinates exist. See :ref:`tutorials/electrodes:Specifying electrode coordinates`.
 
@@ -148,7 +148,7 @@ Use CLSimulator's :meth:`~cleo.CLSimulator.reset` function to restore the defaul
 
 To facilitate access to data after the simulation, many classes offer a ``save_history`` option on construction. If true, that object will store relevant variables as attributes. For example,::
 
-    sorted_spikes = cleo.electrodes.SortedSpiking(...)
+    sorted_spikes = cleo.ephys.SortedSpiking(...)
     ...
     sim.run(...)
 
