@@ -32,7 +32,12 @@ For an explanation of why we choose to prioritize spiking network models and how
 
 Installation
 ------------
-Make sure you have Python >=3.7, then use pip: ``pip install cleo``
+Make sure you have Python >=3.7, then use pip: ``pip install cleosim``.
+
+.. note:: 
+    The name on PyPI is ``cleosim`` since ``cleo`` `was already taken <https://cleo.readthedocs.io/en/latest/>`_, but in code it is still used as ``import cleo``. 
+    The other Cleo appears to actually be a fairly well developed package, so I'm sorry if you need to use it along with this Cleo in the same environment. 
+    In that case, `there are workarounds <https://stackoverflow.com/a/55817170/6461032>`_.
 
 Or, if you're a developer, `install poetry <https://python-poetry.org/docs/>`_ and run ``poetry install`` from the repository root.
 
