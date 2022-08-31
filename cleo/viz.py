@@ -87,7 +87,7 @@ class VideoVisualizer(InterfaceDevice):
             dictionary of arguments as taken by :func:`plot`. can include
             `xlim`, `ylim`, `zlim`, `colors`, `axis_scale_unit`, `invert_z`,
             and/or `scatterargs`. neuron groups and devices are
-            automatically added and **figargs are specified separately.
+            automatically added and `**figargs` are specified separately.
         slowdown_factor : float, optional
             how much slower the animation will be rendered, as a multiple of
             real-time, by default 10

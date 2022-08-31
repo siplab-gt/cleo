@@ -4,7 +4,7 @@ from typing import Any, Tuple
 from brian2 import Network, PoissonGroup, ms, Hz
 
 from cleo import CLSimulator
-from cleo.processing import LatencyIOProcessor, ProcessingBlock, ConstantDelay
+from cleo.ioproc import LatencyIOProcessor, ProcessingBlock, ConstantDelay
 
 
 class MyProcessingBlock(ProcessingBlock):

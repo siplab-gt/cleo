@@ -6,7 +6,7 @@ from brian2.input.poissongroup import PoissonGroup
 from tklfp import TKLFP
 
 from cleo import CLSimulator
-from cleo.processing import RecordOnlyProcessor
+from cleo.ioproc import RecordOnlyProcessor
 from cleo.ephys import linear_shank_coords, concat_coords, TKLFPSignal, Probe
 from cleo.coords import assign_coords_rand_rect_prism, assign_coords
 

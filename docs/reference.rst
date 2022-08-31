@@ -35,10 +35,10 @@ cleo.opto module
    :undoc-members:
    :show-inheritance:
 
-cleo.processing module
+cleo.ioproc module
 --------------------------
 
-.. automodule:: cleo.processing
+.. automodule:: cleo.ioproc
    :members:
    :imported-members:
    :undoc-members:

@@ -120,7 +120,7 @@ Just as in a real experiment where the experiment hardware must be connected to 
 
     sim.set_io_processor(...)
 
-If you are only recording, you may want to use the :class:`~cleo.processing.RecordOnlyProcessor`. Otherwise you will want to implement the :class:`~cleo.processing.LatencyIOProcessor`, which not only takes samples at the specified rate, but processes the data and delivers input to the network after a user-defined delay, emulating the latency inherent in real experiments. You define your processor by creating a subclass and defining the :meth:`~cleo.processing.LatencyIOProcessor.process` function::
+If you are only recording, you may want to use the :class:`~cleo.ioproc.RecordOnlyProcessor`. Otherwise you will want to implement the :class:`~cleo.ioproc.LatencyIOProcessor`, which not only takes samples at the specified rate, but processes the data and delivers input to the network after a user-defined delay, emulating the latency inherent in real experiments. You define your processor by creating a subclass and defining the :meth:`~cleo.ioproc.LatencyIOProcessor.process` function::
 
     class MyProcessor(LatencyIOProcessor):
 
