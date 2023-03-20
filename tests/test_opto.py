@@ -29,7 +29,7 @@ neurons2 = neurons
 @pytest.fixture
 def opto() -> OptogeneticIntervention:
     return OptogeneticIntervention(
-        "opto", FourStateModel(ChR2_four_state), default_blue
+        "opto", ChR2_four_state(), default_blue
     )
 
 

@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from typing import Tuple, Any
 import warnings
 
+from attrs import define, field, asdict
 from brian2 import (
     Synapses,
     NeuronGroup,
@@ -40,31 +41,7 @@ from cleo.utilities import uniform_cylinder_rθz, wavelength_to_rgb, xyz_from_r�
 from cleo.stimulators import Stimulator
 
 
-ChR2_four_state = {
-    "g0": 114000 * psiemens,
-    "gamma": 0.00742,
-    "phim": 2.33e17 / mm2 / second,  # *photon, not in Brian2
-    "k1": 4.15 / ms,
-    "k2": 0.868 / ms,
-    "p": 0.833,
-    "Gf0": 0.0373 / ms,
-    "kf": 0.0581 / ms,
-    "Gb0": 0.0161 / ms,
-    "kb": 0.063 / ms,
-    "q": 1.94,
-    "Gd1": 0.105 / ms,
-    "Gd2": 0.0138 / ms,
-    "Gr0": 0.00033 / ms,
-    "E": 0 * mV,
-    "v0": 43 * mV,
-    "v1": 17.1 * mV,
-}
-"""Parameters for the 4-state ChR2 model.
-
-Taken from try.projectpyrho.org's default 4-state params.
-"""
-
-
+@define
 class OpsinModel(ABC):
     """Base class for opsin model"""
 
@@ -75,9 +52,6 @@ class OpsinModel(ABC):
     levels. Will likely also contain special NeuronGroup-dependent
     symbols such as V_VAR_NAME to be replaced on injection in 
     :meth:`~OpsinModel.modify_model_and_params_for_ng`."""
-
-    params: dict
-    """Parameter values for model, passed in as a namespace dict"""
 
     required_vars: list[Tuple[str, Unit]]
     """Default names of state variables required in the neuron group,
@@ -143,6 +117,18 @@ class OpsinModel(ABC):
         # neuron group variable name
         return self._fix_name_conflicts(model, neuron_group)
 
+    @property
+    def params(self) -> dict:
+        """Returns a dictionary of parameters for the model"""
+        params = asdict(self)
+        params.pop("model")
+        params.pop("required_vars")
+        # remove private attributes
+        for key in list(params.keys()):
+            if key.startswith("_"):
+                params.pop(key)
+        return params
+
     def _fix_name_conflicts(
         self, modified_model: str, neuron_group: NeuronGroup
     ) -> Tuple[str, dict]:
@@ -179,22 +165,14 @@ class OpsinModel(ABC):
         pass
 
 
+@define
 class MarkovModel(OpsinModel):
     """Base class for Markov state models à la Evans et al., 2016"""
 
-    required_vars: list[Tuple[str, Unit]] = [("Iopto", amp), ("v", volt)]
-
-    def __init__(self, params: dict) -> None:
-        """
-        Parameters
-        ----------
-        params : dict
-            dict defining params in the :attr:`model`
-        """
-        super().__init__()
-        self.params = params
+    required_vars: list[Tuple[str, Unit]] = field(factory=lambda: [("Iopto", amp), ("v", volt)])
 
 
+@define
 class FourStateModel(MarkovModel):
     """4-state model from PyRhO (Evans et al. 2016).
 
@@ -202,14 +180,32 @@ class FourStateModel(MarkovModel):
     modifying it post-injection allows for heterogeneous opsin expression.
 
     IOPTO_VAR_NAME and V_VAR_NAME are substituted on injection.
+
+    Defaults are for ChR2.
     """
 
+    g0: Quantity = 114000 * psiemens
+    gamma: Quantity = 0.00742
+    phim: Quantity = 2.33e17 / mm2 / second  # *photon, not in Brian2
+    k1: Quantity = 4.15 / ms
+    k2: Quantity = 0.868 / ms
+    p: Quantity = 0.833
+    Gf0: Quantity = 0.0373 / ms
+    kf: Quantity = 0.0581 / ms
+    Gb0: Quantity = 0.0161 / ms
+    kb: Quantity = 0.063 / ms
+    q: Quantity = 1.94
+    Gd1: Quantity = 0.105 / ms
+    Gd2: Quantity = 0.0138 / ms
+    Gr0: Quantity = 0.00033 / ms
+    E: Quantity = 0 * mV
+    v0: Quantity = 43 * mV
+    v1: Quantity = 17.1 * mV
     model: str = """
         dC1/dt = Gd1*O1 + Gr0*C2 - Ga1*C1 : 1 (clock-driven)
         dO1/dt = Ga1*C1 + Gb*O2 - (Gd1+Gf)*O1 : 1 (clock-driven)
         dO2/dt = Ga2*C2 + Gf*O1 - (Gd2+Gb)*O2 : 1 (clock-driven)
         C2 = 1 - C1 - O1 - O2 : 1
-        # dC2/dt = Gd2*O2 - (Gr0+Ga2)*C2 : 1 (clock-driven)
 
         Theta = int(phi > 0*phi) : 1
         Hp = Theta * phi**p/(phi**p + phim**p) : 1
@@ -226,34 +222,64 @@ class FourStateModel(MarkovModel):
         rho_rel : 1
     """
 
+
     def init_opto_syn_vars(self, opto_syn: Synapses) -> None:
         for varname, value in {"Irr0": 0, "C1": 1, "O1": 0, "O2": 0}.items():
             setattr(opto_syn, varname, value)
 
+def ChR2_four_state():
+    """Returns a 4-state ChR2 model.
 
+    Params taken from try.projectpyrho.org's default 4-state configuration.
+    """
+    return FourStateModel(
+        g0=114000 * psiemens,
+        gamma=0.00742,
+        phim=2.33e17 / mm2 / second,  # *photon, not in Brian2
+        k1=4.15 / ms,
+        k2=0.868 / ms,
+        p=0.833,
+        Gf0=0.0373 / ms,
+        kf=0.0581 / ms,
+        Gb0=0.0161 / ms,
+        kb=0.063 / ms,
+        q=1.94,
+        Gd1=0.105 / ms,
+        Gd2=0.0138 / ms,
+        Gr0=0.00033 / ms,
+        E=0 * mV,
+        v0=43 * mV,
+        v1=17.1 * mV,
+    )
+
+@define
 class ProportionalCurrentModel(OpsinModel):
     """A simple model delivering current proportional to light intensity"""
 
+    Iopto_per_mW_per_mm2: Quantity = field()
+    """ How much current (in amps or unitless, depending on neuron model)
+    to deliver per mW/mm2.
+    """
     # would be IOPTO_UNIT but that throws off Equation parsing
     model: str = """
-        IOPTO_VAR_NAME_post = gain * Irr * rho_rel : IOPTO_UNIT (summed)
+        IOPTO_VAR_NAME_post = Iopto_per_mW_per_mm2 / (mwatt / mm2) 
+            * Irr * rho_rel : IOPTO_UNIT (summed)
         rho_rel : 1
     """
 
-    def __init__(self, Iopto_per_mW_per_mm2: Quantity) -> None:
-        """
-        Parameters
-        ----------
-        Iopto_per_mW_per_mm2 : Quantity
-            How much current (in amps or unitless, depending on neuron model) to
-            deliver per mW/mm2
-        """
-        self.params = {"gain": Iopto_per_mW_per_mm2 / (mwatt / mm2)}
-        if isinstance(Iopto_per_mW_per_mm2, Quantity):
-            self._Iopto_unit = get_unit(Iopto_per_mW_per_mm2.dim)
+    _Iopto_unit: Unit = field()
+    @_Iopto_unit.default
+    def _Iopto_unit_default(self) -> Unit:
+        if isinstance(self.Iopto_per_mW_per_mm2, Quantity):
+            _Iopto_unit = get_unit(self.Iopto_per_mW_per_mm2.dim)
         else:
-            self._Iopto_unit = radian
-        self.required_vars = [("Iopto", self._Iopto_unit)]
+            _Iopto_unit = radian
+        return _Iopto_unit
+    
+    required_vars: list[Tuple[str, Unit]] = field()
+    @required_vars.default
+    def _required_vars_default(self) -> list[Tuple[str, Unit]]:
+        return [("Iopto", self._Iopto_unit)]
 
     def modify_model_and_params_for_ng(
         self, neuron_group: NeuronGroup, injct_params: dict
