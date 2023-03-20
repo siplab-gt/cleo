@@ -15,12 +15,10 @@ classifiers = [
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
 ]
-packages = [
-    { include = "cleo" },
-]
+packages = [{ include = "cleo" }]
 
 [tool.poetry.dependencies]
-python = ">=3.7,<3.10"
+python = ">=3.8,<=3.11"
 brian2 = "^2.4, !=2.5.0.2"
 matplotlib = "^3.4"
 numpy = "^1.16"
@@ -57,10 +55,5 @@ addopts = [
     # "--ignore=examples/adaptive_ctrl_ldsctrlest.ipynb"
     # "--ignore=docs/tutorials/video_visualization.ipynb"
 ]
-markers = [
-    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
-]
-testpaths = [
-    "tests",
-    "docs/tutorials",
-]
+markers = ["slow: marks tests as slow (deselect with '-m \"not slow\"')"]
+testpaths = ["tests", "docs/tutorials"]
