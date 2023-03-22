@@ -27,10 +27,8 @@ neurons2 = neurons
 
 
 @pytest.fixture
-def opto() -> OptogeneticIntervention:
-    return OptogeneticIntervention(
-        "opto", ChR2_four_state(), default_blue
-    )
+def opto() -> Light:
+    return Light("opto", opsin_model=ChR2_four_state(), light_model=fiber473nm())
 
 
 opto2 = opto
@@ -181,7 +179,9 @@ def _prep_simple_opto(ng_model, gain):
     ng = NeuronGroup(1, ng_model)
     assign_coords_grid_rect_prism(ng, (0, 0), (0, 0), (0, 0), shape=(1, 1, 1))
     # assuming 0 starting voltage
-    opto = OptogeneticIntervention("opto", ProportionalCurrentModel(gain), default_blue)
+    opto = Light(
+        "opto", opsin_model=ProportionalCurrentModel(gain), light_model=fiber473nm()
+    )
     sim = CLSimulator(Network(ng))
     sim.inject_stimulator(opto, ng)
     return ng, opto, sim

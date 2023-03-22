@@ -13,6 +13,7 @@ from brian2 import (
     get_unit,
     Equations,
 )
+from nptyping import NDArray
 from brian2.units import (
     mm,
     mm2,
@@ -37,7 +38,14 @@ from matplotlib import colors
 from matplotlib.artist import Artist
 from matplotlib.collections import PathCollection
 
-from cleo.utilities import uniform_cylinder_rθz, wavelength_to_rgb, xyz_from_rθz
+from cleo.base import InterfaceDevice
+from cleo.utilities import (
+    uniform_cylinder_rθz,
+    wavelength_to_rgb,
+    xyz_from_rθz,
+    coords_from_ng,
+    normalize_coords,
+)
 from cleo.stimulators import Stimulator
 
 
@@ -45,7 +53,7 @@ from cleo.stimulators import Stimulator
 class OpsinModel(ABC):
     """Base class for opsin model"""
 
-    model: str
+    model: str = field(init=False)
     """Basic Brian model equations string.
     
     Should contain a `rho_rel` term reflecting relative expression 
@@ -53,7 +61,11 @@ class OpsinModel(ABC):
     symbols such as V_VAR_NAME to be replaced on injection in 
     :meth:`~OpsinModel.modify_model_and_params_for_ng`."""
 
-    required_vars: list[Tuple[str, Unit]]
+    per_ng_unit_replacements: list[Tuple[str, str]] = field(factory=list, init=False)
+    """List of (UNIT_NAME, neuron_group_specific_unit_name) tuples to be substituted
+    in the model string on injection and before checking required variables."""
+
+    required_vars: list[Tuple[str, Unit]] = field(factory=list, init=False)
     """Default names of state variables required in the neuron group,
     along with units, e.g., [('Iopto', amp)].
     
@@ -63,7 +75,7 @@ class OpsinModel(ABC):
     ``[DEFAULT_NAME]_VAR_NAME`` before replacement."""
 
     def modify_model_and_params_for_ng(
-        self, neuron_group: NeuronGroup, injct_params: dict, model="class-defined"
+        self, neuron_group: NeuronGroup, injct_params: dict
     ) -> Tuple[Equations, dict]:
         """Adapt model for given neuron group on injection
 
@@ -94,9 +106,13 @@ class OpsinModel(ABC):
             and :attr:`~params`, respectively, with modified names for use
             in :attr:`~cleo.opto.OptogeneticIntervention.opto_syns`
         """
-        if model == "class-defined":
-            model = self.model
+        model = self.model
 
+        # perform unit substitutions
+        for unit_name, neuron_group_unit_name in self.per_ng_unit_replacements:
+            model = model.replace(unit_name, neuron_group_unit_name)
+
+        # check required variables/units and replace placeholder names
         for default_name, unit in self.required_vars:
             var_name = injct_params.get(f"{default_name}_var_name", default_name)
             if var_name not in neuron_group.variables or not neuron_group.variables[
@@ -131,7 +147,7 @@ class OpsinModel(ABC):
 
     def _fix_name_conflicts(
         self, modified_model: str, neuron_group: NeuronGroup
-    ) -> Tuple[str, dict]:
+    ) -> Tuple[Equations, dict]:
         modified_params = self.params.copy()
         rename = lambda x: f"{x}_syn"
 
@@ -169,7 +185,10 @@ class OpsinModel(ABC):
 class MarkovModel(OpsinModel):
     """Base class for Markov state models à la Evans et al., 2016"""
 
-    required_vars: list[Tuple[str, Unit]] = field(factory=lambda: [("Iopto", amp), ("v", volt)])
+    required_vars: list[Tuple[str, Unit]] = field(
+        factory=lambda: [("Iopto", amp), ("v", volt)],
+        # init=False,  # TODO: can get rid of init=False if in parent?
+    )
 
 
 @define
@@ -201,7 +220,9 @@ class FourStateModel(MarkovModel):
     E: Quantity = 0 * mV
     v0: Quantity = 43 * mV
     v1: Quantity = 17.1 * mV
-    model: str = """
+    model: str = field(
+        init=False,  # TODO: can get rid of init=False if in parent?
+        default="""
         dC1/dt = Gd1*O1 + Gr0*C2 - Ga1*C1 : 1 (clock-driven)
         dO1/dt = Ga1*C1 + Gb*O2 - (Gd1+Gf)*O1 : 1 (clock-driven)
         dO2/dt = Ga2*C2 + Gf*O1 - (Gd2+Gb)*O2 : 1 (clock-driven)
@@ -219,13 +240,13 @@ class FourStateModel(MarkovModel):
         fv = (1 - exp(-(V_VAR_NAME_post-E)/v0)) / -2 : 1
 
         IOPTO_VAR_NAME_post = -g0*fphi*fv*(V_VAR_NAME_post-E)*rho_rel : ampere (summed)
-        rho_rel : 1
-    """
-
+        rho_rel : 1""",
+    )
 
     def init_opto_syn_vars(self, opto_syn: Synapses) -> None:
         for varname, value in {"Irr0": 0, "C1": 1, "O1": 0, "O2": 0}.items():
             setattr(opto_syn, varname, value)
+
 
 def ChR2_four_state():
     """Returns a 4-state ChR2 model.
@@ -252,6 +273,7 @@ def ChR2_four_state():
         v1=17.1 * mV,
     )
 
+
 @define
 class ProportionalCurrentModel(OpsinModel):
     """A simple model delivering current proportional to light intensity"""
@@ -261,51 +283,199 @@ class ProportionalCurrentModel(OpsinModel):
     to deliver per mW/mm2.
     """
     # would be IOPTO_UNIT but that throws off Equation parsing
-    model: str = """
-        IOPTO_VAR_NAME_post = Iopto_per_mW_per_mm2 / (mwatt / mm2) 
-            * Irr * rho_rel : IOPTO_UNIT (summed)
-        rho_rel : 1
-    """
+    model: str = field(
+        init=False,
+        default="""
+            IOPTO_VAR_NAME_post = Iopto_per_mW_per_mm2 / (mwatt / mm2) 
+                * Irr * rho_rel : IOPTO_UNIT (summed)
+            rho_rel : 1
+        """,
+    )
 
-    _Iopto_unit: Unit = field()
-    @_Iopto_unit.default
-    def _Iopto_unit_default(self) -> Unit:
+    required_vars: list[Tuple[str, Unit]] = field(factory=list, init=False)
+
+    def __attrs_post_init__(self):
         if isinstance(self.Iopto_per_mW_per_mm2, Quantity):
-            _Iopto_unit = get_unit(self.Iopto_per_mW_per_mm2.dim)
+            Iopto_unit = get_unit(self.Iopto_per_mW_per_mm2.dim)
         else:
-            _Iopto_unit = radian
-        return _Iopto_unit
-    
-    required_vars: list[Tuple[str, Unit]] = field()
-    @required_vars.default
-    def _required_vars_default(self) -> list[Tuple[str, Unit]]:
-        return [("Iopto", self._Iopto_unit)]
+            Iopto_unit = radian
+        self.per_ng_unit_replacements = [("IOPTO_UNIT", Iopto_unit.name)]
+        self.required_vars = [("Iopto", Iopto_unit)]
 
-    def modify_model_and_params_for_ng(
-        self, neuron_group: NeuronGroup, injct_params: dict
-    ) -> Tuple[Equations, dict]:
-        mod_model = self.model.replace("IOPTO_UNIT", self._Iopto_unit.name)
-        return super().modify_model_and_params_for_ng(
-            neuron_group, injct_params, model=mod_model
+
+@define
+class LightModel(ABC):
+    @abstractmethod
+    def transmittance(
+        self,
+        source_coords: Quantity,
+        source_direction: NDArray[(Any, 3), Any],
+        target_coords: Quantity,
+    ) -> NDArray[(Any,), float]:
+        pass
+
+    @abstractmethod
+    def viz_points(
+        self, coords: Quantity, direction: NDArray[(Any, 3), Any], **kwargs
+    ) -> Quantity:
+        pass
+
+
+@define
+class FiberModel(LightModel):
+    """Optic fiber light model from Foutz et al., 2012.
+
+    Defaults are from paper for 473 nm wavelength."""
+
+    R0: Quantity = 0.1 * mm
+    """optical fiber radius"""
+    NAfib: Quantity = 0.37
+    """optical fiber numerical aperture"""
+    wavelength: Quantity = 473 * nmeter
+    """light wavelength"""
+    K: Quantity = 0.125 / mm
+    """absorbance coefficient (wavelength/tissue dependent)"""
+    S: Quantity = 7.37 / mm
+    """scattering coefficient (wavelength/tissue dependent)"""
+    ntis: Quantity = 1.36
+    """tissue index of refraction (wavelength/tissue dependent)"""
+
+    model = """
+            Irr = Irr0*T : watt/meter**2
+            Irr0 : watt/meter**2 
+            T : 1
+            phi = Irr / Ephoton : 1/second/meter**2
+            """
+
+    def transmittance(
+        self,
+        source_coords: Quantity,
+        source_direction: NDArray[(Any, 3), Any],
+        target_coords: Quantity,
+    ) -> NDArray[(Any, Any), float]:
+        assert np.allclose(np.linalg.norm(source_direction, axis=-1), 1)
+        r, z = self._get_rz_for_xyz(source_coords, source_direction, target_coords)
+        return self._Foutz12_transmittance(r, z)
+
+    def _Foutz12_transmittance(self, r, z, scatter=True, spread=True, gaussian=True):
+        """Foutz et al. 2012 transmittance model: Gaussian cone with Kubelka-Munk propagation"""
+
+        if spread:
+            # divergence half-angle of cone
+            theta_div = np.arcsin(self.NAfib / self.ntis)
+            Rz = self.R0 + z * np.tan(
+                theta_div
+            )  # radius as light spreads ("apparent radius" from original code)
+            C = (self.R0 / Rz) ** 2
+        else:
+            Rz = self.R0  # "apparent radius"
+            C = 1
+
+        if gaussian:
+            G = 1 / np.sqrt(2 * np.pi) * np.exp(-2 * (r / Rz) ** 2)
+        else:
+            G = 1
+
+        if scatter:
+            S = self.S
+            a = 1 + self.K / S
+            b = np.sqrt(a**2 - 1)
+            dist = np.sqrt(r**2 + z**2)
+            M = b / (a * np.sinh(b * S * dist) + b * np.cosh(b * S * dist))
+        else:
+            M = 1
+
+        T = G * C * M
+        T[z < 0] = 0
+        return T
+
+    def viz_points(
+        self, coords: Quantity, direction: NDArray[(Any, 3), Any], **kwargs
+    ) -> Quantity:
+        T_threshold = kwargs.get("T_threshold", 0.001)
+        n_points_per_source = kwargs.get("n_points", 1e4)
+        r_thresh, zc_thresh = self._find_rz_thresholds(T_threshold)
+        r, theta, zc = uniform_cylinder_rθz(n_points_per_source, r_thresh, zc_thresh)
+
+        T = self._Foutz12_transmittance(r, zc)
+
+        end = coords + zc_thresh * direction
+        x, y, z = xyz_from_rθz(r, theta, zc, coords, end)
+
+    def _get_rz_for_xyz(self, source_coords, source_direction, target_coords):
+        """Assumes x, y, z already have units"""
+        m = len(source_coords) if len(source_coords.shape) == 2 else 1
+        n = len(target_coords) if len(target_coords.shape) == 2 else 1
+
+        rel_coords = (
+            # target_coords[np.newaxis, :, :] - source_coords[:, np.newaxis, :]
+            target_coords.reshape((1, n, 3))
+            - source_coords.reshape((m, 1, 3))
+        )  # relative to light source(s)
+        # now m x n x 3 array, where m is number of sources, n is number of targets
+        # must use brian2's dot function for matrix multiply to preserve
+        # units correctly.
+        # zc = usf.dot(rel_coords, source_direction)  # mxn distance along cylinder axis
+        #           m x n x 3    m x 1 x 3
+        zc = np.sum(
+            rel_coords * source_direction.reshape((m, 1, 3)), axis=-1
+        )  # mxn distance along cylinder axis
+        assert zc.shape == (m, n)
+        # just need length (norm) of radius vectors
+        # not using np.linalg.norm because it strips units
+        r = np.sqrt(
+            np.sum(
+                (
+                    rel_coords
+                    #    m x n                 m x 3
+                    # --> m x n x 1             m x 1 x 3
+                    - zc.reshape((m, n, 1)) * source_direction.reshape((m, 1, 3))
+                )
+                ** 2,
+                axis=-1,
+            )
         )
+        assert r.shape == (m, n)
+        return r, zc
+
+    def _find_rz_thresholds(self, thresh):
+        """find r and z thresholds for visualization purposes"""
+        res_mm = 0.01
+        zc = np.arange(20, 0, -res_mm) * mm  # ascending T
+        T = self._Foutz12_transmittance(0 * mm, zc)
+        zc_thresh = zc[np.searchsorted(T, thresh)]
+        # look at half the z threshold for the r threshold
+        r = np.arange(20, 0, -res_mm) * mm
+        T = self._Foutz12_transmittance(r, zc_thresh / 2)
+        r_thresh = r[np.searchsorted(T, thresh)]
+        # multiply by 1.2 just in case
+        return r_thresh * 1.2, zc_thresh
 
 
-default_blue = {
-    "R0": 0.1 * mm,  # optical fiber radius
-    "NAfib": 0.37,  # optical fiber numerical aperture
-    "wavelength": 473 * nmeter,
-    # NOTE: the following depend on wavelength and tissue properties and thus would be different for another wavelength
-    "K": 0.125 / mm,  # absorbance coefficient
-    "S": 7.37 / mm,  # scattering coefficient
-    "ntis": 1.36,  # tissue index of refraction
-}
-"""Light parameters for 473 nm wavelength delivered via an optic fiber.
+def fiber473nm(
+    R0=0.1 * mm,  # optical fiber radius
+    NAfib=0.37,  # optical fiber numerical aperture
+    wavelength=473 * nmeter,
+    K=0.125 / mm,  # absorbance coefficient
+    S=7.37 / mm,  # scattering coefficient
+    ntis=1.36,  # tissue index of refraction
+) -> FiberModel:
+    """Light parameters for 473 nm wavelength delivered via an optic fiber.
 
-From Foutz et al., 2012"""
+    From Foutz et al., 2012. See :class:`FiberModel` for parameter descriptions."""
+    return FiberModel(
+        R0=R0,
+        NAfib=NAfib,
+        wavelength=wavelength,
+        K=K,
+        S=S,
+        ntis=ntis,
+    )
 
 
-class OptogeneticIntervention(Stimulator):
-    """Enables optogenetic stimulation of the network.
+@define
+class Light(Stimulator):
+    """Delivers photostimulation of the network.
 
     Essentially "transfects" neurons and provides a light source.
     Under the hood, it delivers current via a Brian :class:`~brian2.synapses.synapses.Synapses`
@@ -336,114 +506,44 @@ class OptogeneticIntervention(Stimulator):
         Useful since so many points makes later rendering and editing slow.
     """
 
-    opto_syns: dict[str, Synapses]
+    opsin_model: OpsinModel = field(kw_only=True)
+    """OpsinModel object defining how light affects target
+    neurons. See :class:`FourStateModel` and :class:`ProportionalCurrentModel`
+    for examples."""
+
+    light_model: LightModel = field(kw_only=True)
+    """LightModel object defining how light is emitted. See
+    :class:`FiberModel` for an example."""
+
+    coords: Quantity = (0, 0, 0) * mm
+    """(x, y, z) coords with Brian unit specifying where to place
+    the base of the light source, by default (0, 0, 0)*mm.
+    Can also be an nx3 array for multiple sources.
+    """
+
+    direction: NDArray[(Any, 3), Any] = field(
+        default=(0, 0, 1), converter=normalize_coords
+    )
+    """(x, y, z) vector specifying direction in which light
+    source is pointing, by default (0, 0, 1).
+    
+    Will be converted to unit magnitude."""
+
+    opto_syns: dict[str, Synapses] = field(factory=dict, init=False)
     """Stores the synapse objects implementing the opsin model,
     with NeuronGroup name keys and Synapse values."""
 
-    max_Irr0_mW_per_mm2: float
+    max_Irr0_mW_per_mm2: float = None
     """The maximum irradiance the light source can emit.
     
     Usually determined by hardware in a real experiment."""
 
-    max_Irr0_mW_per_mm2_viz: float
+    max_Irr0_mW_per_mm2_viz: float = field(default=None, kw_only=True)
     """Maximum irradiance for visualization purposes. 
     
     i.e., the level at or above which the light appears maximally bright.
     Only relevant in video visualization.
     """
-
-    def __init__(
-        self,
-        name: str,
-        opsin_model: OpsinModel,
-        light_model_params: dict,
-        location: Quantity = (0, 0, 0) * mm,
-        direction: Tuple[float, float, float] = (0, 0, 1),
-        max_Irr0_mW_per_mm2: float = None,
-        save_history: bool = False,
-    ):
-        """
-        Parameters
-        ----------
-        name : str
-            Unique identifier for stimulator
-        opsin_model : OpsinModel
-            OpsinModel object defining how light affects target
-            neurons. See :class:`FourStateModel` and :class:`ProportionalCurrentModel`
-            for examples.
-        light_model_params : dict
-            Parameters for the light propagation model in Foutz et al., 2012.
-            See :attr:`default_blue` for an example.
-        location : Quantity, optional
-            (x, y, z) coords with Brian unit specifying where to place
-            the base of the light source, by default (0, 0, 0)*mm
-        direction : Tuple[float, float, float], optional
-            (x, y, z) vector specifying direction in which light
-            source is pointing, by default (0, 0, 1)
-        max_Irr0_mW_per_mm2 : float, optional
-            Set :attr:`max_Irr0_mW_per_mm2`.
-        save_history : bool, optional
-            Determines whether :attr:`~values` and :attr:`~t_ms` are saved.
-        """
-        super().__init__(name, 0, save_history)
-        self.opsin_model = opsin_model
-        self.light_model_params = light_model_params
-        self.location = location
-        # direction unit vector
-        self.dir_uvec = direction / np.linalg.norm(direction)
-        self.opto_syns = {}
-        self.max_Irr0_mW_per_mm2 = max_Irr0_mW_per_mm2
-        self.max_Irr0_mW_per_mm2_viz = None
-
-    def _Foutz12_transmittance(self, r, z, scatter=True, spread=True, gaussian=True):
-        """Foutz et al. 2012 transmittance model: Gaussian cone with Kubelka-Munk propagation"""
-
-        if spread:
-            # divergence half-angle of cone
-            theta_div = np.arcsin(
-                self.light_model_params["NAfib"] / self.light_model_params["ntis"]
-            )
-            Rz = self.light_model_params["R0"] + z * np.tan(
-                theta_div
-            )  # radius as light spreads ("apparent radius" from original code)
-            C = (self.light_model_params["R0"] / Rz) ** 2
-        else:
-            Rz = self.light_model_params["R0"]  # "apparent radius"
-            C = 1
-
-        if gaussian:
-            G = 1 / np.sqrt(2 * np.pi) * np.exp(-2 * (r / Rz) ** 2)
-        else:
-            G = 1
-
-        if scatter:
-            S = self.light_model_params["S"]
-            a = 1 + self.light_model_params["K"] / S
-            b = np.sqrt(a**2 - 1)
-            dist = np.sqrt(r**2 + z**2)
-            M = b / (a * np.sinh(b * S * dist) + b * np.cosh(b * S * dist))
-        else:
-            M = 1
-
-        T = G * C * M
-        T[z < 0] = 0
-        return T
-
-    def _get_rz_for_xyz(self, x, y, z):
-        """Assumes x, y, z already have units"""
-
-        # have to add unit back on since it's stripped by vstack
-        coords = np.column_stack([x, y, z]) * meter
-        rel_coords = coords - self.location  # relative to fiber location
-        # must use brian2's dot function for matrix multiply to preserve
-        # units correctly.
-        zc = usf.dot(rel_coords, self.dir_uvec)  # distance along cylinder axis
-        # just need length (norm) of radius vectors
-        # not using np.linalg.norm because it strips units
-        r = np.sqrt(
-            np.sum((rel_coords - zc[..., np.newaxis] * self.dir_uvec.T) ** 2, axis=1)
-        )
-        return r, zc
 
     def connect_to_neuron_group(
         self, neuron_group: NeuronGroup, **kwparams: Any
@@ -483,7 +583,7 @@ class OptogeneticIntervention(Stimulator):
         E_photon = (
             6.63e-34 * meter2 * kgram / second
             * 2.998e8 * meter / second
-            / self.light_model_params["wavelength"]
+            / self.light_model.wavelength
         )
         # fmt: on
 
@@ -516,9 +616,10 @@ class OptogeneticIntervention(Stimulator):
         # relative channel density
         opto_syn.rho_rel = kwparams.get("rho_rel", 1)
         # calculate transmittance coefficient for each point
-        r, z = self._get_rz_for_xyz(neuron_group.x, neuron_group.y, neuron_group.z)
-        T = self._Foutz12_transmittance(r, z).flatten()
-        assert len(T) == len(neuron_group)
+        T = self.light_model.transmittance(
+            self.coords, self.direction, coords_from_ng(neuron_group)
+        )
+        assert T.shape == (self.m, len(neuron_group))
         # reduce to subset expressing opsin before assigning
         T = T[opto_syn.i]
 
@@ -526,6 +627,12 @@ class OptogeneticIntervention(Stimulator):
 
         self.opto_syns[neuron_group.name] = opto_syn
         self.brian_objects.add(opto_syn)
+
+    @property
+    def m(self):
+        """Number of light sources"""
+        assert len(self.coords.shape) == 2 or len(self.coords.shape) == 1
+        return len(self.coords) if len(self.coords.shape) == 2 else 1
 
     def add_self_to_plot(self, ax, axis_scale_unit, **kwargs) -> PathCollection:
         # show light with point field, assigning r and z coordinates
@@ -535,13 +642,11 @@ class OptogeneticIntervention(Stimulator):
         T_threshold = kwargs.get("T_threshold", 0.001)
         n_points = kwargs.get("n_points", 1e4)
         intensity = kwargs.get("intensity", 0.5)
-        r_thresh, zc_thresh = self._find_rz_thresholds(T_threshold)
-        r, theta, zc = uniform_cylinder_rθz(n_points, r_thresh, zc_thresh)
 
-        T = self._Foutz12_transmittance(r, zc)
-
-        end = self.location + zc_thresh * self.dir_uvec
-        x, y, z = xyz_from_rθz(r, theta, zc, self.location, end)
+        viz_points = self.light_model.viz_points(self.coords, self.direction, **kwargs)
+        T = self.light_model.transmittance(
+            self.coords, self.direction, viz_points, **kwargs
+        )
 
         idx_to_plot = T >= T_threshold
         x = x[idx_to_plot]
@@ -565,24 +670,11 @@ class OptogeneticIntervention(Stimulator):
             # to make manageable in SVGs
             point_cloud.set_rasterized(kwargs.get("rasterized", True))
         handles = ax.get_legend().legendHandles
-        c = wavelength_to_rgb(self.light_model_params["wavelength"] / nmeter)
+        c = wavelength_to_rgb(self.light_model.wavelength / nmeter)
         opto_patch = matplotlib.patches.Patch(color=c, label=self.name)
         handles.append(opto_patch)
         ax.legend(handles=handles)
         return [point_cloud]
-
-    def _find_rz_thresholds(self, thresh):
-        """find r and z thresholds for visualization purposes"""
-        res_mm = 0.01
-        zc = np.arange(20, 0, -res_mm) * mm  # ascending T
-        T = self._Foutz12_transmittance(0 * mm, zc)
-        zc_thresh = zc[np.searchsorted(T, thresh)]
-        # look at half the z threshold for the r threshold
-        r = np.arange(20, 0, -res_mm) * mm
-        T = self._Foutz12_transmittance(r, zc_thresh / 2)
-        r_thresh = r[np.searchsorted(T, thresh)]
-        # multiply by 1.2 just in case
-        return r_thresh * 1.2, zc_thresh
 
     def update_artists(
         self, artists: list[Artist], value, *args, **kwargs
@@ -634,7 +726,7 @@ class OptogeneticIntervention(Stimulator):
             self.opsin_model.init_opto_syn_vars(opto_syn)
 
     def _alpha_cmap_for_wavelength(self, intensity=0.5):
-        c = wavelength_to_rgb(self.light_model_params["wavelength"] / nmeter)
+        c = wavelength_to_rgb(self.light_model.wavelength / nmeter)
         c_clear = (*c, 0)
         c_opaque = (*c, 0.6 * intensity)
         return colors.LinearSegmentedColormap.from_list(

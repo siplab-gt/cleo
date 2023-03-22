@@ -87,20 +87,20 @@ def get_Irr0_thres(
     sim = CLSimulator(net)
 
     if simple_opto:
-        opto = OptogeneticIntervention(
+        opto = Light(
             name="opto",
             opsin_model=ProportionalCurrentModel(
                 # use 240*(thresh-E_L) factor from tutorial
                 Iopto_per_mW_per_mm2=Iopto_gain_from_factor(gain_factor)
             ),
-            light_model_params=default_blue,
+            light_model_params=fiber473nm,
             location=(0, 0, 0) * mm,
         )
     else:
-        opto = OptogeneticIntervention(
+        opto = Light(
             name="opto",
             opsin_model=FourStateModel(ChR2_four_state),
-            light_model_params=default_blue,
+            light_model_params=fiber473nm,
             location=(0, 0, 0) * mm,
         )
     sim.inject_stimulator(opto, ng)

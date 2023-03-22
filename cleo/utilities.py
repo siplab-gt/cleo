@@ -6,7 +6,7 @@ from scipy import linalg
 import numpy as np
 from matplotlib import pyplot as plt
 
-from brian2 import second
+from brian2 import second, meter, NeuronGroup, Quantity
 from brian2.groups.group import get_dtype
 from brian2.equations.equations import (
     Equations,
@@ -14,6 +14,17 @@ from brian2.equations.equations import (
     SUBEXPRESSION,
     PARAMETER,
 )
+
+
+def coords_from_ng(ng: NeuronGroup) -> Quantity:
+    """Get nx3 coordinate array from NeuronGroup."""
+    # have to add unit back on since it's stripped by vstack
+    return np.column_stack([ng.x, ng.y, ng.z]) * meter
+
+
+def normalize_coords(coords: Quantity) -> Quantity:
+    """Normalize coordinates to unit vectors."""
+    return coords / np.linalg.norm(coords, axis=-1)
 
 
 def get_orth_vectors_for_v(v):

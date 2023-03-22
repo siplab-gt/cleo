@@ -4,6 +4,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any
 
+from attrs import define, field
 from brian2 import (
     NeuronGroup,
     Subgroup,
@@ -19,33 +20,34 @@ from mpl_toolkits.mplot3d import Axes3D
 from matplotlib.artist import Artist
 
 
+@define
 class InterfaceDevice(ABC):
     """Base class for devices to be injected into the network"""
 
-    name: str
+    name: str = None
     """Unique identifier for device.
     Used as a key in output/input dicts
     """
-    brian_objects: set
+    brian_objects: set = field(factory=set, init=False)
     """All the Brian objects added to the network by this device.
     Must be kept up-to-date in :meth:`connect_to_neuron_group` and
     other functions so that those objects can be automatically added
     to the network when the device is injected.
     """
-    sim: CLSimulator
+    sim: CLSimulator = field(init=False, default=None)
     """The simulator the device is injected into
     """
 
-    def __init__(self, name: str) -> None:
-        """
-        Parameters
-        ----------
-        name : str
-            Unique identifier for the device.
-        """
-        self.name = name
-        self.brian_objects = set()
-        self.sim = None
+    # def __init__(self, name: str) -> None:
+    #     """
+    #     Parameters
+    #     ----------
+    #     name : str
+    #         Unique identifier for the device.
+    #     """
+    #     self.name = name
+    #     self.brian_objects = set()
+    #     self.sim = None
 
     def init_for_simulator(self, simulator: CLSimulator) -> None:
         """Initialize device for simulator on initial injection
@@ -196,43 +198,34 @@ class Recorder(InterfaceDevice):
         pass
 
 
+@define(eq=False)
 class Stimulator(InterfaceDevice):
     """Device for manipulating the network"""
 
-    value: Any
+    value: Any = field(init=False, default=None)
     """The current value of the stimulator device"""
-    default_value: Any
+    default_value: Any = 0
     """The default value of the device---used on initialization and on :meth:`~reset`"""
-    t_ms: list[float]
+    t_ms: list[float] = field(factory=list, init=False)
     """Times stimulator was updated, stored if :attr:`save_history`"""
-    values: list[Any]
+    values: list[Any] = field(factory=list, init=False)
     """Values taken by the stimulator at each :meth:`~update` call, 
     stored if :attr:`save_history`"""
-    save_history: bool
+    save_history: bool = True
     """Determines whether :attr:`t_ms` and :attr:`values` are recorded"""
-
-    def __init__(self, name: str, default_value, save_history: bool = False) -> None:
-        """
-        Parameters
-        ----------
-        name : str
-            Unique device name used in :meth:`CLSimulator.update_stimulators`
-        default_value : any
-            The stimulator's default value
-        """
-        super().__init__(name)
-        self.value = default_value
-        self.default_value = default_value
-        self.save_history = save_history
 
     def init_for_simulator(self, simulator: CLSimulator) -> None:
         super().init_for_simulator(simulator)
+        self.reset()
+
+    def __attrs_post_init__(self):
+        self.value = self.default_value
         self._init_saved_vars()
 
     def _init_saved_vars(self):
         if self.save_history:
-            self.t_ms = [self.sim.network.t / ms]
-            self.values = [self.default_value]
+            self.t_ms = []
+            self.values = []
 
     def update(self, ctrl_signal) -> None:
         """Set the stimulator value.
@@ -255,6 +248,7 @@ class Stimulator(InterfaceDevice):
     def reset(self, **kwargs) -> None:
         """Reset the stimulator device to a neutral state"""
         self._init_saved_vars()
+        self.update(self.default_value)
 
 
 class CLSimulator:

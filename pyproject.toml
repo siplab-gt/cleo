@@ -26,10 +26,10 @@ scipy = "^1.7.2"
 tklfp = "^0.2"
 bidict = "*"
 nptyping = "^1.4.4"
-attrs = "^20.0"
+attrs = "^21.0"
 
 [tool.poetry.dev-dependencies]
-black = "^21.12b0"
+black = "^23.0"
 flake8 = "^4.0.1"
 pytest = "^6.2.5"
 pytest-flake8 = "^1.0.7"

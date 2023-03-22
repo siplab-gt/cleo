@@ -4,10 +4,10 @@ import pytest
 from cleo import CLSimulator
 from cleo.viz import VideoVisualizer
 from cleo.opto import (
-    OptogeneticIntervention,
+    Light,
     FourStateModel,
     ChR2_four_state,
-    default_blue,
+    fiber473nm,
 )
 from cleo.coords import assign_coords
 from cleo.ephys import Probe
@@ -24,8 +24,8 @@ def test_VideoVisualizer():
         reset="v = 0 * volt",
     )
     assign_coords(ng, 0, 0, 0)
-    opto = OptogeneticIntervention(
-        "opto", FourStateModel(ChR2_four_state), default_blue, max_Irr0_mW_per_mm2=20
+    opto = Light(
+        "opto", FourStateModel(ChR2_four_state), fiber473nm, max_Irr0_mW_per_mm2=20
     )
     probe = Probe("probe", [(0, 0, 0.1)] * mm)
 
