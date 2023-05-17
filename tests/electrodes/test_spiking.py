@@ -39,7 +39,7 @@ def test_MUS_multiple_contacts():
         save_history=True,
     )
     probe = Probe("probe", [[0, 0, 0.25], [0, 0, 0.75]] * mm, [mus])
-    sim.inject_recorder(probe, sgg)
+    sim.inject(probe, sgg)
 
     # remember i here is channel, no longer neuron
     i, t, y = mus.get_state()
@@ -95,7 +95,7 @@ def test_MUS_multiple_groups():
         save_history=True,
     )
     probe = Probe("probe", [[0, 0, 0], [0, 0, 0.1]] * mm, [mus])
-    sim.inject_recorder(probe, sgg1, sgg2, sgg3)
+    sim.inject(probe, sgg1, sgg2, sgg3)
 
     sim.run(10 * ms)
     i, t, y = mus.get_state()
@@ -133,7 +133,7 @@ def test_SortedSpiking():
     )
     probe = Probe("probe", [[0, 0, 0.25], [0, 0, 0.75], [0, 0, 10]] * mm, [ss])
     # injecting sgg0 before sgg1 needed to predict i_eg
-    sim.inject_recorder(probe, sgg0, sgg1)
+    sim.inject(probe, sgg0, sgg1)
 
     sim.run(3 * ms)  # 3 ms
     i, t, y = sim.get_state()["probe"]["ss"]
@@ -166,7 +166,7 @@ def _test_reset(spike_signal_class):
         save_history=True,
     )
     probe = Probe("probe", [[0, 0, 0]] * mm, [spike_signal])
-    sim.inject_recorder(probe, sgg)
+    sim.inject(probe, sgg)
     sim.set_io_processor(RecordOnlyProcessor(sample_period_ms=1))
     assert len(spike_signal.i) == 0
     assert len(spike_signal.t_ms) == 0

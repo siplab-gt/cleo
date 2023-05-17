@@ -185,6 +185,12 @@ def assign_coords(
     neuron_group.z = np.reshape(z, (-1,)) * unit
 
 
+def coords_from_ng(ng: NeuronGroup) -> Quantity:
+    """Get nx3 coordinate array from NeuronGroup."""
+    # have to add unit back on since it's stripped by vstack
+    return np.column_stack([ng.x, ng.y, ng.z]) * meter
+
+
 def _init_variables(group: Group):
     for dim_name in ["x", "y", "z"]:
         if hasattr(group, dim_name):

@@ -1,7 +1,7 @@
 """Contains opsin models and default parameters"""
 from __future__ import annotations
 from abc import ABC, abstractmethod
-from typing import Tuple, Any
+from typing import Callable, Tuple, Any
 import warnings
 
 from attrs import define, field, asdict
@@ -39,18 +39,19 @@ from matplotlib.artist import Artist
 from matplotlib.collections import PathCollection
 
 from cleo.base import InterfaceDevice
+from cleo.coords import assign_coords, coords_from_ng
+from cleo.opto.registry import lor_for_sim
 from cleo.utilities import (
     uniform_cylinder_rθz,
     wavelength_to_rgb,
     xyz_from_rθz,
-    coords_from_ng,
     normalize_coords,
 )
 from cleo.stimulators import Stimulator
 
 
 @define
-class OpsinModel(ABC):
+class Opsin(InterfaceDevice):
     """Base class for opsin model"""
 
     model: str = field(init=False)
@@ -73,6 +74,114 @@ class OpsinModel(ABC):
     as a keyword argument ``[default_name]_var_name=[non_default_name]``
     and that these are found in the model string as 
     ``[DEFAULT_NAME]_VAR_NAME`` before replacement."""
+
+    light_agg_ngs: dict[NeuronGroup, NeuronGroup] = field(factory=dict, init=False)
+    """{target_ng: light_agg_ng} dict of light aggregator neuron groups."""
+
+    opto_syns: dict[NeuronGroup, Synapses] = field(factory=dict, init=False)
+    """Stores the synapse objects implementing the opsin model,
+    with NeuronGroup keys and Synapse values."""
+
+    epsilon: Callable = field(default=(lambda wl: 1))
+    """A callable that returns a value between 0 and 1 when given a wavelength
+    representing the relative sensitivity of the opsin to that wavelength."""
+
+    def connect_to_neuron_group(self, neuron_group: NeuronGroup, **kwparams) -> None:
+        """Transfect neuron group with opsin.
+
+        Parameters
+        ----------
+        neuron_group : NeuronGroup
+            The neuron group to stimulate with the given opsin and light source
+
+        Keyword args
+        ------------
+        p_expression : float
+            Probability (0 <= p <= 1) that a given neuron in the group
+            will express the opsin. 1 by default.
+        rho_rel : float
+            The expression level, relative to the standard model fit,
+            of the opsin. 1 by default. For heterogeneous expression,
+            this would have to be modified in the opsin synapse post-injection,
+            e.g., ``opto.opto_syns["neuron_group_name"].rho_rel = ...``
+        Iopto_var_name : str
+            The name of the variable in the neuron group model representing
+            current from the opsin
+        v_var_name : str
+            The name of the variable in the neuron group model representing
+            membrane potential
+        """
+        # get modified opsin model string (i.e., with names/units specified)
+        if neuron_group in self.light_agg_ngs:
+            assert neuron_group in self.opto_syns
+            raise ValueError(
+                f"Opsin {self} already connected to neuron group {neuron_group}"
+            )
+
+        mod_opsin_model, mod_opsin_params = self.modify_model_and_params_for_ng(
+            neuron_group, kwparams
+        )
+
+        # this will go on light propagation synapses
+        # fmt: off
+        # Ephoton = h*c/lambda
+        # E_photon = (
+        #     6.63e-34 * meter2 * kgram / second
+        #     * 2.998e8 * meter / second
+        #     / self.light_model.wavelength
+        # )
+        # fmt: on
+
+        light_model = Equations(
+            """
+            # Irr = Irr0*T : watt/meter**2
+            # Irr0 : watt/meter**2
+            # T : 1
+            # phi = Irr / Ephoton : 1/second/meter**2
+            phi : 1/second/meter**2
+            """
+        )
+        # opto_syn.namespace["Ephoton"] = E_photon
+
+        # create light aggregator neurons
+        light_agg_ng = NeuronGroup(
+            neuron_group.N, light_model, name=f"light_agg_{self}_{neuron_group.name}"
+        )
+        self.light_agg_ngs[neuron_group] = light_agg_ng
+        self.brian_objects.add(light_agg_ng)
+        assign_coords(
+            light_agg_ng,
+            neuron_group.x / mm,
+            neuron_group.y / mm,
+            neuron_group.z / mm,
+            unit=mm,
+        )
+
+        # create opsin synapses
+        opto_syn = Synapses(
+            light_agg_ng,
+            neuron_group,
+            model=mod_opsin_model,
+            namespace=mod_opsin_params,
+            name=f"synapses_{self}_{neuron_group.name}",
+            # method="rk2",  # TODO: why did I have this hardcoded?
+        )
+        self.opto_syns[neuron_group.name] = opto_syn
+        self.brian_objects.add(opto_syn)
+
+        p_expression = kwparams.get("p_expression", 1)
+        if p_expression == 1:
+            opto_syn.connect(j="i")
+        else:
+            opto_syn.connect(condition="i==j", p=p_expression)
+
+        self.init_opto_syn_vars(opto_syn)
+
+        # relative channel density
+        opto_syn.rho_rel = kwparams.get("rho_rel", 1)
+
+        lor = lor_for_sim(self.sim)
+        lor.register_opsin(self, neuron_group)
 
     def modify_model_and_params_for_ng(
         self, neuron_group: NeuronGroup, injct_params: dict
@@ -182,17 +291,17 @@ class OpsinModel(ABC):
 
 
 @define
-class MarkovModel(OpsinModel):
+class MarkovOpsin(Opsin):
     """Base class for Markov state models à la Evans et al., 2016"""
 
     required_vars: list[Tuple[str, Unit]] = field(
         factory=lambda: [("Iopto", amp), ("v", volt)],
-        # init=False,  # TODO: can get rid of init=False if in parent?
+        init=False,
     )
 
 
 @define
-class FourStateModel(MarkovModel):
+class FourStateOpsin(MarkovOpsin):
     """4-state model from PyRhO (Evans et al. 2016).
 
     rho_rel is channel density relative to standard model fit;
@@ -221,18 +330,18 @@ class FourStateModel(MarkovModel):
     v0: Quantity = 43 * mV
     v1: Quantity = 17.1 * mV
     model: str = field(
-        init=False,  # TODO: can get rid of init=False if in parent?
+        init=False,
         default="""
         dC1/dt = Gd1*O1 + Gr0*C2 - Ga1*C1 : 1 (clock-driven)
         dO1/dt = Ga1*C1 + Gb*O2 - (Gd1+Gf)*O1 : 1 (clock-driven)
         dO2/dt = Ga2*C2 + Gf*O1 - (Gd2+Gb)*O2 : 1 (clock-driven)
         C2 = 1 - C1 - O1 - O2 : 1
 
-        Theta = int(phi > 0*phi) : 1
-        Hp = Theta * phi**p/(phi**p + phim**p) : 1
+        Theta = int(phi_pre > 0*phi_pre) : 1
+        Hp = Theta * phi_pre**p/(phi_pre**p + phim**p) : 1
         Ga1 = k1*Hp : hertz
         Ga2 = k2*Hp : hertz
-        Hq = Theta * phi**q/(phi**q + phim**q) : 1
+        Hq = Theta * phi_pre**q/(phi**q + phim**q) : 1
         Gf = kf*Hq + Gf0 : hertz
         Gb = kb*Hq + Gb0 : hertz
 
@@ -271,7 +380,7 @@ def ChR2_four_state(
 
     Params taken from try.projectpyrho.org's default 4-state configuration.
     """
-    return FourStateModel(
+    return FourStateOpsin(
         g0=g0,
         gamma=gamma,
         phim=phim,
@@ -293,10 +402,10 @@ def ChR2_four_state(
 
 
 @define
-class ProportionalCurrentModel(OpsinModel):
+class ProportionalCurrentOpsin(Opsin):
     """A simple model delivering current proportional to light intensity"""
 
-    Iopto_per_mW_per_mm2: Quantity = field()
+    Iopto_per_mW_per_mm2: Quantity = field(kw_only=True)
     """ How much current (in amps or unitless, depending on neuron model)
     to deliver per mW/mm2.
     """
@@ -305,7 +414,7 @@ class ProportionalCurrentModel(OpsinModel):
         init=False,
         default="""
             IOPTO_VAR_NAME_post = Iopto_per_mW_per_mm2 / (mwatt / mm2) 
-                * Irr * rho_rel : IOPTO_UNIT (summed)
+                * Irr_pre * rho_rel : IOPTO_UNIT (summed)
             rho_rel : 1
         """,
     )

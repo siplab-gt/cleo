@@ -28,7 +28,7 @@ neurons2 = neurons
 
 @pytest.fixture
 def opto() -> Light:
-    return Light("opto", opsin_model=ChR2_four_state(), light_model=fiber473nm())
+    return Light(opsin_model=ChR2_four_state(), light_model=fiber473nm())
 
 
 opto2 = opto
@@ -36,7 +36,7 @@ opto2 = opto
 
 def test_inject_opto(opto, neurons, neurons2):
     sim = CLSimulator(Network(neurons))
-    sim.inject_stimulator(opto, neurons, rho_rel=2)
+    sim.inject(opto, neurons, rho_rel=2)
     # channel density setting
     assert all(opto.opto_syns[neurons.name].rho_rel == 2)
     # one-to-one connections
@@ -44,11 +44,11 @@ def test_inject_opto(opto, neurons, neurons2):
 
     # not in network
     with pytest.raises(Exception):
-        sim.inject_stimulator(opto, neurons2)
+        sim.inject(opto, neurons2)
 
     # p_expression
     sim.network.add(neurons2)
-    sim.inject_stimulator(opto, neurons2, p_expression=0.1)
+    sim.inject(opto, neurons2, p_expression=0.1)
     assert len(opto.opto_syns[neurons2.name]) < neurons2.N
 
 
@@ -72,14 +72,14 @@ def test_v_and_Iopto_in_model(opto, opto2):
     )
     sim = CLSimulator(Network(ng))
     with pytest.raises(BrianObjectException):
-        sim.inject_stimulator(opto, ng)
+        sim.inject(opto, ng)
     # ok when Iopto name specified
     # ...but missing coords
     with pytest.raises(AttributeError):
-        sim.inject_stimulator(opto, ng, Iopto_var_name="I_wumbo")
+        sim.inject(opto, ng, Iopto_var_name="I_wumbo")
     # now it should work
     assign_coords_grid_rect_prism(ng, (0, 0), (0, 0), (0, 0), (1, 1, 1))
-    sim.inject_stimulator(opto, ng, Iopto_var_name="I_wumbo")
+    sim.inject(opto, ng, Iopto_var_name="I_wumbo")
 
     ng = NeuronGroup(
         1,
@@ -90,19 +90,19 @@ def test_v_and_Iopto_in_model(opto, opto2):
     sim = CLSimulator(Network(ng))
     # can't inject device into different simulator
     with pytest.raises(Exception):
-        sim.inject_stimulator(opto, ng, v_var_name="u")
+        sim.inject(opto, ng, v_var_name="u")
     # so use different device, opto2
     # missing v in model
     with pytest.raises(BrianObjectException):
-        sim.inject_stimulator(opto2, ng)
+        sim.inject(opto2, ng)
     # should work with new, un-injected opto
-    sim.inject_stimulator(opto2, ng, v_var_name="u")
+    sim.inject(opto2, ng, v_var_name="u")
 
 
 @pytest.mark.slow
 def test_markov_opsin_model(opto, neurons):
     sim = CLSimulator(Network(neurons))
-    sim.inject_stimulator(opto, neurons)
+    sim.inject(opto, neurons)
     opsyn = opto.opto_syns[neurons.name]
     assert all(neurons.Iopto) == 0
     assert all(neurons.v == -70 * mV)
@@ -154,7 +154,7 @@ def test_light_model(opto, neurons):
 @pytest.mark.slow
 def test_opto_reset(opto, neurons, neurons2):
     sim = CLSimulator(Network(neurons, neurons2))
-    sim.inject_stimulator(opto, neurons, neurons2)
+    sim.inject(opto, neurons, neurons2)
     opsyn1 = opto.opto_syns[neurons.name]
     opsyn2 = opto.opto_syns[neurons2.name]
 
@@ -179,11 +179,9 @@ def _prep_simple_opto(ng_model, gain):
     ng = NeuronGroup(1, ng_model)
     assign_coords_grid_rect_prism(ng, (0, 0), (0, 0), (0, 0), shape=(1, 1, 1))
     # assuming 0 starting voltage
-    opto = Light(
-        "opto", opsin_model=ProportionalCurrentModel(gain), light_model=fiber473nm()
-    )
+    opto = Light(opsin_model=ProportionalCurrentOpsin(gain), light_model=fiber473nm())
     sim = CLSimulator(Network(ng))
-    sim.inject_stimulator(opto, ng)
+    sim.inject(opto, ng)
     return ng, opto, sim
 
 
@@ -219,7 +217,7 @@ def _prep_markov_opto(ng_model, opto):
     ng = NeuronGroup(3, ng_model)
     sim = CLSimulator(Network(ng))
     assign_coords_grid_rect_prism(ng, (0, 0), (0, 0), (0, 0), shape=(3, 1, 1))
-    sim.inject_stimulator(opto, ng)
+    sim.inject(opto, ng)
     return ng, sim
 
 

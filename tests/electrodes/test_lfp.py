@@ -72,14 +72,14 @@ def test_TKLFPSignal(groups_and_types, signal_positive, rand_seed):
     )
     probe = Probe("probe", contact_coords, signals=[tklfp])
     for group, tklfp_type in groups_and_types:
-        sim.inject_recorder(probe, group, tklfp_type=tklfp_type, sample_period_ms=1)
+        sim.inject(probe, group, tklfp_type=tklfp_type, sample_period_ms=1)
 
     # doesn't specify tklfp_type:
     with pytest.raises(Exception):
-        sim.inject_recorder(probe, group, sample_period_ms=1)
+        sim.inject(probe, group, sample_period_ms=1)
     # doesn't specify sampling period:
     with pytest.raises(Exception):
-        sim.inject_recorder(probe, group, tklfp_type="inh")
+        sim.inject(probe, group, tklfp_type="inh")
 
     sim.run(30 * ms)
 
@@ -117,7 +117,7 @@ def test_TKLFPSignal_out_of_range():
     probe = Probe(
         "probe", [[0, 0, 0], [5, 5, 5]] * mm, signals=[tklfp]
     )  # contacts at origin and 5,5,5
-    sim.inject_recorder(probe, *pgs, tklfp_type="exc", sample_period_ms=1)
+    sim.inject(probe, *pgs, tklfp_type="exc", sample_period_ms=1)
     sim.run(30 * ms)
     lfp = tklfp.get_state()
     assert lfp.shape == (2,)
@@ -151,7 +151,7 @@ def test_TKLFP_orientation(seed, is_exc):
     probe = Probe("probe", elec_coords, [tklfp_signal])
     samp_period = 10 * ms
     sim.set_io_processor(RecordOnlyProcessor(samp_period / ms))  # record every 10 ms
-    sim.inject_recorder(
+    sim.inject(
         probe, sgg, tklfp_type="exc" if is_exc else "inh", orientation=orientation
     )
 

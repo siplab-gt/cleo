@@ -39,18 +39,22 @@ from matplotlib.artist import Artist
 from matplotlib.collections import PathCollection
 
 from cleo.base import InterfaceDevice
+from cleo.opto.registry import lor_for_sim
 from cleo.utilities import (
     uniform_cylinder_rθz,
     wavelength_to_rgb,
     xyz_from_rθz,
-    coords_from_ng,
     normalize_coords,
 )
+from cleo.coords import coords_from_ng
 from cleo.stimulators import Stimulator
 
 
 @define
 class LightModel(ABC):
+    wavelength: Quantity
+    """light wavelength"""
+
     @abstractmethod
     def transmittance(
         self,
@@ -78,7 +82,6 @@ class FiberModel(LightModel):
     NAfib: Quantity = 0.37
     """optical fiber numerical aperture"""
     wavelength: Quantity = 473 * nmeter
-    """light wavelength"""
     K: Quantity = 0.125 / mm
     """absorbance coefficient (wavelength/tissue dependent)"""
     S: Quantity = 7.37 / mm
@@ -252,11 +255,6 @@ class Light(Stimulator):
         Useful since so many points makes later rendering and editing slow.
     """
 
-    opsin_model: OpsinModel = field(kw_only=True)
-    """OpsinModel object defining how light affects target
-    neurons. See :class:`FourStateModel` and :class:`ProportionalCurrentModel`
-    for examples."""
-
     light_model: LightModel = field(kw_only=True)
     """LightModel object defining how light is emitted. See
     :class:`FiberModel` for an example."""
@@ -267,6 +265,12 @@ class Light(Stimulator):
     Can also be an nx3 array for multiple sources.
     """
 
+    source_ng: NeuronGroup = field(init=False)
+
+    @source_ng.default
+    def _default_source_ng(self):
+        return NeuronGroup(self.m, "Irr0: watt/meter**2")
+
     direction: NDArray[(Any, 3), Any] = field(
         default=(0, 0, 1), converter=normalize_coords
     )
@@ -275,11 +279,7 @@ class Light(Stimulator):
     
     Will be converted to unit magnitude."""
 
-    opto_syns: dict[str, Synapses] = field(factory=dict, init=False)
-    """Stores the synapse objects implementing the opsin model,
-    with NeuronGroup name keys and Synapse values."""
-
-    max_Irr0_mW_per_mm2: float = None
+    max_Irr0_mW_per_mm2: float = field(default=None, kw_only=True)
     """The maximum irradiance the light source can emit.
     
     Usually determined by hardware in a real experiment."""
@@ -291,88 +291,20 @@ class Light(Stimulator):
     Only relevant in video visualization.
     """
 
+    def transmittance(self, target_coords) -> np.ndarray:
+        return self.light_model.transmittance(
+            self.coords, self.direction, target_coords
+        )
+
     def connect_to_neuron_group(
         self, neuron_group: NeuronGroup, **kwparams: Any
     ) -> None:
-        """Configure opsin and light source to stimulate given neuron group.
-
-        Parameters
-        ----------
-        neuron_group : NeuronGroup
-            The neuron group to stimulate with the given opsin and light source
-
-        Keyword args
-        ------------
-        p_expression : float
-            Probability (0 <= p <= 1) that a given neuron in the group
-            will express the opsin. 1 by default.
-        rho_rel : float
-            The expression level, relative to the standard model fit,
-            of the opsin. 1 by default. For heterogeneous expression,
-            this would have to be modified in the opsin synapse post-injection,
-            e.g., ``opto.opto_syns["neuron_group_name"].rho_rel = ...``
-        Iopto_var_name : str
-            The name of the variable in the neuron group model representing
-            current from the opsin
-        v_var_name : str
-            The name of the variable in the neuron group model representing
-            membrane potential
-        """
-        # get modified opsin model string (i.e., with names/units specified)
-        (
-            mod_opsin_model,
-            mod_opsin_params,
-        ) = self.opsin_model.modify_model_and_params_for_ng(neuron_group, kwparams)
-
-        # fmt: off
-        # Ephoton = h*c/lambda
-        E_photon = (
-            6.63e-34 * meter2 * kgram / second
-            * 2.998e8 * meter / second
-            / self.light_model.wavelength
-        )
-        # fmt: on
-
-        light_model = Equations(
-            """
-            Irr = Irr0*T : watt/meter**2
-            Irr0 : watt/meter**2 
-            T : 1
-            phi = Irr / Ephoton : 1/second/meter**2
-            """
-        )
-
-        opto_syn = Synapses(
-            neuron_group,
-            model=mod_opsin_model + light_model,
-            namespace=mod_opsin_params,
-            name=f"synapses_{self.name}_{neuron_group.name}",
-            method="rk2",
-        )
-        opto_syn.namespace["Ephoton"] = E_photon
-
-        p_expression = kwparams.get("p_expression", 1)
-        if p_expression == 1:
-            opto_syn.connect(j="i")
-        else:
-            opto_syn.connect(condition="i==j", p=p_expression)
-
-        self.opsin_model.init_opto_syn_vars(opto_syn)
-
-        # relative channel density
-        opto_syn.rho_rel = kwparams.get("rho_rel", 1)
-        # calculate transmittance coefficient for each point
-        T = self.light_model.transmittance(
-            self.coords, self.direction, coords_from_ng(neuron_group)
-        )
-        assert T.shape == (self.m, len(neuron_group))
-        # reduce to subset expressing opsin before assigning
-        T = T[opto_syn.i]
-
-        opto_syn.T = T
-
-        self.opto_syns[neuron_group.name] = opto_syn
-        self.brian_objects.add(opto_syn)
+        lor = lor_for_sim(self.sim)
+        if self in lor.lights_for_ng[neuron_group]:
+            raise ValueError(
+                f"Light {self} already connected to neuron group {neuron_group}"
+            )
+        lor.register_light(self, neuron_group)
 
     @property
     def m(self):

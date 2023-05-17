@@ -52,7 +52,7 @@ def test_Probe_injection():
     dumber = DummySignal("dumber")
     probe = Probe("probe", [0, 0, 0] * mm, signals=[dumb])
     probe.add_signals(dumber)
-    sim.inject_recorder(probe, ng)
+    sim.inject(probe, ng)
 
     assert dumb.brian_objects.issubset(sim.network.objects)
     assert dumber.brian_objects.issubset(sim.network.objects)

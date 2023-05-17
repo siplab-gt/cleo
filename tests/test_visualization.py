@@ -5,7 +5,7 @@ from cleo import CLSimulator
 from cleo.viz import VideoVisualizer
 from cleo.opto import (
     Light,
-    FourStateModel,
+    FourStateOpsin,
     ChR2_four_state,
     fiber473nm,
 )
@@ -25,16 +25,17 @@ def test_VideoVisualizer():
     )
     assign_coords(ng, 0, 0, 0)
     opto = Light(
-        "opto", FourStateModel(ChR2_four_state), fiber473nm, max_Irr0_mW_per_mm2=20
+        "opto",
+        opsin_model=ChR2_four_state(),
+        light_model=fiber473nm(),
+        max_Irr0_mW_per_mm2=20,
     )
     probe = Probe("probe", [(0, 0, 0.1)] * mm)
 
-    sim = CLSimulator(Network(ng))
-    sim.inject_stimulator(opto, ng)
-    sim.inject_recorder(probe, ng)
+    sim = CLSimulator(Network(ng)).inject(opto, ng).inject(probe, ng)
 
     vv = VideoVisualizer()
-    sim.inject_device(vv, ng)
+    sim.inject(vv, ng)
 
     sim.run(2 * ms)
     plotargs = {

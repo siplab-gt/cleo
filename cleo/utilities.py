@@ -16,12 +16,6 @@ from brian2.equations.equations import (
 )
 
 
-def coords_from_ng(ng: NeuronGroup) -> Quantity:
-    """Get nx3 coordinate array from NeuronGroup."""
-    # have to add unit back on since it's stripped by vstack
-    return np.column_stack([ng.x, ng.y, ng.z]) * meter
-
-
 def normalize_coords(coords: Quantity) -> Quantity:
     """Normalize coordinates to unit vectors."""
     return coords / np.linalg.norm(coords, axis=-1)
