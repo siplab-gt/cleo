@@ -60,3 +60,6 @@ I was going to lint using flake8 but then I realized, this is a small research c
 Originally, the intention was for opto and electrodes to live under stimulators and recorders, respectively. This made `opto_stim = cleo.opto.OptogeneticIntervention(...)` possible but not for importing from that second-level shortcut (`from cleo.opto import ...`). Thus, they were moved up a level. 
 
 We still have some import shortcuts for users, making everything in the `ephys` subpackage (the contents of lfp, spiking, and probes modules) available under `cleo.ephys`. We do this by importing the submodules' contents in `__init__.py` files. We can then test the shortcut imports by making sure to use them in the unit tests. However, we must use the full import path in the source code itself to avoid circular import errors. 
+
+## Notebooks
+Please use [nbdev for Git-friendly Jupyter](https://nbdev.fast.ai/tutorials/git_friendly_jupyter.html).

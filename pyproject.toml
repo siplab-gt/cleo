@@ -42,6 +42,7 @@ sphinx-copybutton = "^0.4.0"
 myst-nb = "^0.13.1"
 sphinx-favicon = "^0.2"
 furo = "^2022.6.21"
+nbdev = "^2.3.12"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
