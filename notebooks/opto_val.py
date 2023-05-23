@@ -88,22 +88,20 @@ def get_Irr0_thres(
 
     if simple_opto:
         opto = Light(
-            name="opto",
-            opsin_model=ProportionalCurrentModel(
+            opsin_model=ProportionalCurrentOpsin(
                 # use 240*(thresh-E_L) factor from tutorial
-                Iopto_per_mW_per_mm2=Iopto_gain_from_factor(gain_factor)
+                I_per_Irr=Iopto_gain_from_factor(gain_factor)
             ),
             light_model_params=fiber473nm,
             location=(0, 0, 0) * mm,
         )
     else:
         opto = Light(
-            name="opto",
-            opsin_model=FourStateModel(ChR2_four_state),
+            opsin_model=ChR2_four_state(),
             light_model_params=fiber473nm,
             location=(0, 0, 0) * mm,
         )
-    sim.inject_stimulator(opto, ng)
+    sim.inject(opto, ng)
 
     sim.network.store()
     Irr0_thres = []
