@@ -51,7 +51,7 @@ def _groups_types_ei(n_e, n_i):
 )
 def test_TKLFPSignal(groups_and_types, signal_positive, rand_seed):
     """Can run multiple times with different seeds from command line
-    with --seed [num. seeds]"""
+    with --seeds [num. seeds]"""
     np.random.seed(rand_seed)
     seed(rand_seed)
     # since parametrize passes function, not return value

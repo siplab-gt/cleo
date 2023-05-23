@@ -20,7 +20,7 @@ from mpl_toolkits.mplot3d import Axes3D
 from matplotlib.artist import Artist
 
 
-@define
+@define(eq=False)
 class InterfaceDevice(ABC):
     """Base class for devices to be injected into the network"""
 
@@ -31,8 +31,13 @@ class InterfaceDevice(ABC):
     to the network when the device is injected.
     """
     sim: CLSimulator = field(init=False, default=None)
-    """The simulator the device is injected into
-    """
+    """The simulator the device is injected into """
+
+    name: str = field(kw_only=True)
+
+    @name.default
+    def _default_name(self) -> str:
+        return self.__class__.__name__
 
     def init_for_simulator(self, simulator: CLSimulator) -> None:
         """Initialize device for simulator on initial injection
@@ -192,6 +197,7 @@ class Recorder(InterfaceDevice):
 class Stimulator(InterfaceDevice):
     """Device for manipulating the network"""
 
+    # TODO: remove name from Stimulator and Recorder, since it's already in InterfaceDevice
     name: str = None
     """Unique identifier for device.
     Used as a key in output/input dicts

@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from typing import Callable, Tuple, Any
 import warnings
 
-from attrs import define, field, asdict
+from attrs import define, field, asdict, fields_dict
 from brian2 import (
     Synapses,
     NeuronGroup,
@@ -50,9 +50,16 @@ from cleo.utilities import (
 from cleo.stimulators import Stimulator
 
 
-@define
+@define(eq=False)
 class Opsin(InterfaceDevice):
-    """Base class for opsin model"""
+    """Base class for opsin model.
+
+    We approximate dynamics under multiple wavelengths using a weighted sum
+    of photon fluxes, where the :math:`\\varepsilon` factor indicates the activation
+    relative to the peak-sensitivy wavelength for an equivalent number of photons
+    (see Mager et al, 2018). This weighted sum is an approximation of a nonlinear
+    peak-non-peak wavelength relation; see notebooks/multi_wavelength_model.ipynb
+    for details."""
 
     model: str = field(init=False)
     """Basic Brian model equations string.
@@ -111,49 +118,38 @@ class Opsin(InterfaceDevice):
             The name of the variable in the neuron group model representing
             membrane potential
         """
-        # get modified opsin model string (i.e., with names/units specified)
-        if neuron_group in self.light_agg_ngs:
-            assert neuron_group in self.opto_syns
+        if neuron_group.name in self.light_agg_ngs:
+            assert neuron_group.name in self.opto_syns
             raise ValueError(
-                f"Opsin {self} already connected to neuron group {neuron_group}"
+                f"Opsin {self.name} already connected to neuron group {neuron_group.name}"
             )
 
+        # get modified opsin model string (i.e., with names/units specified)
         mod_opsin_model, mod_opsin_params = self.modify_model_and_params_for_ng(
             neuron_group, kwparams
         )
 
-        # this will go on light propagation synapses
-        # fmt: off
-        # Ephoton = h*c/lambda
-        # E_photon = (
-        #     6.63e-34 * meter2 * kgram / second
-        #     * 2.998e8 * meter / second
-        #     / self.light_model.wavelength
-        # )
-        # fmt: on
-
-        light_model = Equations(
-            """
-            # Irr = Irr0*T : watt/meter**2
-            # Irr0 : watt/meter**2
-            # T : 1
-            # phi = Irr / Ephoton : 1/second/meter**2
-            phi : 1/second/meter**2
-            """
-        )
-        # opto_syn.namespace["Ephoton"] = E_photon
+        # handle p_expression
+        p_expression = kwparams.get("p_expression", 1)
+        i_expression_bool = np.random.rand(neuron_group.N) < p_expression
+        i_expression = np.where(i_expression_bool)[0]
+        if len(i_expression) == 0:
+            return
 
         # create light aggregator neurons
         light_agg_ng = NeuronGroup(
-            neuron_group.N, light_model, name=f"light_agg_{self}_{neuron_group.name}"
+            len(i_expression),
+            model="""
+            phi : 1/second/meter**2
+            Irr : watt/meter**2
+            """,
+            name=f"light_agg_{self.name}_{neuron_group.name}",
         )
-        self.light_agg_ngs[neuron_group] = light_agg_ng
-        self.brian_objects.add(light_agg_ng)
         assign_coords(
             light_agg_ng,
-            neuron_group.x / mm,
-            neuron_group.y / mm,
-            neuron_group.z / mm,
+            neuron_group.x[i_expression] / mm,
+            neuron_group.y[i_expression] / mm,
+            neuron_group.z[i_expression] / mm,
             unit=mm,
         )
 
@@ -163,25 +159,21 @@ class Opsin(InterfaceDevice):
             neuron_group,
             model=mod_opsin_model,
             namespace=mod_opsin_params,
-            name=f"synapses_{self}_{neuron_group.name}",
-            # method="rk2",  # TODO: why did I have this hardcoded?
+            name=f"opto_syn_{self.name}_{neuron_group.name}",
         )
-        self.opto_syns[neuron_group.name] = opto_syn
-        self.brian_objects.add(opto_syn)
-
-        p_expression = kwparams.get("p_expression", 1)
-        if p_expression == 1:
-            opto_syn.connect(j="i")
-        else:
-            opto_syn.connect(condition="i==j", p=p_expression)
-
+        opto_syn.connect(i=range(len(i_expression)), j=i_expression)
         self.init_opto_syn_vars(opto_syn)
-
         # relative channel density
         opto_syn.rho_rel = kwparams.get("rho_rel", 1)
 
         lor = lor_for_sim(self.sim)
         lor.register_opsin(self, neuron_group)
+
+        # store at the end, after all checks have passed
+        self.light_agg_ngs[neuron_group.name] = light_agg_ng
+        self.brian_objects.add(light_agg_ng)
+        self.opto_syns[neuron_group.name] = opto_syn
+        self.brian_objects.add(opto_syn)
 
     def modify_model_and_params_for_ng(
         self, neuron_group: NeuronGroup, injct_params: dict
@@ -230,7 +222,7 @@ class Opsin(InterfaceDevice):
                 raise BrianObjectException(
                     (
                         f"{var_name} : {unit.name} needed in the model of NeuronGroup "
-                        f"{neuron_group.name} to connect OptogeneticIntervention."
+                        f"{neuron_group.name} to connect Opsin {self.name}."
                     ),
                     neuron_group,
                 )
@@ -246,8 +238,9 @@ class Opsin(InterfaceDevice):
     def params(self) -> dict:
         """Returns a dictionary of parameters for the model"""
         params = asdict(self)
-        params.pop("model")
-        params.pop("required_vars")
+        # remove generic fields that are not parameters
+        for field in fields_dict(Opsin):
+            params.pop(field)
         # remove private attributes
         for key in list(params.keys()):
             if key.startswith("_"):
@@ -277,6 +270,10 @@ class Opsin(InterfaceDevice):
         mod_opsin_eqs = opsin_eqs.substitute(**substitutions)
         return mod_opsin_eqs, modified_params
 
+    def reset(self, **kwargs):
+        for opto_syn in self.opto_syns.values():
+            self.init_opto_syn_vars(opto_syn)
+
     def init_opto_syn_vars(self, opto_syn: Synapses) -> None:
         """Initializes appropriate variables in Synapses implementing the model
 
@@ -290,7 +287,7 @@ class Opsin(InterfaceDevice):
         pass
 
 
-@define
+@define(eq=False)
 class MarkovOpsin(Opsin):
     """Base class for Markov state models à la Evans et al., 2016"""
 
@@ -300,7 +297,7 @@ class MarkovOpsin(Opsin):
     )
 
 
-@define
+@define(eq=False)
 class FourStateOpsin(MarkovOpsin):
     """4-state model from PyRhO (Evans et al. 2016).
 
@@ -341,7 +338,7 @@ class FourStateOpsin(MarkovOpsin):
         Hp = Theta * phi_pre**p/(phi_pre**p + phim**p) : 1
         Ga1 = k1*Hp : hertz
         Ga2 = k2*Hp : hertz
-        Hq = Theta * phi_pre**q/(phi**q + phim**q) : 1
+        Hq = Theta * phi_pre**q/(phi_pre**q + phim**q) : 1
         Gf = kf*Hq + Gf0 : hertz
         Gb = kb*Hq + Gb0 : hertz
 
@@ -353,7 +350,7 @@ class FourStateOpsin(MarkovOpsin):
     )
 
     def init_opto_syn_vars(self, opto_syn: Synapses) -> None:
-        for varname, value in {"Irr0": 0, "C1": 1, "O1": 0, "O2": 0}.items():
+        for varname, value in {"C1": 1, "O1": 0, "O2": 0}.items():
             setattr(opto_syn, varname, value)
 
 
@@ -375,7 +372,8 @@ def ChR2_four_state(
     E=0 * mV,
     v0=43 * mV,
     v1=17.1 * mV,
-):
+    name="ChR2",
+) -> FourStateOpsin:
     """Returns a 4-state ChR2 model.
 
     Params taken from try.projectpyrho.org's default 4-state configuration.
@@ -398,14 +396,15 @@ def ChR2_four_state(
         E=E,
         v0=v0,
         v1=v1,
+        name=name,
     )
 
 
-@define
+@define(eq=False)
 class ProportionalCurrentOpsin(Opsin):
     """A simple model delivering current proportional to light intensity"""
 
-    Iopto_per_mW_per_mm2: Quantity = field(kw_only=True)
+    I_per_Irr: Quantity = field(kw_only=True)
     """ How much current (in amps or unitless, depending on neuron model)
     to deliver per mW/mm2.
     """
@@ -413,7 +412,7 @@ class ProportionalCurrentOpsin(Opsin):
     model: str = field(
         init=False,
         default="""
-            IOPTO_VAR_NAME_post = Iopto_per_mW_per_mm2 / (mwatt / mm2) 
+            IOPTO_VAR_NAME_post = I_per_Irr / (mwatt / mm2) 
                 * Irr_pre * rho_rel : IOPTO_UNIT (summed)
             rho_rel : 1
         """,
@@ -422,8 +421,8 @@ class ProportionalCurrentOpsin(Opsin):
     required_vars: list[Tuple[str, Unit]] = field(factory=list, init=False)
 
     def __attrs_post_init__(self):
-        if isinstance(self.Iopto_per_mW_per_mm2, Quantity):
-            Iopto_unit = get_unit(self.Iopto_per_mW_per_mm2.dim)
+        if isinstance(self.I_per_Irr, Quantity):
+            Iopto_unit = get_unit(self.I_per_Irr.dim)
         else:
             Iopto_unit = radian
         self.per_ng_unit_replacements = [("IOPTO_UNIT", Iopto_unit.name)]

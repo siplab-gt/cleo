@@ -15,11 +15,6 @@ class LightOpsinRegistry:
 
     sim: CLSimulator = field()
 
-    # on purpose using a class-level dict to act like a singleton
-    # just in case we want to use this class in a multi-simulator context
-    # hackier alternative would be to stick a dynamic attribute on sim
-    registries: dict[CLSimulator, "LightOpsinRegistry"] = {}
-
     opsins_for_ng: dict[NeuronGroup, set["Opsin"]] = field(factory=dict, init=False)
 
     lights_for_ng: dict[NeuronGroup, set["Light"]] = field(factory=dict, init=False)
@@ -29,15 +24,15 @@ class LightOpsinRegistry:
     )
 
     light_prop_model = """
-        Irr = Irr0_pre * T * epsilon : watt/meter**2
         T : 1
-        phi_post = Irr / Ephoton : 1/second/meter**2 (summed)
+        Irr_post = epsilon * T * Irr0_pre : watt/meter**2 (summed)
+        phi_post = Irr_post / Ephoton : 1/second/meter**2 (summed)
     """
 
     def connect_light_to_opsin_for_ng(
         self, light: "Light", opsin: "Opsin", ng: NeuronGroup
     ):
-        light_agg_ng = opsin.light_agg_ngs[ng]
+        light_agg_ng = opsin.light_agg_ngs[ng.name]
         epsilon = opsin.epsilon(light.light_model.wavelength)
         # fmt: off
         # Ephoton = h*c/lambda
@@ -47,11 +42,13 @@ class LightOpsinRegistry:
             / light.light_model.wavelength
         )
         # fmt: on
+
         light_prop_syn = Synapses(
             light.source_ng,
             light_agg_ng,
             model=self.light_prop_model,
             namespace={"epsilon": epsilon, "Ephoton": E_photon},
+            name=f"{light.name}_prop_{opsin.name}_{ng.name}",
         )
         light_prop_syn.T = light.transmittance(coords_from_ng(ng))
         light_prop_syn.connect()
@@ -60,22 +57,25 @@ class LightOpsinRegistry:
 
     def register_opsin(self, opsin: "Opsin", ng: NeuronGroup):
         """Connects lights previously injected into this neuron group to this opsin"""
-        self.opsins_for_ng[ng].add(opsin)
-        prev_injct_lights = self.lights_for_ng[ng]
+        self.opsins_for_ng.get(ng, set()).add(opsin)
+        prev_injct_lights = self.lights_for_ng.get(ng, set())
         for light in prev_injct_lights:
             self.connect_light_to_opsin_for_ng(light, opsin, ng)
 
     def register_light(self, light: "Light", ng: NeuronGroup):
         """Connects light to opsins already injected into this neuron group"""
-        self.lights_for_ng[ng].add(light)
-        prev_injct_opsins = self.opsins_for_ng[ng]
+        self.lights_for_ng.get(ng, set()).add(light)
+        prev_injct_opsins = self.opsins_for_ng.get(ng, set())
         for opsin in prev_injct_opsins:
             self.connect_light_to_opsin_for_ng(light, opsin, ng)
+
+
+registries: dict[CLSimulator, LightOpsinRegistry] = {}
 
 
 def lor_for_sim(sim: CLSimulator) -> LightOpsinRegistry:
     """Returns the registry for the given simulator"""
     assert sim is not None
-    if sim not in LightOpsinRegistry.registries:
-        LightOpsinRegistry.registries[sim] = LightOpsinRegistry(sim)
-    return LightOpsinRegistry.registries[sim]
+    if sim not in registries:
+        registries[sim] = LightOpsinRegistry(sim)
+    return registries[sim]
