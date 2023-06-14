@@ -10,7 +10,7 @@ from matplotlib.artist import Artist
 from brian2 import NeuronGroup, mm, Unit, Quantity, umeter, np
 
 from cleo.base import Recorder
-from cleo.utilities import get_orth_vectors_for_v
+from cleo.utilities import get_orth_vectors_for_V
 
 
 class Signal(ABC):
@@ -339,7 +339,7 @@ def tetrode_shank_coords(
     #    x      -dir*width/sqrt(2)
     # x  .  x   +/- orth*width/sqrt(2)
     #    x      +dir*width/sqrt(2)
-    orth_uvec, _ = get_orth_vectors_for_v(dir_uvec)
+    orth_uvec, _ = get_orth_vectors_for_V(dir_uvec)
     return np.repeat(center_locs, 4, axis=0) + tetrode_width / np.sqrt(2) * np.tile(
         np.vstack([-dir_uvec, -orth_uvec, orth_uvec, dir_uvec]), (tetrode_count, 1)
     )
@@ -382,7 +382,7 @@ def poly2_shank_coords(
     dir_uvec = direction / np.linalg.norm(direction)
     end_location = start_location + array_length * dir_uvec
     out = np.linspace(start_location, end_location, channel_count)
-    orth_uvec, _ = get_orth_vectors_for_v(dir_uvec)
+    orth_uvec, _ = get_orth_vectors_for_V(dir_uvec)
     # place contacts on alternating sides of the central axis
     even_channels = np.arange(channel_count) % 2 == 0
     out[even_channels] += intercol_space / 2 * orth_uvec
@@ -439,7 +439,7 @@ def poly3_shank_coords(
 
     spacing = array_length / n_middle
     side_length = n_side * spacing
-    orth_uvec, _ = get_orth_vectors_for_v(dir_uvec)
+    orth_uvec, _ = get_orth_vectors_for_V(dir_uvec)
     side = np.linspace(
         center_loc - dir_uvec * side_length / 2,
         center_loc + dir_uvec * side_length / 2,

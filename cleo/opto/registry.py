@@ -50,21 +50,25 @@ class LightOpsinRegistry:
             namespace={"epsilon": epsilon, "Ephoton": E_photon},
             name=f"{light.name}_prop_{opsin.name}_{ng.name}",
         )
-        light_prop_syn.T = light.transmittance(coords_from_ng(ng))
         light_prop_syn.connect()
+        light_prop_syn.T = light.transmittance(coords_from_ng(ng)).ravel()
         self.sim.network.add(light_prop_syn)
         self.light_prop_syns[(light, opsin, ng)] = light_prop_syn
 
     def register_opsin(self, opsin: "Opsin", ng: NeuronGroup):
         """Connects lights previously injected into this neuron group to this opsin"""
-        self.opsins_for_ng.get(ng, set()).add(opsin)
+        if ng not in self.opsins_for_ng:
+            self.opsins_for_ng[ng] = set()
+        self.opsins_for_ng[ng].add(opsin)
         prev_injct_lights = self.lights_for_ng.get(ng, set())
         for light in prev_injct_lights:
             self.connect_light_to_opsin_for_ng(light, opsin, ng)
 
     def register_light(self, light: "Light", ng: NeuronGroup):
         """Connects light to opsins already injected into this neuron group"""
-        self.lights_for_ng.get(ng, set()).add(light)
+        if ng not in self.lights_for_ng:
+            self.lights_for_ng[ng] = set()
+        self.lights_for_ng[ng].add(light)
         prev_injct_opsins = self.opsins_for_ng.get(ng, set())
         for opsin in prev_injct_opsins:
             self.connect_light_to_opsin_for_ng(light, opsin, ng)

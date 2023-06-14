@@ -178,7 +178,8 @@ class IOProcessor(ABC):
 class Recorder(InterfaceDevice):
     """Device for taking measurements of the network."""
 
-    name: str = None
+    # TODO: remove?
+    # name: str = None
     """Unique identifier for device.
     Used as a key in output/input dicts
     """
@@ -198,7 +199,7 @@ class Stimulator(InterfaceDevice):
     """Device for manipulating the network"""
 
     # TODO: remove name from Stimulator and Recorder, since it's already in InterfaceDevice
-    name: str = None
+    # name: str = None
     """Unique identifier for device.
     Used as a key in output/input dicts
     """
@@ -311,7 +312,8 @@ class CLSimulator:
                 device.init_for_simulator(self)
             device.connect_to_neuron_group(ng, **kwparams)
         for brian_object in device.brian_objects:
-            self.network.add(brian_object)
+            if brian_object not in self.network.objects:
+                self.network.add(brian_object)
         self.network.store(self._net_store_name)
         if isinstance(device, Recorder):
             self.recorders[device] = device

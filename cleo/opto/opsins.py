@@ -41,12 +41,6 @@ from matplotlib.collections import PathCollection
 from cleo.base import InterfaceDevice
 from cleo.coords import assign_coords, coords_from_ng
 from cleo.opto.registry import lor_for_sim
-from cleo.utilities import (
-    uniform_cylinder_rθz,
-    wavelength_to_rgb,
-    xyz_from_rθz,
-    normalize_coords,
-)
 from cleo.stimulators import Stimulator
 
 
@@ -82,8 +76,8 @@ class Opsin(InterfaceDevice):
     and that these are found in the model string as 
     ``[DEFAULT_NAME]_VAR_NAME`` before replacement."""
 
-    light_agg_ngs: dict[NeuronGroup, NeuronGroup] = field(factory=dict, init=False)
-    """{target_ng: light_agg_ng} dict of light aggregator neuron groups."""
+    light_agg_ngs: dict[str, NeuronGroup] = field(factory=dict, init=False)
+    """{target_ng.name: light_agg_ng} dict of light aggregator neuron groups."""
 
     opto_syns: dict[NeuronGroup, Synapses] = field(factory=dict, init=False)
     """Stores the synapse objects implementing the opsin model,
@@ -166,14 +160,14 @@ class Opsin(InterfaceDevice):
         # relative channel density
         opto_syn.rho_rel = kwparams.get("rho_rel", 1)
 
-        lor = lor_for_sim(self.sim)
-        lor.register_opsin(self, neuron_group)
-
         # store at the end, after all checks have passed
         self.light_agg_ngs[neuron_group.name] = light_agg_ng
         self.brian_objects.add(light_agg_ng)
         self.opto_syns[neuron_group.name] = opto_syn
         self.brian_objects.add(opto_syn)
+
+        lor = lor_for_sim(self.sim)
+        lor.register_opsin(self, neuron_group)
 
     def modify_model_and_params_for_ng(
         self, neuron_group: NeuronGroup, injct_params: dict
@@ -237,7 +231,7 @@ class Opsin(InterfaceDevice):
     @property
     def params(self) -> dict:
         """Returns a dictionary of parameters for the model"""
-        params = asdict(self)
+        params = asdict(self, recurse=False)
         # remove generic fields that are not parameters
         for field in fields_dict(Opsin):
             params.pop(field)

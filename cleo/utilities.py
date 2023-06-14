@@ -2,7 +2,7 @@
 from collections.abc import MutableMapping
 from math import ceil, floor
 
-from scipy import linalg
+# from scipy import linalg
 import numpy as np
 from matplotlib import pyplot as plt
 
@@ -18,15 +18,21 @@ from brian2.equations.equations import (
 
 def normalize_coords(coords: Quantity) -> Quantity:
     """Normalize coordinates to unit vectors."""
-    return coords / np.linalg.norm(coords, axis=-1)
+    return coords / np.linalg.norm(coords, axis=-1, keepdims=True)
 
 
-def get_orth_vectors_for_v(v):
-    """Returns w1, w2 as 1x3 row vectors"""
-    q, r = linalg.qr(
-        np.column_stack([v, v, v])
-    )  # get two vectors orthogonal to v from QR decomp
-    return q[:, 1], q[:, 2]
+def get_orth_vectors_for_V(V):
+    """For nx3 block of row vectors V, return nx3 W1, W2 orthogonal
+    vector blocks"""
+    V = V.reshape((-1, 3, 1))
+    n = V.shape[0]
+    V = np.repeat(V, 3, axis=-1)
+    assert V.shape == (n, 3, 3)
+    q, r = np.linalg.qr(V)
+    # get two vectors orthogonal to v from QR decomp
+    W1, W2 = q[..., 1], q[..., 2]
+    assert W1.shape == W2.shape == (n, 3)
+    return W1.squeeze(), W2.squeeze()
 
 
 def xyz_from_rθz(rs, thetas, zs, xyz_start, xyz_end):
@@ -34,8 +40,10 @@ def xyz_from_rθz(rs, thetas, zs, xyz_start, xyz_end):
     # not using np.linalg.norm because it strips units
     cyl_length = np.sqrt(np.sum(np.subtract(xyz_end, xyz_start) ** 2))
     c = (xyz_end - xyz_start) / cyl_length  # unit vector in direction of cylinder
+    m = xyz_start.reshape((-1, 3)).shape[0]
+    n = len(rs)
 
-    r1, r2 = get_orth_vectors_for_v(c)
+    r1, r2 = get_orth_vectors_for_V(c)
 
     def r_unit_vecs(thetas):
         cosines = np.reshape(np.cos(thetas), (len(thetas), 1))
@@ -43,12 +51,17 @@ def xyz_from_rθz(rs, thetas, zs, xyz_start, xyz_end):
         # add axis for broadcasting so result is nx3
         cosines = np.cos(thetas)[..., np.newaxis]
         sines = np.sin(thetas)[..., np.newaxis]
-        return r1 * cosines + r2 * sines
+        return r1.reshape((m, 1, 3)) * cosines + r2.reshape((m, 1, 3)) * sines
 
     coords = (
-        xyz_start + c * zs[..., np.newaxis] + rs[..., np.newaxis] * r_unit_vecs(thetas)
+        xyz_start.reshape((m, 1, 3))
+        + c.reshape((m, 1, 3)) * zs.reshape((1, n, 1))
+        + rs.reshape((1, n, 1)) * r_unit_vecs(thetas)
     )
-    return coords[:, 0], coords[:, 1], coords[:, 2]
+    assert coords.shape == (m, n, 3)
+    return coords[..., 0], coords[..., 1], coords[..., 2]
+    # coords = coords.reshape((m * n), 3)
+    # return coords[:, 0], coords[:, 1], coords[:, 2]
 
 
 def uniform_cylinder_rθz(n, rmax, zmax):

@@ -10,7 +10,7 @@ from brian2.units.fundamentalunits import get_dimensions
 import numpy as np
 
 from cleo.utilities import (
-    get_orth_vectors_for_v,
+    get_orth_vectors_for_V,
     modify_model_with_eqs,
     uniform_cylinder_rθz,
     xyz_from_rθz,
@@ -185,10 +185,26 @@ def assign_coords(
     neuron_group.z = np.reshape(z, (-1,)) * unit
 
 
+def coords_from_xyz(x: Quantity, y: Quantity, z: Quantity) -> Quantity:
+    """Get ...x3 coordinate array from x, y, z arrays (with units)."""
+    # have to add unit back on since it's stripped by vstack
+    n = x.shape[-1]
+    return (
+        np.concatenate(
+            [
+                np.reshape(x, (-1, n, 1)),
+                np.reshape(y, (-1, n, 1)),
+                np.reshape(z, (-1, n, 1)),
+            ],
+            axis=-1,
+        )
+        * meter
+    )
+
+
 def coords_from_ng(ng: NeuronGroup) -> Quantity:
     """Get nx3 coordinate array from NeuronGroup."""
-    # have to add unit back on since it's stripped by vstack
-    return np.column_stack([ng.x, ng.y, ng.z]) * meter
+    return coords_from_xyz(ng.x, ng.y, ng.z)
 
 
 def _init_variables(group: Group):

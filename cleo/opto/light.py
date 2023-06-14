@@ -46,7 +46,7 @@ from cleo.utilities import (
     xyz_from_rθz,
     normalize_coords,
 )
-from cleo.coords import coords_from_ng
+from cleo.coords import coords_from_ng, coords_from_xyz
 from cleo.stimulators import Stimulator
 
 
@@ -66,8 +66,14 @@ class LightModel(ABC):
 
     @abstractmethod
     def viz_points(
-        self, coords: Quantity, direction: NDArray[(Any, 3), Any], **kwargs
+        self,
+        coords: Quantity,
+        direction: NDArray[(Any, 3), Any],
+        n_points_per_source: int,
+        T_threshold: float,
+        **kwargs,
     ) -> Quantity:
+        """Outputs m x n_points_per_source x 3 array"""
         pass
 
 
@@ -99,15 +105,17 @@ class FiberModel(LightModel):
     def transmittance(
         self,
         source_coords: Quantity,
-        source_direction: NDArray[(Any, 3), Any],
+        source_dir_uvec: NDArray[(Any, 3), Any],
         target_coords: Quantity,
     ) -> NDArray[(Any, Any), float]:
-        assert np.allclose(np.linalg.norm(source_direction, axis=-1), 1)
-        r, z = self._get_rz_for_xyz(source_coords, source_direction, target_coords)
+        assert np.allclose(np.linalg.norm(source_dir_uvec, axis=-1), 1)
+        r, z = self._get_rz_for_xyz(source_coords, source_dir_uvec, target_coords)
         return self._Foutz12_transmittance(r, z)
 
     def _Foutz12_transmittance(self, r, z, scatter=True, spread=True, gaussian=True):
-        """Foutz et al. 2012 transmittance model: Gaussian cone with Kubelka-Munk propagation"""
+        """Foutz et al. 2012 transmittance model: Gaussian cone with Kubelka-Munk propagation.
+
+        r and z should be M x N arrays with units"""
 
         if spread:
             # divergence half-angle of cone
@@ -139,22 +147,26 @@ class FiberModel(LightModel):
         return T
 
     def viz_points(
-        self, coords: Quantity, direction: NDArray[(Any, 3), Any], **kwargs
+        self,
+        coords: Quantity,
+        direction: NDArray[(Any, 3), Any],
+        n_points_per_source: int,
+        T_threshold: float,
+        **kwargs,
     ) -> Quantity:
-        T_threshold = kwargs.get("T_threshold", 0.001)
-        n_points_per_source = kwargs.get("n_points", 1e4)
         r_thresh, zc_thresh = self._find_rz_thresholds(T_threshold)
         r, theta, zc = uniform_cylinder_rθz(n_points_per_source, r_thresh, zc_thresh)
 
-        T = self._Foutz12_transmittance(r, zc)
+        # T = self._Foutz12_transmittance(r, zc)
 
         end = coords + zc_thresh * direction
         x, y, z = xyz_from_rθz(r, theta, zc, coords, end)
+        return coords_from_xyz(x, y, z)
 
     def _get_rz_for_xyz(self, source_coords, source_direction, target_coords):
         """Assumes x, y, z already have units"""
-        m = len(source_coords) if len(source_coords.shape) == 2 else 1
-        n = len(target_coords) if len(target_coords.shape) == 2 else 1
+        m = source_coords.reshape((-1, 3)).shape[0]
+        n = target_coords.reshape((-1, 3)).shape[0]
 
         rel_coords = (
             # target_coords[np.newaxis, :, :] - source_coords[:, np.newaxis, :]
@@ -167,7 +179,7 @@ class FiberModel(LightModel):
         # zc = usf.dot(rel_coords, source_direction)  # mxn distance along cylinder axis
         #           m x n x 3    m x 1 x 3
         zc = np.sum(
-            rel_coords * source_direction.reshape((m, 1, 3)), axis=-1
+            rel_coords * source_direction.reshape((-1, 1, 3)), axis=-1
         )  # mxn distance along cylinder axis
         assert zc.shape == (m, n)
         # just need length (norm) of radius vectors
@@ -178,7 +190,7 @@ class FiberModel(LightModel):
                     rel_coords
                     #    m x n                 m x 3
                     # --> m x n x 1             m x 1 x 3
-                    - zc.reshape((m, n, 1)) * source_direction.reshape((m, 1, 3))
+                    - zc.reshape((m, n, 1)) * source_direction.reshape((-1, 1, 3))
                 )
                 ** 2,
                 axis=-1,
@@ -192,11 +204,17 @@ class FiberModel(LightModel):
         res_mm = 0.01
         zc = np.arange(20, 0, -res_mm) * mm  # ascending T
         T = self._Foutz12_transmittance(0 * mm, zc)
-        zc_thresh = zc[np.searchsorted(T, thresh)]
+        try:
+            zc_thresh = zc[np.searchsorted(T, thresh)]
+        except IndexError:  # no points above threshold
+            zc_thresh = np.max(zc)
         # look at half the z threshold for the r threshold
         r = np.arange(20, 0, -res_mm) * mm
         T = self._Foutz12_transmittance(r, zc_thresh / 2)
-        r_thresh = r[np.searchsorted(T, thresh)]
+        try:
+            r_thresh = r[np.searchsorted(T, thresh)]
+        except IndexError:  # no points above threshold
+            r_thresh = np.max(r)
         # multiply by 1.2 just in case
         return r_thresh * 1.2, zc_thresh
 
@@ -222,7 +240,7 @@ def fiber473nm(
     )
 
 
-@define
+@define(eq=False)
 class Light(Stimulator):
     """Delivers photostimulation of the network.
 
@@ -242,9 +260,9 @@ class Light(Stimulator):
 
     Visualization kwargs
     --------------------
-    n_points : int, optional
-        The number of points used to represent light intensity in space.
-        By default 1e4.
+    n_points_per_source : int, optional
+        The number of points per light source used to represent light intensity in
+        space. By default 1e4.
     T_threshold : float, optional
         The transmittance below which no points are plotted. By default
         1e-3.
@@ -300,10 +318,11 @@ class Light(Stimulator):
         self, neuron_group: NeuronGroup, **kwparams: Any
     ) -> None:
         lor = lor_for_sim(self.sim)
-        if self in lor.lights_for_ng[neuron_group]:
+        if self in lor.lights_for_ng.get(neuron_group, set()):
             raise ValueError(
                 f"Light {self} already connected to neuron group {neuron_group}"
             )
+        self.brian_objects.add(self.source_ng)
         lor.register_light(self, neuron_group)
 
     @property
@@ -312,30 +331,37 @@ class Light(Stimulator):
         assert len(self.coords.shape) == 2 or len(self.coords.shape) == 1
         return len(self.coords) if len(self.coords.shape) == 2 else 1
 
-    def add_self_to_plot(self, ax, axis_scale_unit, **kwargs) -> PathCollection:
+    def add_self_to_plot(self, ax, axis_scale_unit, **kwargs) -> list[PathCollection]:
         # show light with point field, assigning r and z coordinates
         # to all points
         # filter out points with <0.001 transmittance to make plotting faster
 
-        T_threshold = kwargs.get("T_threshold", 0.001)
-        n_points = kwargs.get("n_points", 1e4)
+        T_threshold = kwargs.pop("T_threshold", 0.001)
+        n_points_per_source = kwargs.pop("n_points_per_source", 1e4)
         intensity = kwargs.get("intensity", 0.5)
 
-        viz_points = self.light_model.viz_points(self.coords, self.direction, **kwargs)
-        T = self.light_model.transmittance(
-            self.coords, self.direction, viz_points, **kwargs
+        viz_points = self.light_model.viz_points(
+            self.coords, self.direction, int(n_points_per_source), T_threshold, **kwargs
         )
+        assert viz_points.shape == (self.m, n_points_per_source, 3)
+        viz_points = viz_points.reshape((-1, 3))
+        T = self.light_model.transmittance(self.coords, self.direction, viz_points)
+        T = T.reshape((-1, 3))
 
         idx_to_plot = T >= T_threshold
-        x = x[idx_to_plot]
-        y = y[idx_to_plot]
-        z = z[idx_to_plot]
-        T = T[idx_to_plot]
+        # x = x[idx_to_plot]
+        # y = y[idx_to_plot]
+        # z = z[idx_to_plot]
+        # T = T[idx_to_plot]
         point_cloud = ax.scatter(
-            x / axis_scale_unit,
-            y / axis_scale_unit,
-            z / axis_scale_unit,
-            c=T,
+            viz_points[idx_to_plot, 0] / axis_scale_unit,
+            viz_points[idx_to_plot, 1] / axis_scale_unit,
+            viz_points[idx_to_plot, 2] / axis_scale_unit,
+            # iz_points[idx_to_plot, 0],
+            # x / axis_scale_unit,
+            # y / axis_scale_unit,
+            # z / axis_scale_unit,
+            c=T[idx_to_plot],
             cmap=self._alpha_cmap_for_wavelength(intensity),
             marker="o",
             edgecolors="none",
@@ -396,12 +422,7 @@ class Light(Stimulator):
         ):
             Irr0_mW_per_mm2 = self.max_Irr0_mW_per_mm2
         super().update(Irr0_mW_per_mm2)
-        for opto_syn in self.opto_syns.values():
-            opto_syn.Irr0 = Irr0_mW_per_mm2 * mwatt / mm2
-
-    def reset(self, **kwargs):
-        for opto_syn in self.opto_syns.values():
-            self.opsin_model.init_opto_syn_vars(opto_syn)
+        self.source_ng.Irr0 = Irr0_mW_per_mm2 * mwatt / mm2
 
     def _alpha_cmap_for_wavelength(self, intensity=0.5):
         c = wavelength_to_rgb(self.light_model.wavelength / nmeter)
