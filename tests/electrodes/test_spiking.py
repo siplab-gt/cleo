@@ -38,7 +38,7 @@ def test_MUS_multiple_contacts():
         half_detection_radius=0.75 * mm,
         save_history=True,
     )
-    probe = Probe("probe", [[0, 0, 0.25], [0, 0, 0.75]] * mm, [mus])
+    probe = Probe(coords=[[0, 0, 0.25], [0, 0, 0.75]] * mm, signals=[mus])
     sim.inject(probe, sgg)
 
     # remember i here is channel, no longer neuron
@@ -67,7 +67,7 @@ def test_MUS_multiple_contacts():
     # skip to 6 ms
     sim.run(2 * ms)
     # sim.get_state() nested dict is what will be passed to IO processor
-    i, t, y = sim.get_state()["probe"]["mus"]
+    i, t, y = sim.get_state()["Probe"]["mus"]
     assert (0 in i) and (1 in i) and len(i) >= 7
     assert all(t_i in t.round(2) for t_i in [4.1, 4.9, 5.1, 5.3, 5.5])
 
@@ -94,7 +94,7 @@ def test_MUS_multiple_groups():
         half_detection_radius=0.2 * mm,
         save_history=True,
     )
-    probe = Probe("probe", [[0, 0, 0], [0, 0, 0.1]] * mm, [mus])
+    probe = Probe([[0, 0, 0], [0, 0, 0.1]] * mm, [mus])
     sim.inject(probe, sgg1, sgg2, sgg3)
 
     sim.run(10 * ms)
@@ -131,12 +131,12 @@ def test_SortedSpiking():
         half_detection_radius=0.75 * mm,
         save_history=True,
     )
-    probe = Probe("probe", [[0, 0, 0.25], [0, 0, 0.75], [0, 0, 10]] * mm, [ss])
+    probe = Probe([[0, 0, 0.25], [0, 0, 0.75], [0, 0, 10]] * mm, [ss])
     # injecting sgg0 before sgg1 needed to predict i_eg
     sim.inject(probe, sgg0, sgg1)
 
     sim.run(3 * ms)  # 3 ms
-    i, t, y = sim.get_state()["probe"]["ss"]
+    i, t, y = sim.get_state()["Probe"]["ss"]
     assert all(i == [2, 2])
 
     sim.run(1 * ms)  # 4 ms
@@ -165,7 +165,7 @@ def _test_reset(spike_signal_class):
         half_detection_radius=0.75 * mm,
         save_history=True,
     )
-    probe = Probe("probe", [[0, 0, 0]] * mm, [spike_signal])
+    probe = Probe([[0, 0, 0]] * mm, [spike_signal])
     sim.inject(probe, sgg)
     sim.set_io_processor(RecordOnlyProcessor(sample_period_ms=1))
     assert len(spike_signal.i) == 0

@@ -5,6 +5,7 @@ from collections.abc import Iterable
 from operator import concat
 from typing import Any, Tuple
 
+from attrs import field, define
 from mpl_toolkits.mplot3d.axes3d import Axes3D
 from matplotlib.artist import Artist
 from brian2 import NeuronGroup, mm, Unit, Quantity, umeter, np
@@ -82,6 +83,7 @@ class Signal(ABC):
         pass
 
 
+@define(eq=False)
 class Probe(Recorder):
     """Picks up specified signals across an array of electrodes.
 
@@ -96,42 +98,27 @@ class Probe(Recorder):
     """
 
     coords: Quantity
-    """n x 3 array (with Brian length unit) specifying contact locations"""
-    signals: list[Signal]
-    """Signals recorded by the probe"""
-    n: int
-    """Number of electrode contacts in the probe"""
+    """Coordinates of n electrodes. Must be an n x 3 array (with unit)
+    where columns represent x, y, and z"""
 
-    def __init__(
-        self, name: str, coords: Quantity, signals: Iterable[Signal] = []
-    ) -> None:
-        """
-        Parameters
-        ----------
-        name : str
-            Unique identifier for device
-        coords : Quantity
-            Coordinates of n electrodes. Must be an n x 3 array (with unit)
-            where columns represent x, y, and z
-        signals : Iterable[Signal], optional
-            Signals to record with probe, by default [].
-            Can be specified later with :meth:`add_signals`.
+    signals: list[Signal] = field(factory=list)
+    """Signals recorded by the probe.
+    Can be added to post-init with :meth:`add_signals`."""
 
-        Raises
-        ------
-        ValueError
-            When coords aren't n x 3
-        """
-        super().__init__(name)
-        self.coords = np.reshape(coords, (-1, 3))
+    def __attrs_post_init__(self):
+        self.coords = self.coords.reshape((-1, 3))
         if len(self.coords.shape) != 2 or self.coords.shape[1] != 3:
             raise ValueError(
                 "coords must be an n by 3 array (with unit) with x, y, and z"
                 "coordinates for n contact locations."
             )
-        self.n = len(self.coords)
-        self.signals = []
-        self.add_signals(*signals)
+        for signal in self.signals:
+            signal.init_for_probe(self)
+
+    @property
+    def n(self):
+        """Number of electrode contacts in the probe"""
+        return len(self.coords)
 
     def add_signals(self, *signals: Signal) -> None:
         """Add signals to the probe for recording

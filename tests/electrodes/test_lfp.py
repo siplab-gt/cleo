@@ -70,7 +70,7 @@ def test_TKLFPSignal(groups_and_types, signal_positive, rand_seed):
         linear_shank_coords(1.2 * mm, 4, (0, 0, 0) * mm),
         linear_shank_coords(1.2 * mm, 4, (0.2, 0.2, 0) * mm),
     )
-    probe = Probe("probe", contact_coords, signals=[tklfp])
+    probe = Probe(contact_coords, signals=[tklfp])
     for group, tklfp_type in groups_and_types:
         sim.inject(probe, group, tklfp_type=tklfp_type, sample_period_ms=1)
 
@@ -115,7 +115,7 @@ def test_TKLFPSignal_out_of_range():
     sim = CLSimulator(net)
     tklfp = TKLFPSignal("tklfp")
     probe = Probe(
-        "probe", [[0, 0, 0], [5, 5, 5]] * mm, signals=[tklfp]
+        [[0, 0, 0], [5, 5, 5]] * mm, signals=[tklfp]
     )  # contacts at origin and 5,5,5
     sim.inject(probe, *pgs, tklfp_type="exc", sample_period_ms=1)
     sim.run(30 * ms)
@@ -148,7 +148,7 @@ def test_TKLFP_orientation(seed, is_exc):
     # cleo setup
     sim = CLSimulator(Network(sgg))
     tklfp_signal = TKLFPSignal("tklfp", save_history=True)
-    probe = Probe("probe", elec_coords, [tklfp_signal])
+    probe = Probe(elec_coords, [tklfp_signal])
     samp_period = 10 * ms
     sim.set_io_processor(RecordOnlyProcessor(samp_period / ms))  # record every 10 ms
     sim.inject(

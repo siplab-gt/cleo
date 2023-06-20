@@ -69,8 +69,8 @@ class InterfaceDevice(ABC):
         Parameters
         ----------
         neuron_group : NeuronGroup
-        **kwparams : optional, passed from `inject_recorder` or
-            `inject_stimulator`
+        **kwparams : optional, passed from `inject` or
+            `inject`
         """
         pass
 
@@ -179,14 +179,9 @@ class IOProcessor(ABC):
         pass
 
 
+@define(eq=False)
 class Recorder(InterfaceDevice):
     """Device for taking measurements of the network."""
-
-    # TODO: remove?
-    # name: str = None
-    """Unique identifier for device.
-    Used as a key in output/input dicts
-    """
 
     @abstractmethod
     def get_state(self) -> Any:
@@ -198,11 +193,6 @@ class Recorder(InterfaceDevice):
 class Stimulator(InterfaceDevice):
     """Device for manipulating the network"""
 
-    # TODO: remove name from Stimulator and Recorder, since it's already in InterfaceDevice
-    # name: str = None
-    """Unique identifier for device.
-    Used as a key in output/input dicts
-    """
     value: Any = field(init=False, default=None)
     """The current value of the stimulator device"""
     default_value: Any = 0
@@ -273,8 +263,6 @@ class CLSimulator:
         Calls :meth:`~InterfaceDevice.connect_to_neuron_group` for each group with
         kwparams and adds the device's :attr:`~InterfaceDevice.brian_objects`
         to the simulator's :attr:`network`.
-
-        Automatically called by :meth:`inject_recorder` and :meth:`inject_stimulator`.
 
         Parameters
         ----------

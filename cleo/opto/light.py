@@ -257,7 +257,7 @@ class Light(Stimulator):
 
     See :meth:`connect_to_neuron_group` for optional keyword parameters
     that can be specified when calling
-    :meth:`cleo.CLSimulator.inject_stimulator`.
+    :meth:`cleo.CLSimulator.inject`.
 
     Visualization kwargs
     --------------------
@@ -283,11 +283,6 @@ class Light(Stimulator):
     the base of the light source, by default (0, 0, 0)*mm.
     Can also be an nx3 array for multiple sources.
     """
-
-    # TODO: remove
-    # @source_ng.default
-    # def _default_source_ng(self):
-    #     return NeuronGroup(self.m, "Irr0: watt/meter**2")
 
     direction: NDArray[(Any, 3), Any] = field(
         default=(0, 0, 1), converter=normalize_coords

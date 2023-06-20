@@ -97,7 +97,7 @@ class TKLFPSignal(Signal):
         if tklfp_type not in ["exc", "inh"]:
             raise Exception(
                 "tklfp_type ('exc' or 'inh') must be passed as a keyword argument to "
-                "inject_recorder() when injecting an electrode with a TKLFPSignal."
+                "inject() when injecting an electrode with a TKLFPSignal."
             )
         orientation = kwparams.pop("orientation", np.array([[0, 0, -1]])).copy()
         orientation[:, 2] *= -1
@@ -182,7 +182,7 @@ class TKLFPSignal(Signal):
                 raise Exception(
                     "TKLFP needs to know the sampling period. Either set the simulator's "
                     f"IO processor before injecting {self.probe.name} or "
-                    f"specify it on injection: .inject_recorder({self.probe.name} "
+                    f"specify it on injection: .inject({self.probe.name} "
                     ", tklfp_type=..., sample_period_ms=...)"
                 )
         return np.ceil(

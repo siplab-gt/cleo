@@ -20,16 +20,16 @@ from cleo.ephys import (
 
 
 def test_Probe():
-    probe = Probe("probe", [0, 0, 0] * mm)
+    probe = Probe([0, 0, 0] * mm)
     assert probe.n == 1
-    probe = Probe("probe", [[0, 0, 0], [1, 1, 1]] * mm)
+    probe = Probe([[0, 0, 0], [1, 1, 1]] * mm)
     assert probe.n == 2
     with pytest.raises(ValueError):
-        Probe("probe", [0, 0] * mm)
+        Probe([0, 0] * mm)
     with pytest.raises(ValueError):
-        Probe("probe", [0, 0, 0, 0] * mm)
+        Probe([0, 0, 0, 0] * mm)
     with pytest.raises(ValueError):
-        Probe("probe", [[0, 0], [1, 1], [2, 2], [3, 3]] * mm)
+        Probe([[0, 0], [1, 1], [2, 2], [3, 3]] * mm)
 
 
 def test_Probe_injection():
@@ -50,18 +50,18 @@ def test_Probe_injection():
 
     dumb = DummySignal("dumb")
     dumber = DummySignal("dumber")
-    probe = Probe("probe", [0, 0, 0] * mm, signals=[dumb])
+    probe = Probe([0, 0, 0] * mm, signals=[dumb])
     probe.add_signals(dumber)
     sim.inject(probe, ng)
 
     assert dumb.brian_objects.issubset(sim.network.objects)
     assert dumber.brian_objects.issubset(sim.network.objects)
-    assert sim.get_state()["probe"]["dumb"] == ng.name
-    assert sim.get_state()["probe"]["dumber"] == ng.name
+    assert sim.get_state()["Probe"]["dumb"] == ng.name
+    assert sim.get_state()["Probe"]["dumber"] == ng.name
 
     with pytest.raises(ValueError):
         # cannot use same signal object for two electrodes
-        Probe("probe2", [0, 0, 0] * mm, signals=[dumb])
+        Probe([0, 0, 0] * mm, signals=[dumb], name="probe2")
 
     assert dumb.value == dumber.value == 1
     probe.reset()

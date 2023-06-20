@@ -41,8 +41,8 @@ def sim(neurons):
 
 
 def test_stimulator(sim, neurons):
-    my_stim = MyStim("my_stim", 42, save_history=True)
-    sim.inject_stimulator(my_stim, neurons)
+    my_stim = MyStim(42, name="my_stim", save_history=True)
+    sim.inject(my_stim, neurons)
     assert sim.stimulators["my_stim"] == my_stim
 
     assert len(my_stim.brian_objects) == 2
@@ -62,12 +62,12 @@ def test_stimulator(sim, neurons):
 
     neurons2 = NeuronGroup(1, "v = -70*mV : volt")
     with pytest.raises(Exception):  # neuron2 not in network
-        sim.inject_stimulator(my_stim, neurons2)
+        sim.inject(my_stim, neurons2)
 
 
 def test_recorder(sim, neurons):
-    my_rec = MyRec("my_rec")
-    sim.inject_recorder(my_rec, neurons)
+    my_rec = MyRec(name="my_rec")
+    sim.inject(my_rec, neurons)
     assert sim.recorders["my_rec"] == my_rec
 
     assert len(my_rec.brian_objects) == 1
@@ -90,10 +90,10 @@ class MyProcLoop(IOProcessor):
 
 
 def test_io_processor_in_sim(sim, neurons):
-    my_rec = MyRec("my_rec")
-    sim.inject_recorder(my_rec, neurons)
-    my_stim = MyStim("my_stim", 42)
-    sim.inject_stimulator(my_stim, neurons)
+    my_rec = MyRec(name="my_rec")
+    sim.inject(my_rec, neurons)
+    my_stim = MyStim(42, name="my_stim")
+    sim.inject(my_stim, neurons)
 
     sim.set_io_processor(MyProcLoop())
     sim.run(0.1 * ms)
