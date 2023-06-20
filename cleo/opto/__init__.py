@@ -6,8 +6,12 @@ from cleo.opto.registry import (
 from cleo.opto.opsins import (
     FourStateOpsin,
     ProportionalCurrentOpsin,
-    ChR2_four_state,
     Opsin,
+)
+from cleo.opto.opsin_library import (
+    ChR2_4S,
+    VfChrimson_4S,
+    Chrimson_4S,
 )
 from cleo.opto.light import (
     Light,

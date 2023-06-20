@@ -54,6 +54,10 @@ class InterfaceDevice(ABC):
         """
         pass
 
+    def reset(self, **kwargs) -> None:
+        """Reset the device to a neutral state"""
+        pass
+
     @abstractmethod
     def connect_to_neuron_group(self, neuron_group: NeuronGroup, **kwparams) -> None:
         """Connect device to given `neuron_group`.
@@ -189,10 +193,6 @@ class Recorder(InterfaceDevice):
         """Return current measurement."""
         pass
 
-    def reset(self, **kwargs) -> None:
-        """Reset the recording device to a neutral state"""
-        pass
-
 
 @define(eq=False)
 class Stimulator(InterfaceDevice):
@@ -261,6 +261,7 @@ class CLSimulator:
     io_processor: IOProcessor = field(default=None, init=False)
     recorders: dict[str, Recorder] = field(factory=dict, init=False)
     stimulators: dict[str, Stimulator] = field(factory=dict, init=False)
+    devices: set[InterfaceDevice] = field(factory=set, init=False)
     _processing_net_op: NetworkOperation = field(default=None, init=False)
     _net_store_name: str = field(default="cleo default", init=False)
 
@@ -316,9 +317,10 @@ class CLSimulator:
                 self.network.add(brian_object)
         self.network.store(self._net_store_name)
         if isinstance(device, Recorder):
-            self.recorders[device] = device
+            self.recorders[device.name] = device
         if isinstance(device, Stimulator):
-            self.stimulators[device] = device
+            self.stimulators[device.name] = device
+        self.devices.add(device)
         return self
 
     def get_state(self) -> dict:
@@ -410,13 +412,11 @@ class CLSimulator:
 
         Restores the Brian Network to where it was when the
         CLSimulator was last modified (last injection, IOProcessor change).
-        Calls reset() on stimulators, recorders, and IOProcessor.
+        Calls reset() on devices and IOProcessor.
         """
         # kwargs passed to stimulators, recorders, and io_processor reset
         self.network.restore(self._net_store_name)
-        for stim in self.stimulators.values():
-            stim.reset(**kwargs)
-        for rec in self.recorders.values():
-            rec.reset(**kwargs)
+        for device in self.devices:
+            device.reset(**kwargs)
         if self.io_processor is not None:
             self.io_processor.reset(**kwargs)

@@ -1,13 +1,14 @@
 """Contains Light device and propagation models"""
 from __future__ import annotations
 from abc import ABC, abstractmethod
-from typing import Tuple, Any
+from typing import Tuple, Any, Union
 import warnings
 
 from attrs import define, field, asdict
 from brian2 import (
     Synapses,
     NeuronGroup,
+    Subgroup,
     Unit,
     BrianObjectException,
     get_unit,
@@ -283,11 +284,10 @@ class Light(Stimulator):
     Can also be an nx3 array for multiple sources.
     """
 
-    source_ng: NeuronGroup = field(init=False)
-
-    @source_ng.default
-    def _default_source_ng(self):
-        return NeuronGroup(self.m, "Irr0: watt/meter**2")
+    # TODO: remove
+    # @source_ng.default
+    # def _default_source_ng(self):
+    #     return NeuronGroup(self.m, "Irr0: watt/meter**2")
 
     direction: NDArray[(Any, 3), Any] = field(
         default=(0, 0, 1), converter=normalize_coords
@@ -314,6 +314,11 @@ class Light(Stimulator):
             self.coords, self.direction, target_coords
         )
 
+    def init_for_simulator(self, sim: CLSimulator) -> None:
+        lor = lor_for_sim(sim)
+        lor.init_register_light(self)
+        self.reset()
+
     def connect_to_neuron_group(
         self, neuron_group: NeuronGroup, **kwparams: Any
     ) -> None:
@@ -322,7 +327,6 @@ class Light(Stimulator):
             raise ValueError(
                 f"Light {self} already connected to neuron group {neuron_group}"
             )
-        self.brian_objects.add(self.source_ng)
         lor.register_light(self, neuron_group)
 
     @property
@@ -330,6 +334,11 @@ class Light(Stimulator):
         """Number of light sources"""
         assert len(self.coords.shape) == 2 or len(self.coords.shape) == 1
         return len(self.coords) if len(self.coords.shape) == 2 else 1
+
+    @property
+    def source(self) -> Subgroup:
+        lor = lor_for_sim(self.sim)
+        return lor.source_for_light(self)
 
     def add_self_to_plot(self, ax, axis_scale_unit, **kwargs) -> list[PathCollection]:
         # show light with point field, assigning r and z coordinates
@@ -405,7 +414,7 @@ class Light(Stimulator):
         point_cloud.set_cmap(self._alpha_cmap_for_wavelength(intensity))
         return [point_cloud]
 
-    def update(self, Irr0_mW_per_mm2: float):
+    def update(self, Irr0_mW_per_mm2: Union[float, np.ndarray]) -> None:
         """Set the light intensity, in mW/mm2 (without unit)
 
         Parameters
@@ -413,16 +422,25 @@ class Light(Stimulator):
         Irr0_mW_per_mm2 : float
             Desired light intensity for light source
         """
-        if Irr0_mW_per_mm2 < 0:
+        if type(Irr0_mW_per_mm2) != np.ndarray:
+            Irr0_mW_per_mm2 = np.array(Irr0_mW_per_mm2).reshape((-1,))
+        if Irr0_mW_per_mm2.shape not in [(1,), (self.m,)]:
+            raise ValueError(
+                f"Input to light Irr0_mW_per_mm2 must be a scalar or an array of"
+                f" length {self.m}. Got {Irr0_mW_per_mm2.shape} instead."
+            )
+        if np.any(Irr0_mW_per_mm2 < 0):
             warnings.warn(f"{self.name}: negative light intensity Irr0 clipped to 0")
-            Irr0_mW_per_mm2 = 0
+            Irr0_mW_per_mm2[Irr0_mW_per_mm2 < 0] = 0
         if (
             self.max_Irr0_mW_per_mm2 is not None
             and Irr0_mW_per_mm2 > self.max_Irr0_mW_per_mm2
         ):
-            Irr0_mW_per_mm2 = self.max_Irr0_mW_per_mm2
+            Irr0_mW_per_mm2[
+                Irr0_mW_per_mm2 > self.max_Irr0_mW_per_mm2
+            ] = self.max_Irr0_mW_per_mm2
         super().update(Irr0_mW_per_mm2)
-        self.source_ng.Irr0 = Irr0_mW_per_mm2 * mwatt / mm2
+        self.source.Irr0 = Irr0_mW_per_mm2 * mwatt / mm2
 
     def _alpha_cmap_for_wavelength(self, intensity=0.5):
         c = wavelength_to_rgb(self.light_model.wavelength / nmeter)

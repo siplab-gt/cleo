@@ -1,25 +1,24 @@
 """Contains opsin models and default parameters"""
 from __future__ import annotations
-from abc import ABC, abstractmethod
-from typing import Callable, Tuple, Any
-import warnings
+from typing import Callable, Tuple
 
 from attrs import define, field, asdict, fields_dict
 from brian2 import (
     Synapses,
+    Function,
     NeuronGroup,
     Unit,
     BrianObjectException,
     get_unit,
     Equations,
+    implementation,
+    check_units,
 )
 from nptyping import NDArray
 from brian2.units import (
     mm,
     mm2,
     nmeter,
-    meter,
-    kgram,
     Quantity,
     second,
     ms,
@@ -28,20 +27,14 @@ from brian2.units import (
     mV,
     volt,
     amp,
-    mwatt,
 )
-from brian2.units.allunits import meter2, radian
-import brian2.units.unitsafefunctions as usf
+from brian2.units.allunits import radian
 import numpy as np
-import matplotlib
-from matplotlib import colors
-from matplotlib.artist import Artist
-from matplotlib.collections import PathCollection
+from scipy.interpolate import interp1d
 
 from cleo.base import InterfaceDevice
-from cleo.coords import assign_coords, coords_from_ng
+from cleo.coords import assign_coords
 from cleo.opto.registry import lor_for_sim
-from cleo.stimulators import Stimulator
 
 
 @define(eq=False)
@@ -85,7 +78,10 @@ class Opsin(InterfaceDevice):
 
     epsilon: Callable = field(default=(lambda wl: 1))
     """A callable that returns a value between 0 and 1 when given a wavelength
-    representing the relative sensitivity of the opsin to that wavelength."""
+    (in nm) representing the relative sensitivity of the opsin to that wavelength."""
+
+    extra_namespace: dict = field(factory=dict, init=False)
+    """Additional items (beyond parameters) to be added to the opto synapse namespace"""
 
     def connect_to_neuron_group(self, neuron_group: NeuronGroup, **kwparams) -> None:
         """Transfect neuron group with opsin.
@@ -155,6 +151,7 @@ class Opsin(InterfaceDevice):
             namespace=mod_opsin_params,
             name=f"opto_syn_{self.name}_{neuron_group.name}",
         )
+        opto_syn.namespace.update(self.extra_namespace)
         opto_syn.connect(i=range(len(i_expression)), j=i_expression)
         self.init_opto_syn_vars(opto_syn)
         # relative channel density
@@ -291,6 +288,22 @@ class MarkovOpsin(Opsin):
     )
 
 
+@implementation(
+    "cython",
+    """
+    cdef double f_unless_x0(double f, double x, double f_when_x0):
+        if x == 0:
+            return f_when_x0
+        else:
+            return f
+    """,
+)
+@check_units(f=1, x=volt, f_when_0=1, result=1)
+def f_unless_x0(f, x, f_when_x0):
+    f[x == 0] = f_when_x0
+    return f
+
+
 @define(eq=False)
 class FourStateOpsin(MarkovOpsin):
     """4-state model from PyRhO (Evans et al. 2016).
@@ -337,10 +350,21 @@ class FourStateOpsin(MarkovOpsin):
         Gb = kb*Hq + Gb0 : hertz
 
         fphi = O1 + gamma*O2 : 1
-        fv = (1 - exp(-(V_VAR_NAME_post-E)/v0)) / -2 : 1
+        # TODO: get this voltage dependence right 
+        # v1/v0 when v-E == 0 via l'Hopital's rule
+        # fv = (1 - exp(-(V_VAR_NAME_post-E)/v0)) / -2 : 1
+        fv = f_unless_x0(
+            (1 - exp(-(V_VAR_NAME_post-E)/v0)) / ((V_VAR_NAME_post-E)/v1),
+            V_VAR_NAME_post - E,
+            v1/v0
+        ) : 1
 
         IOPTO_VAR_NAME_post = -g0*fphi*fv*(V_VAR_NAME_post-E)*rho_rel : ampere (summed)
         rho_rel : 1""",
+    )
+
+    extra_namespace: dict[str, Any] = field(
+        init=False, factory=lambda: {"f_unless_x0": f_unless_x0}
     )
 
     def init_opto_syn_vars(self, opto_syn: Synapses) -> None:
@@ -348,50 +372,59 @@ class FourStateOpsin(MarkovOpsin):
             setattr(opto_syn, varname, value)
 
 
-def ChR2_four_state(
-    g0=114000 * psiemens,
-    gamma=0.00742,
-    phim=2.33e17 / mm2 / second,  # *photon, not in Brian2
-    k1=4.15 / ms,
-    k2=0.868 / ms,
-    p=0.833,
-    Gf0=0.0373 / ms,
-    kf=0.0581 / ms,
-    Gb0=0.0161 / ms,
-    kb=0.063 / ms,
-    q=1.94,
-    Gd1=0.105 / ms,
-    Gd2=0.0138 / ms,
-    Gr0=0.00033 / ms,
-    E=0 * mV,
-    v0=43 * mV,
-    v1=17.1 * mV,
-    name="ChR2",
-) -> FourStateOpsin:
-    """Returns a 4-state ChR2 model.
+@define(eq=False)
+class BansalFourStateOpsin(MarkovOpsin):
+    """4-state model from Bansal et al. 2020.
 
-    Params taken from try.projectpyrho.org's default 4-state configuration.
+    The difference from the PyRhO model is that there is no voltage dependence.
+
+    rho_rel is channel density relative to standard model fit;
+    modifying it post-injection allows for heterogeneous opsin expression.
+
+    IOPTO_VAR_NAME and V_VAR_NAME are substituted on injection.
     """
-    return FourStateOpsin(
-        g0=g0,
-        gamma=gamma,
-        phim=phim,
-        k1=k1,
-        k2=k2,
-        p=p,
-        Gf0=Gf0,
-        kf=kf,
-        Gb0=Gb0,
-        kb=kb,
-        q=q,
-        Gd1=Gd1,
-        Gd2=Gd2,
-        Gr0=Gr0,
-        E=E,
-        v0=v0,
-        v1=v1,
-        name=name,
+
+    g0: Quantity = 114000 * psiemens
+    gamma: Quantity = 0.00742
+    phim: Quantity = 2.33e17 / mm2 / second  # *photon, not in Brian2
+    k1: Quantity = 4.15 / ms
+    k2: Quantity = 0.868 / ms
+    p: Quantity = 0.833
+    Gf0: Quantity = 0.0373 / ms
+    kf: Quantity = 0.0581 / ms
+    Gb0: Quantity = 0.0161 / ms
+    kb: Quantity = 0.063 / ms
+    q: Quantity = 1.94
+    Gd1: Quantity = 0.105 / ms
+    Gd2: Quantity = 0.0138 / ms
+    Gr0: Quantity = 0.00033 / ms
+    E: Quantity = 0 * mV
+    model: str = field(
+        init=False,
+        default="""
+        dC1/dt = Gd1*O1 + Gr0*C2 - Ga1*C1 : 1 (clock-driven)
+        dO1/dt = Ga1*C1 + Gb*O2 - (Gd1+Gf)*O1 : 1 (clock-driven)
+        dO2/dt = Ga2*C2 + Gf*O1 - (Gd2+Gb)*O2 : 1 (clock-driven)
+        C2 = 1 - C1 - O1 - O2 : 1
+
+        Theta = int(phi_pre > 0*phi_pre) : 1
+        Hp = Theta * phi_pre**p/(phi_pre**p + phim**p) : 1
+        Ga1 = k1*Hp : hertz
+        Ga2 = k2*Hp : hertz
+        Hq = Theta * phi_pre**q/(phi_pre**q + phim**q) : 1
+        Gf = kf*Hq + Gf0 : hertz
+        Gb = kb*Hq + Gb0 : hertz
+
+        fphi = O1 + gamma*O2 : 1
+        fv = 1 : 1
+
+        IOPTO_VAR_NAME_post = -g0*fphi*(V_VAR_NAME_post-E)*rho_rel : ampere (summed)
+        rho_rel : 1""",
     )
+
+    def init_opto_syn_vars(self, opto_syn: Synapses) -> None:
+        for varname, value in {"C1": 1, "O1": 0, "O2": 0}.items():
+            setattr(opto_syn, varname, value)
 
 
 @define(eq=False)
@@ -421,3 +454,7 @@ class ProportionalCurrentOpsin(Opsin):
             Iopto_unit = radian
         self.per_ng_unit_replacements = [("IOPTO_UNIT", Iopto_unit.name)]
         self.required_vars = [("Iopto", Iopto_unit)]
+
+
+def linear_interp_from_data(wavelength_nm, epsilon):
+    return interp1d(wavelength_nm, epsilon, kind="linear")
