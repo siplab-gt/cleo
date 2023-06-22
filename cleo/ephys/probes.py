@@ -14,29 +14,23 @@ from cleo.base import Recorder
 from cleo.utilities import get_orth_vectors_for_V
 
 
+@define(eq=False)
 class Signal(ABC):
     """Base class representing something an electrode can record"""
 
-    name: str
-    """Unique identifier used to organize probe output"""
-    brian_objects: set
+    name: str = field(kw_only=True)
+    """Unique identifier used to organize probe output.
+    Name of the class by default."""
+
+    @name.default
+    def _default_name(self) -> str:
+        return self.__class__.__name__
+
+    brian_objects: set = field(init=False, factory=set)
     """All Brian objects created by the signal.
     Must be kept up-to-date for automatic injection into the network"""
-    probe: Probe
+    probe: Probe = field(init=False, default=None)
     """The probe the signal is configured to record for."""
-
-    def __init__(self, name: str) -> None:
-        """
-        Constructor must be called at beginning of children constructors.
-
-        Parameters
-        ----------
-        name : str
-            Unique identifier used when reading the state from the network
-        """
-        self.name = name
-        self.brian_objects = set()
-        self.probe = None
 
     def init_for_probe(self, probe: Probe) -> None:
         """Called when attached to a probe.
@@ -104,6 +98,8 @@ class Probe(Recorder):
     signals: list[Signal] = field(factory=list)
     """Signals recorded by the probe.
     Can be added to post-init with :meth:`add_signals`."""
+
+    probe: Probe = field(init=False)
 
     def __attrs_post_init__(self):
         self.coords = self.coords.reshape((-1, 3))

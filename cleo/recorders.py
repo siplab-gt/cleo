@@ -103,6 +103,7 @@ class GroundTruthSpikeRecorder(Recorder):
         num_new_spikes = len(self._mon.t) - self._num_spikes_seen
         self._num_spikes_seen += num_new_spikes
         out = np.zeros(len(self.neuron_group), dtype=np.uint)
-        for spike_i in self._mon.i[-num_new_spikes:]:
-            out[spike_i] += 1
+        if num_new_spikes > 0:
+            for spike_i in self._mon.i[-num_new_spikes:]:
+                out[spike_i] += 1
         return out

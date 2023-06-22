@@ -48,8 +48,8 @@ def test_Probe_injection():
     ng = NeuronGroup(1, "v : 1")
     sim = CLSimulator(Network(ng))
 
-    dumb = DummySignal("dumb")
-    dumber = DummySignal("dumber")
+    dumb = DummySignal(name="dumb")
+    dumber = DummySignal(name="dumber")
     probe = Probe([0, 0, 0] * mm, signals=[dumb])
     probe.add_signals(dumber)
     sim.inject(probe, ng)

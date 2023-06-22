@@ -59,7 +59,7 @@ def test_TKLFPSignal(groups_and_types, signal_positive, rand_seed):
     net = Network(*[gt[0] for gt in groups_and_types])
     sim = CLSimulator(net)
 
-    tklfp = TKLFPSignal("tklfp", save_history=True)
+    tklfp = TKLFPSignal(save_history=True)
     # One probe in middle and another further out.
     # Here we put coords for two probes in one EG.
     # Alternatively you could create two separate EGs
@@ -113,7 +113,7 @@ def test_TKLFPSignal_out_of_range():
         pgs.append(pg)
     net = Network(*pgs)
     sim = CLSimulator(net)
-    tklfp = TKLFPSignal("tklfp")
+    tklfp = TKLFPSignal()
     probe = Probe(
         [[0, 0, 0], [5, 5, 5]] * mm, signals=[tklfp]
     )  # contacts at origin and 5,5,5
@@ -147,7 +147,7 @@ def test_TKLFP_orientation(seed, is_exc):
 
     # cleo setup
     sim = CLSimulator(Network(sgg))
-    tklfp_signal = TKLFPSignal("tklfp", save_history=True)
+    tklfp_signal = TKLFPSignal(save_history=True)
     probe = Probe(elec_coords, [tklfp_signal])
     samp_period = 10 * ms
     sim.set_io_processor(RecordOnlyProcessor(samp_period / ms))  # record every 10 ms

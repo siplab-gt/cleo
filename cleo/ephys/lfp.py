@@ -2,6 +2,7 @@
 from __future__ import annotations
 from typing import Any
 
+from attrs import define, field
 from brian2 import NeuronGroup, mm, ms
 from brian2.monitors.spikemonitor import SpikeMonitor
 import numpy as np
@@ -11,6 +12,7 @@ from tklfp import TKLFP
 from cleo.ephys.probes import Signal, Probe
 
 
+@define(eq=False)
 class TKLFPSignal(Signal):
     """Records the Teleńczuk kernel LFP approximation.
 
@@ -26,50 +28,29 @@ class TKLFPSignal(Signal):
     elsewhere, Cleo's convention is that z=0 corresponds to the
     cortical surface and increasing z values represent increasing depth.
 
-    TKLFP is computed from spikes using the tklfp package."""
+    TKLFP is computed from spikes using the `tklfp package <https://github.com/kjohnsen/tklfp/>`_.
+    """
 
-    uLFP_threshold_uV: float
-    """Threshold, in microvolts, above which the uLFP for a single
-    spike is guaranteed to be considered. This determines the buffer
-    length of past spikes, since the uLFP from a long-past spike
-    becomes negligible and is ignored."""
-    save_history: bool
+    uLFP_threshold_uV: float = 1e-3
+    """Threshold, in microvolts, above which the uLFP for a single spike is guaranteed
+    to be considered, by default 1e-3.
+    This determines the buffer length of past spikes, since the uLFP from a long-past
+    spike becomes negligible and is ignored."""
+    save_history: bool = False
     """Whether to record output from every timestep in :attr:`lfp_uV`.
     Output is stored every time :meth:`get_state` is called."""
-    t_ms: NDArray[(Any,), float]
+    t_ms: NDArray[(Any,), float] = field(init=False)
     """Times at which LFP is recorded, in ms, stored if :attr:`save_history`"""
-    lfp_uV: NDArray[(Any, Any), float]
+    lfp_uV: NDArray[(Any, Any), float] = field(init=False)
     """Approximated LFP from every call to :meth:`get_state`, recorded
     if :attr:`save_history`. Shape is (n_samples, n_channels)."""
-    _elec_coords_mm: np.ndarray
-    _tklfps: list[TKLFP]
-    _monitors: list[SpikeMonitor]
-    _mon_spikes_already_seen: list[int]
-    _i_buffers: list[list[np.ndarray]]
-    _t_ms_buffers: list[list[np.ndarray]]
-
-    def __init__(
-        self, name: str, uLFP_threshold_uV: float = 1e-3, save_history: bool = False
-    ) -> None:
-        """
-        Parameters
-        ----------
-        name : str
-            Unique identifier for signal, used to identify signal output in :meth:`Probe.get_state`
-        uLFP_threshold_uV : float, optional
-            Sets :attr:`uLFP_threshold_uV`, by default 1e-3
-        save_history : bool, optional
-            Sets :attr:`save_history` to determine whether output is recorded, by default False
-        """
-        super().__init__(name)
-        self.uLFP_threshold_uV = uLFP_threshold_uV
-        self.save_history = save_history
-        self._tklfps = []
-        self._monitors = []
-        self._mon_spikes_already_seen = []
-        self._i_buffers = []
-        self._t_ms_buffers = []
-        self._buffer_positions = []
+    _elec_coords_mm: np.ndarray = field(init=False)
+    _tklfps: list[TKLFP] = field(init=False, factory=list)
+    _monitors: list[SpikeMonitor] = field(init=False, factory=list)
+    _mon_spikes_already_seen: list[int] = field(init=False, factory=list)
+    _i_buffers: list[list[np.ndarray]] = field(init=False, factory=list)
+    _t_ms_buffers: list[list[np.ndarray]] = field(init=False, factory=list)
+    _buffer_positions: list[int] = field(init=False, factory=list)
 
     def init_for_probe(self, probe: Probe):
         # inherit docstring

@@ -3,6 +3,7 @@ from __future__ import annotations
 from abc import abstractmethod
 from typing import Any, Tuple
 
+from attrs import define, field, fields
 from bidict import bidict
 from brian2 import NeuronGroup, Quantity, SpikeMonitor, meter, ms
 import numpy as np
@@ -13,6 +14,7 @@ from nptyping import NDArray
 from cleo.ephys.probes import Signal
 
 
+@define(eq=False)
 class Spiking(Signal):
     """Base class for probabilistically detecting spikes"""
 
@@ -22,69 +24,37 @@ class Spiking(Signal):
     half_detection_radius: Quantity
     """Radius (with Brian unit) within which half of all spikes
     are detected"""
-    cutoff_probability: float
+    cutoff_probability: float = 0.01
     """Spike detection probability below which neurons will not be
     considered. For computational efficiency."""
-    save_history: bool
+    save_history: bool = False
     """Determines whether :attr:`t_ms`, :attr:`i`, and :attr:`t_samp_ms` are recorded"""
-    t_ms: NDArray[(Any,), float]
+    t_ms: NDArray[(Any,), float] = field(
+        init=False, factory=lambda: np.array([], dtype=float)
+    )
     """Spike times in ms, stored if :attr:`save_history`"""
-    i: NDArray[(Any,), np.uint]
+    i: NDArray[(Any,), np.uint] = field(
+        init=False, factory=lambda: np.array([], dtype=np.uint)
+    )
     """Channel (for multi-unit) or neuron (for sorted) indices
     of spikes, stored if :attr:`save_history`"""
-    t_samp_ms: NDArray[(Any,), float]
+    t_samp_ms: NDArray[(Any,), float] = field(
+        init=False, factory=lambda: np.array([], dtype=float)
+    )
     """Sample times in ms when each spike was recorded, stored 
     if :attr:`save_history`"""
-    i_probe_by_i_ng: bidict
+    i_probe_by_i_ng: bidict = field(init=False, factory=bidict)
     """(neuron_group, i_ng) keys,  i_probe values. bidict for converting between
     neuron group indices and the indices the probe uses"""
-    _monitors: list[SpikeMonitor]
-    _mon_spikes_already_seen: list[int]
-    _dtct_prob_array: NDArray[(Any, Any), float]
-
-    def __init__(
-        self,
-        name: str,
-        perfect_detection_radius: Quantity,
-        half_detection_radius: Quantity = None,
-        cutoff_probability: float = 0.01,
-        save_history: bool = False,
-    ) -> None:
-        """
-        Parameters
-        ----------
-        name : str
-            Unique identifier for signal
-        perfect_detection_radius : Quantity
-            Radius (with Brian unit) within which all spikes
-            are detected
-        half_detection_radius : Quantity, optional
-            Radius (with Brian unit) within which half of all spikes
-            are detected
-        cutoff_probability : float, optional
-            Spike detection probability below which neurons will not be
-            considered, by default 0.01. For computational efficiency.
-        save_history : bool, optional
-            If True, will save t_ms (spike times), i (neuron or
-            channel index), and t_samp_ms (sample times) as attributes.
-            By default False
-        """
-        super().__init__(name)
-        self.perfect_detection_radius = perfect_detection_radius
-        self.half_detection_radius = half_detection_radius
-        self.cutoff_probability = cutoff_probability
-        self.save_history = save_history
-        self._init_saved_vars()
-        self._monitors = []
-        self._mon_spikes_already_seen = []
-        self._dtct_prob_array = None
-        self.i_probe_by_i_ng = bidict()
+    _monitors: list[SpikeMonitor] = field(init=False, factory=list)
+    _mon_spikes_already_seen: list[int] = field(init=False, factory=list)
+    _dtct_prob_array: NDArray[(Any, Any), float] = None
 
     def _init_saved_vars(self):
         if self.save_history:
-            self.t_ms = np.array([], dtype=float)
-            self.i = np.array([], dtype=np.uint)
-            self.t_samp_ms = np.array([], dtype=float)
+            self.t_ms = fields(type(self)).t_ms.default.factory()
+            self.i = fields(type(self)).i.default.factory()
+            self.t_samp_ms = fields(type(self)).t_samp_ms.default.factory()
 
     def _update_saved_vars(self, t_ms, i, t_samp_ms):
         if self.save_history:

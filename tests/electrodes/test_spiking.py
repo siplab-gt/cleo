@@ -33,7 +33,7 @@ def test_MUS_multiple_contacts():
     net = Network(sgg)
     sim = CLSimulator(net)
     mus = MultiUnitSpiking(
-        "mus",
+        name="mus",
         perfect_detection_radius=0.3 * mm,
         half_detection_radius=0.75 * mm,
         save_history=True,
@@ -89,7 +89,7 @@ def test_MUS_multiple_groups():
     net = Network(sgg1, sgg2, sgg3)
     sim = CLSimulator(net)
     mus = MultiUnitSpiking(
-        "mus",
+        name="mus",
         perfect_detection_radius=0.1 * mm,
         half_detection_radius=0.2 * mm,
         save_history=True,
@@ -126,7 +126,7 @@ def test_SortedSpiking():
     net = Network(sgg0, sgg1)
     sim = CLSimulator(net)
     ss = SortedSpiking(
-        "ss",
+        name="ss",
         perfect_detection_radius=0.3 * mm,
         half_detection_radius=0.75 * mm,
         save_history=True,
@@ -160,7 +160,7 @@ def _test_reset(spike_signal_class):
     net = Network(sgg)
     sim = CLSimulator(net)
     spike_signal = spike_signal_class(
-        "spikes",
+        name="spikes",
         perfect_detection_radius=0.3 * mm,
         half_detection_radius=0.75 * mm,
         save_history=True,

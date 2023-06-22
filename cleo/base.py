@@ -34,6 +34,8 @@ class InterfaceDevice(ABC):
     """The simulator the device is injected into """
 
     name: str = field(kw_only=True)
+    """Unique identifier for device, used in sampling, plotting, etc.
+    Name of the class by default."""
 
     @name.default
     def _default_name(self) -> str:
