@@ -62,7 +62,8 @@ class LightModel(ABC):
         source_coords: Quantity,
         source_direction: NDArray[(Any, 3), Any],
         target_coords: Quantity,
-    ) -> NDArray[(Any,), float]:
+    ) -> NDArray[(Any, Any), float]:
+        """Output must be between 0 and shape (n_sources, n_targets)."""
         pass
 
     @abstractmethod
@@ -116,7 +117,7 @@ class FiberModel(LightModel):
     def _Foutz12_transmittance(self, r, z, scatter=True, spread=True, gaussian=True):
         """Foutz et al. 2012 transmittance model: Gaussian cone with Kubelka-Munk propagation.
 
-        r and z should be M x N arrays with units"""
+        r and z should be (n_source, n_target) arrays with units"""
 
         if spread:
             # divergence half-angle of cone
@@ -167,13 +168,16 @@ class FiberModel(LightModel):
     def _get_rz_for_xyz(self, source_coords, source_direction, target_coords):
         """Assumes x, y, z already have units"""
         m = source_coords.reshape((-1, 3)).shape[0]
-        n = target_coords.reshape((-1, 3)).shape[0]
+        if target_coords.ndim > 1:
+            n = target_coords.shape[-2]
+        elif target_coords.ndim == 1:
+            n = 1
+        # either shared or per-source targets
+        assert target_coords.shape in [(m, n, 3), (1, n, 3), (n, 3), (3,)]
 
-        rel_coords = (
-            # target_coords[np.newaxis, :, :] - source_coords[:, np.newaxis, :]
-            target_coords.reshape((1, n, 3))
-            - source_coords.reshape((m, 1, 3))
-        )  # relative to light source(s)
+        # relative to light source(s)
+        rel_coords = target_coords - source_coords.reshape((m, 1, 3))
+        assert rel_coords.shape == (m, n, 3)
         # now m x n x 3 array, where m is number of sources, n is number of targets
         # must use brian2's dot function for matrix multiply to preserve
         # units correctly.
@@ -278,11 +282,21 @@ class Light(Stimulator):
     """LightModel object defining how light is emitted. See
     :class:`FiberModel` for an example."""
 
-    coords: Quantity = (0, 0, 0) * mm
+    coords: Quantity = field(
+        default=(0, 0, 0) * mm, converter=lambda x: x.reshape((-1, 3))
+    )
     """(x, y, z) coords with Brian unit specifying where to place
     the base of the light source, by default (0, 0, 0)*mm.
     Can also be an nx3 array for multiple sources.
     """
+
+    @coords.validator
+    def _check_coords(self, attribute, value):
+        if len(value.shape) != 2 or value.shape[1] != 3:
+            raise ValueError(
+                "coords must be an n by 3 array (with unit) with x, y, and z"
+                "coordinates for n contact locations."
+            )
 
     direction: NDArray[(Any, 3), Any] = field(
         default=(0, 0, 1), converter=normalize_coords
@@ -303,6 +317,12 @@ class Light(Stimulator):
     i.e., the level at or above which the light appears maximally bright.
     Only relevant in video visualization.
     """
+
+    default_value: NDArray[(Any,), float] = field(kw_only=True)
+
+    @default_value.default
+    def _default_default(self):
+        return np.zeros(self.n)
 
     def transmittance(self, target_coords) -> np.ndarray:
         return self.light_model.transmittance(
@@ -325,7 +345,7 @@ class Light(Stimulator):
         lor.register_light(self, neuron_group)
 
     @property
-    def m(self):
+    def n(self):
         """Number of light sources"""
         assert len(self.coords.shape) == 2 or len(self.coords.shape) == 1
         return len(self.coords) if len(self.coords.shape) == 2 else 1
@@ -341,73 +361,86 @@ class Light(Stimulator):
         # filter out points with <0.001 transmittance to make plotting faster
 
         T_threshold = kwargs.pop("T_threshold", 0.001)
+        n_points_per_source = kwargs.pop("n_points", 1e4)
         n_points_per_source = kwargs.pop("n_points_per_source", 1e4)
         intensity = kwargs.get("intensity", 0.5)
 
         viz_points = self.light_model.viz_points(
             self.coords, self.direction, int(n_points_per_source), T_threshold, **kwargs
         )
-        assert viz_points.shape == (self.m, n_points_per_source, 3)
-        viz_points = viz_points.reshape((-1, 3))
+        assert viz_points.shape == (self.n, n_points_per_source, 3)
+        # viz_points = viz_points.reshape((-1, 3))
         T = self.light_model.transmittance(self.coords, self.direction, viz_points)
-        T = T.reshape((-1, 3))
+        assert T.shape == (self.n, n_points_per_source)
+        """TODO: I know I need to make this work for multiple sources.
+        I can call set_array on the PathCollection with T*intensity,
+        but I need to map the T values to the correct source.
 
-        idx_to_plot = T >= T_threshold
-        # x = x[idx_to_plot]
-        # y = y[idx_to_plot]
-        # z = z[idx_to_plot]
-        # T = T[idx_to_plot]
-        point_cloud = ax.scatter(
-            viz_points[idx_to_plot, 0] / axis_scale_unit,
-            viz_points[idx_to_plot, 1] / axis_scale_unit,
-            viz_points[idx_to_plot, 2] / axis_scale_unit,
-            # iz_points[idx_to_plot, 0],
-            # x / axis_scale_unit,
-            # y / axis_scale_unit,
-            # z / axis_scale_unit,
-            c=T[idx_to_plot],
-            cmap=self._alpha_cmap_for_wavelength(intensity),
-            marker="o",
-            edgecolors="none",
-            label=self.name,
-        )
-        with warnings.catch_warnings():
-            warnings.filterwarnings(
-                "ignore", message=".*Rasterization.*will be ignored.*"
+        *this is looking simpler ⬇️*
+        One option is to make a separate PathCollection for each source.
+
+        Another is to not filter T, keeping it 2D (m, n_points_per_source)
+        since if I filter it, there might not be the same number of points
+        for each source.
+        """
+        # T = T.reshape((-1,))
+
+        point_clouds = []
+        for i in range(self.n):
+            idx_to_plot = T[i] >= T_threshold
+            point_cloud = ax.scatter(
+                viz_points[i, idx_to_plot, 0] / axis_scale_unit,
+                viz_points[i, idx_to_plot, 1] / axis_scale_unit,
+                viz_points[i, idx_to_plot, 2] / axis_scale_unit,
+                c=T[i, idx_to_plot],
+                cmap=self._alpha_cmap_for_wavelength(intensity),
+                marker="o",
+                edgecolors="none",
+                label=self.name,
             )
-            # to make manageable in SVGs
-            point_cloud.set_rasterized(kwargs.get("rasterized", True))
+            with warnings.catch_warnings():
+                warnings.filterwarnings(
+                    "ignore", message=".*Rasterization.*will be ignored.*"
+                )
+                # to make manageable in SVGs
+                point_cloud.set_rasterized(kwargs.get("rasterized", True))
+            point_clouds.append(point_cloud)
+
         handles = ax.get_legend().legendHandles
         c = wavelength_to_rgb(self.light_model.wavelength / nmeter)
         opto_patch = matplotlib.patches.Patch(color=c, label=self.name)
         handles.append(opto_patch)
         ax.legend(handles=handles)
-        return [point_cloud]
+
+        return point_clouds
 
     def update_artists(
         self, artists: list[Artist], value, *args, **kwargs
     ) -> list[Artist]:
-        self._prev_value = getattr(self, "_prev_value", None)
-        if value == self._prev_value:
-            return []
-
-        assert len(artists) == 1
-        point_cloud = artists[0]
-
+        assert len(artists) == self.n
         if self.max_Irr0_mW_per_mm2_viz is not None:
             max_Irr0 = self.max_Irr0_mW_per_mm2_viz
         elif self.max_Irr0_mW_per_mm2 is not None:
             max_Irr0 = self.max_Irr0_mW_per_mm2
         else:
             raise Exception(
-                f"OptogeneticIntervention '{self.name}' needs max_Irr0_mW_per_mm2_viz "
+                f"Light'{self.name}' needs max_Irr0_mW_per_mm2_viz "
                 "or max_Irr0_mW_per_mm2 "
                 "set to visualize light intensity."
             )
 
-        intensity = value / max_Irr0 if value <= max_Irr0 else max_Irr0
-        point_cloud.set_cmap(self._alpha_cmap_for_wavelength(intensity))
-        return [point_cloud]
+        updated_artists = []
+        for point_cloud, source_value in zip(artists, value):
+            prev_value = getattr(point_cloud, "_prev_value", None)
+            if source_value != prev_value:
+                intensity = (
+                    source_value / max_Irr0 if source_value <= max_Irr0 else max_Irr0
+                )
+                point_cloud.set_cmap(self._alpha_cmap_for_wavelength(intensity))
+                updated_artists.append(point_cloud)
+                point_cloud._prev_value = source_value
+
+        return updated_artists
 
     def update(self, Irr0_mW_per_mm2: Union[float, np.ndarray]) -> None:
         """Set the light intensity, in mW/mm2 (without unit)
@@ -419,28 +452,27 @@ class Light(Stimulator):
         """
         if type(Irr0_mW_per_mm2) != np.ndarray:
             Irr0_mW_per_mm2 = np.array(Irr0_mW_per_mm2).reshape((-1,))
-        if Irr0_mW_per_mm2.shape not in [(1,), (self.m,)]:
+        if Irr0_mW_per_mm2.shape not in [(), (1,), (self.n,)]:
             raise ValueError(
                 f"Input to light Irr0_mW_per_mm2 must be a scalar or an array of"
-                f" length {self.m}. Got {Irr0_mW_per_mm2.shape} instead."
+                f" length {self.n}. Got {Irr0_mW_per_mm2.shape} instead."
             )
         if np.any(Irr0_mW_per_mm2 < 0):
             warnings.warn(f"{self.name}: negative light intensity Irr0 clipped to 0")
             Irr0_mW_per_mm2[Irr0_mW_per_mm2 < 0] = 0
-        if (
-            self.max_Irr0_mW_per_mm2 is not None
-            and Irr0_mW_per_mm2 > self.max_Irr0_mW_per_mm2
-        ):
+        if self.max_Irr0_mW_per_mm2 is not None:
             Irr0_mW_per_mm2[
                 Irr0_mW_per_mm2 > self.max_Irr0_mW_per_mm2
             ] = self.max_Irr0_mW_per_mm2
         super().update(Irr0_mW_per_mm2)
         self.source.Irr0 = Irr0_mW_per_mm2 * mwatt / mm2
 
-    def _alpha_cmap_for_wavelength(self, intensity=0.5):
+    def _alpha_cmap_for_wavelength(self, intensity):
         c = wavelength_to_rgb(self.light_model.wavelength / nmeter)
-        c_clear = (*c, 0)
-        c_opaque = (*c, 0.6 * intensity)
+        c_dimmest = (*c, 0)
+        alpha_max = 0.6
+        alpha_brightest = alpha_max * intensity
+        c_brightest = (*c, alpha_brightest)
         return colors.LinearSegmentedColormap.from_list(
-            "incr_alpha", [(0, c_clear), (1, c_opaque)]
+            "incr_alpha", [(0, c_dimmest), (1, c_brightest)]
         )

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, Tuple, Iterable
 
 from attrs import define, field
 from brian2 import (
@@ -199,21 +199,16 @@ class Stimulator(InterfaceDevice):
     """The current value of the stimulator device"""
     default_value: Any = 0
     """The default value of the device---used on initialization and on :meth:`~reset`"""
-    t_ms: list[float] = field(factory=list, init=False)
+    t_ms: list[float] = field(factory=list, init=False, repr=False)
     """Times stimulator was updated, stored if :attr:`save_history`"""
-    values: list[Any] = field(factory=list, init=False)
+    values: list[Any] = field(factory=list, init=False, repr=False)
     """Values taken by the stimulator at each :meth:`~update` call, 
     stored if :attr:`save_history`"""
     save_history: bool = True
     """Determines whether :attr:`t_ms` and :attr:`values` are recorded"""
 
-    def init_for_simulator(self, simulator: CLSimulator) -> None:
-        super().init_for_simulator(simulator)
-        self.reset()
-
     def __attrs_post_init__(self):
         self.value = self.default_value
-        self._init_saved_vars()
 
     def _init_saved_vars(self):
         if self.save_history:
@@ -240,22 +235,22 @@ class Stimulator(InterfaceDevice):
 
     def reset(self, **kwargs) -> None:
         """Reset the stimulator device to a neutral state"""
+        self.value = self.default_value
         self._init_saved_vars()
-        self.update(self.default_value)
 
 
 @define(eq=False)
 class CLSimulator:
     """The centerpiece of cleo. Integrates simulation components and runs."""
 
-    network: Network
+    network: Network = field(repr=False)
     """The Brian network forming the core model"""
     io_processor: IOProcessor = field(default=None, init=False)
-    recorders: dict[str, Recorder] = field(factory=dict, init=False)
-    stimulators: dict[str, Stimulator] = field(factory=dict, init=False)
+    recorders: dict[str, Recorder] = field(factory=dict, init=False, repr=False)
+    stimulators: dict[str, Stimulator] = field(factory=dict, init=False, repr=False)
     devices: set[InterfaceDevice] = field(factory=set, init=False)
-    _processing_net_op: NetworkOperation = field(default=None, init=False)
-    _net_store_name: str = field(default="cleo default", init=False)
+    _processing_net_op: NetworkOperation = field(default=None, init=False, repr=False)
+    _net_store_name: str = field(default="cleo default", init=False, repr=False)
 
     def inject(
         self, device: InterfaceDevice, *neuron_groups: NeuronGroup, **kwparams: Any

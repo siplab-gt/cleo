@@ -205,14 +205,17 @@ def wavelength_to_rgb(wavelength_nm, gamma=0.8):
     return (R, G, B)
 
 
-def style_plots_for_docs():
+def style_plots_for_docs(dark=True):
     # some hacky workaround for params not being updated until after first plot
     f = plt.figure()
     plt.plot()
     plt.close(f)
 
-    plt.style.use("dark_background")
+    if dark:
+        plt.style.use("dark_background")
+        for obj in ["figure", "axes", "savefig"]:
+            plt.rc(obj, facecolor="131416")  # color of Furo dark background
+    else:
+        plt.style.use("default")
     plt.rc("savefig", transparent=False)
-    for obj in ["figure", "axes", "savefig"]:
-        plt.rc(obj, facecolor="131416")  # color of Furo dark background
     plt.rc("axes.spines", top=False, right=False)

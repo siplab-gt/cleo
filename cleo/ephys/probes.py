@@ -91,7 +91,7 @@ class Probe(Recorder):
         The color of contact markers. "xkcd:dark gray" by default.
     """
 
-    coords: Quantity
+    coords: Quantity = field(repr=False)
     """Coordinates of n electrodes. Must be an n x 3 array (with unit)
     where columns represent x, y, and z"""
 

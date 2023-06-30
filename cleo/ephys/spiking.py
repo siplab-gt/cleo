@@ -30,25 +30,27 @@ class Spiking(Signal):
     save_history: bool = False
     """Determines whether :attr:`t_ms`, :attr:`i`, and :attr:`t_samp_ms` are recorded"""
     t_ms: NDArray[(Any,), float] = field(
-        init=False, factory=lambda: np.array([], dtype=float)
+        init=False, factory=lambda: np.array([], dtype=float), repr=False
     )
     """Spike times in ms, stored if :attr:`save_history`"""
     i: NDArray[(Any,), np.uint] = field(
-        init=False, factory=lambda: np.array([], dtype=np.uint)
+        init=False, factory=lambda: np.array([], dtype=np.uint), repr=False
     )
     """Channel (for multi-unit) or neuron (for sorted) indices
     of spikes, stored if :attr:`save_history`"""
     t_samp_ms: NDArray[(Any,), float] = field(
-        init=False, factory=lambda: np.array([], dtype=float)
+        init=False, factory=lambda: np.array([], dtype=float), repr=False
     )
     """Sample times in ms when each spike was recorded, stored 
     if :attr:`save_history`"""
-    i_probe_by_i_ng: bidict = field(init=False, factory=bidict)
+    i_probe_by_i_ng: bidict = field(init=False, factory=bidict, repr=False)
     """(neuron_group, i_ng) keys,  i_probe values. bidict for converting between
     neuron group indices and the indices the probe uses"""
-    _monitors: list[SpikeMonitor] = field(init=False, factory=list)
-    _mon_spikes_already_seen: list[int] = field(init=False, factory=list)
-    _dtct_prob_array: NDArray[(Any, Any), float] = None
+    _monitors: list[SpikeMonitor] = field(init=False, factory=list, repr=False)
+    _mon_spikes_already_seen: list[int] = field(init=False, factory=list, repr=False)
+    _dtct_prob_array: NDArray[(Any, Any), float] = field(
+        init=False, default=None, repr=False
+    )
 
     def _init_saved_vars(self):
         if self.save_history:
@@ -173,6 +175,7 @@ class Spiking(Signal):
         self._init_saved_vars()
 
 
+@define(eq=False)
 class MultiUnitSpiking(Spiking):
     """Detects spikes per channel, that is, unsorted."""
 
@@ -216,6 +219,7 @@ class MultiUnitSpiking(Spiking):
         return i_c_detected, t_detected, y
 
 
+@define(eq=False)
 class SortedSpiking(Spiking):
     """Detect spikes identified by neuron indices.
 

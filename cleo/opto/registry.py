@@ -95,21 +95,21 @@ class LightOpsinRegistry:
     def init_register_light(self, light: "Light"):
         if self.light_source_ng is not None:
             Irr0_prev = self.light_source_ng.Irr0
-            m_prev = self.light_source_ng.N
+            n_prev = self.light_source_ng.N
             # need to remove the old light source from the network
             self.sim.network.remove(self.light_source_ng)
         else:
             Irr0_prev = []
-            m_prev = 0
+            n_prev = 0
 
         # create new one
         self.light_source_ng = NeuronGroup(
-            m_prev + light.m, "Irr0: watt/meter**2", name="light_source"
+            n_prev + light.n, "Irr0: watt/meter**2", name="light_source"
         )
-        if m_prev > 0:
-            self.light_source_ng[:m_prev].Irr0 = Irr0_prev
+        if n_prev > 0:
+            self.light_source_ng[:n_prev].Irr0 = Irr0_prev
         self.sim.network.add(self.light_source_ng)
-        self.subgroup_idx_for_light[light] = slice(m_prev, m_prev + light.m)
+        self.subgroup_idx_for_light[light] = slice(n_prev, n_prev + light.n)
 
         # remove and replace light_prop_syns for previous connections
         for light_prop_syn in self.light_prop_syns.values():
@@ -121,7 +121,7 @@ class LightOpsinRegistry:
             self.connect_light_to_opsin_for_ng(light, opsin, ng)
         assert prev_cxns == self.connections
 
-        return self.light_source_ng[m_prev : m_prev + light.m]
+        return self.light_source_ng[n_prev : n_prev + light.n]
 
     def register_light(self, light: "Light", ng: NeuronGroup):
         """Connects light to opsins already injected into this neuron group"""

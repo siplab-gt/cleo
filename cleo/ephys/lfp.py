@@ -39,18 +39,18 @@ class TKLFPSignal(Signal):
     save_history: bool = False
     """Whether to record output from every timestep in :attr:`lfp_uV`.
     Output is stored every time :meth:`get_state` is called."""
-    t_ms: NDArray[(Any,), float] = field(init=False)
+    t_ms: NDArray[(Any,), float] = field(init=False, repr=False)
     """Times at which LFP is recorded, in ms, stored if :attr:`save_history`"""
-    lfp_uV: NDArray[(Any, Any), float] = field(init=False)
+    lfp_uV: NDArray[(Any, Any), float] = field(init=False, repr=False)
     """Approximated LFP from every call to :meth:`get_state`, recorded
     if :attr:`save_history`. Shape is (n_samples, n_channels)."""
-    _elec_coords_mm: np.ndarray = field(init=False)
-    _tklfps: list[TKLFP] = field(init=False, factory=list)
-    _monitors: list[SpikeMonitor] = field(init=False, factory=list)
-    _mon_spikes_already_seen: list[int] = field(init=False, factory=list)
-    _i_buffers: list[list[np.ndarray]] = field(init=False, factory=list)
-    _t_ms_buffers: list[list[np.ndarray]] = field(init=False, factory=list)
-    _buffer_positions: list[int] = field(init=False, factory=list)
+    _elec_coords_mm: np.ndarray = field(init=False, repr=False)
+    _tklfps: list[TKLFP] = field(init=False, factory=list, repr=False)
+    _monitors: list[SpikeMonitor] = field(init=False, factory=list, repr=False)
+    _mon_spikes_already_seen: list[int] = field(init=False, factory=list, repr=False)
+    _i_buffers: list[list[np.ndarray]] = field(init=False, factory=list, repr=False)
+    _t_ms_buffers: list[list[np.ndarray]] = field(init=False, factory=list, repr=False)
+    _buffer_positions: list[int] = field(init=False, factory=list, repr=False)
 
     def init_for_probe(self, probe: Probe):
         # inherit docstring

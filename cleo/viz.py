@@ -115,11 +115,14 @@ class VideoVisualizer(InterfaceDevice):
         )
 
         def update(i):
+            prev_device_values = self._value_per_device_per_frame[i - 1]
             device_values = self._value_per_device_per_frame[i]
             updated_artists = []
-            for device, artists, value in zip(
-                self.devices, device_artists, device_values
+            for device, artists, value, prev_value in zip(
+                self.devices, device_artists, device_values, prev_device_values
             ):
+                if np.allclose(value, prev_value):
+                    continue
                 updated_artists_for_device = device.update_artists(artists, value)
                 updated_artists.extend(updated_artists_for_device)
             self._update_neuron_artists_for_frame(neuron_artists, i)
@@ -235,6 +238,7 @@ def plot(
     devices: Iterable[Union[InterfaceDevice, Tuple[InterfaceDevice, dict]]] = [],
     invert_z: bool = True,
     scatterargs: dict = {},
+    sim: CLSimulator = None,
     **figargs: Any,
 ) -> None:
     """Visualize neurons and interface devices
@@ -260,6 +264,8 @@ def plot(
         that +z represents depth from cortex surface
     scatterargs : dict, optional
         arguments passed to plt.scatter() for each neuron group, such as marker
+    sim: CLSimulator, optional
+        Optional shortcut to include all neuron groups and devices
     **figargs : Any, optional
         keyword arguments passed to plt.figure(), such as figsize
 
@@ -270,6 +276,15 @@ def plot(
     """
     fig = plt.figure(**figargs)
     ax = fig.add_subplot(111, projection="3d")
+    if sim is not None:
+        if len(neuron_groups) == 0:
+            for obj in sim.network.objects:
+                neuron_groups = []
+                if type(obj) == NeuronGroup:
+                    neuron_groups.append(obj)
+        if len(devices) == 0:
+            devices = sim.devices
+
     _plot(
         ax,
         neuron_groups,

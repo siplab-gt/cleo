@@ -98,7 +98,7 @@ def test_reset():
 
 def test_coords():
     light = Light(light_model=fiber473nm(), coords=[[0, 0, 0], [1, 1, 1]] * mm)
-    assert light.m == 2
+    assert light.n == 2
     assert light.coords.shape == (2, 3)
 
 

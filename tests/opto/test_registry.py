@@ -95,7 +95,8 @@ def test_light_opsin_interaction(sim_ng1_ng2, ops1, ops2, coords):
 
     # second opsin on ng2
     reset(sim, ng1, ng2)
-    assert light2.value == 0
+    print(light2.value)
+    assert np.all(light2.value == 0)
     light.update(10)
     sim.inject(ops2, ng2, Iopto_var_name="Iopto2")
     sim.run(0.3 * ms)
@@ -116,7 +117,7 @@ def test_multi_channel(sim_ng1_ng2, ops1):
     v_result = {}
     for i_channel, case in enumerate(["baseline", "x", "y", "z"]):
         sim.reset()
-        u = np.ones(light.m)
+        u = np.ones(light.n)
         u[i_channel] = 10
         light.update(u)
         sim.run(0.3 * ms)

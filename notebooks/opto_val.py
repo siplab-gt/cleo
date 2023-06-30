@@ -97,7 +97,7 @@ def get_Irr0_thres(
         )
     else:
         opto = Light(
-            opsin_model=ChR2_four_state(),
+            opsin_model=ChR2_4S(),
             light_model_params=fiber473nm,
             location=(0, 0, 0) * mm,
         )
