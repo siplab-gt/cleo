@@ -2,8 +2,9 @@
 from __future__ import annotations
 from typing import Tuple, Any, Union
 from collections.abc import Iterable
-from matplotlib.artist import Artist
 
+from attrs import define, field
+from matplotlib.artist import Artist
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as anim
@@ -15,43 +16,46 @@ from cleo.base import CLSimulator, InterfaceDevice
 _neuron_alpha = 0.2
 
 
+@define(eq=False)
 class VideoVisualizer(InterfaceDevice):
     """Device for visualizing a simulation.
 
     Must be injected after all other devices and before the simulation
     is run."""
 
-    def __init__(
-        self,
-        devices: Iterable[Union[InterfaceDevice, Tuple[InterfaceDevice, dict]]] = "all",
-        dt: Quantity = 1 * ms,
-    ) -> None:
-        """
-        Parameters
-        ----------
-        devices : Iterable[Union[InterfaceDevice, Tuple[InterfaceDevice, dict]]], optional
-            list of devices or (device, vis_kwargs) tuples to include in the plot,
-            just as in the :func:`plot` function, by default "all", which will
-            include all recorders and stimulators currently injected when this
-            visualizer is injected into the simulator.
-        dt : Brian 2 temporal Quantity, optional
-            length of each frame---that is, every `dt` the visualizer takes a
-            snapshot of the network, by default 1*ms
-        """
-        super().__init__("video_visualizer")
-        self.neuron_groups = []
-        self._spike_mons = []
-        self._num_old_spikes = []
-        self.devices = devices
-        self.dt = dt
-        # store data to generate video
-        self._value_per_device_per_frame = []
-        self._i_spikes_per_ng_per_frame: list[list[np.ndarray]] = []
+    devices: Iterable[Union[InterfaceDevice, Tuple[InterfaceDevice, dict]]] = field(
+        factory=list
+    )
+    """list of devices or (device, vis_kwargs) tuples to include in the plot,
+    just as in the :func:`plot` function, by default "all", which will
+    include all recorders and stimulators currently injected when this
+    visualizer is injected into the simulator.
+    """
+
+    dt: Quantity = 1 * ms
+    """length of each frame---that is, every ``dt`` the visualizer takes a
+    snapshot of the network, by default 1*ms
+    """
+
+    fig: plt.Figure = field(init=False, default=None)
+
+    ax: plt.Axes = field(init=False, default=None)
+
+    neuron_groups: list[NeuronGroup] = field(init=False, factory=list)
+
+    _spike_mons: list[SpikeMonitor] = field(init=False, factory=list)
+
+    _num_old_spikes: list[int] = field(init=False, factory=list)
+
+    _value_per_device_per_frame: list[list[Any]] = field(init=False, factory=list)
+
+    _i_spikes_per_ng_per_frame: list[list[np.ndarray]] = field(init=False, factory=list)
 
     def init_for_simulator(self, simulator: CLSimulator):
         if self.devices == "all":
             self.devices = list(self.sim.recorders.values())
             self.devices.extend(list(self.sim.stimulators.values()))
+
         # network op
         def snapshot(t):
             i_spikes_per_ng = [
@@ -111,11 +115,14 @@ class VideoVisualizer(InterfaceDevice):
         )
 
         def update(i):
+            prev_device_values = self._value_per_device_per_frame[i - 1]
             device_values = self._value_per_device_per_frame[i]
             updated_artists = []
-            for device, artists, value in zip(
-                self.devices, device_artists, device_values
+            for device, artists, value, prev_value in zip(
+                self.devices, device_artists, device_values, prev_device_values
             ):
+                if np.allclose(value, prev_value):
+                    continue
                 updated_artists_for_device = device.update_artists(artists, value)
                 updated_artists.extend(updated_artists_for_device)
             self._update_neuron_artists_for_frame(neuron_artists, i)
@@ -231,6 +238,7 @@ def plot(
     devices: Iterable[Union[InterfaceDevice, Tuple[InterfaceDevice, dict]]] = [],
     invert_z: bool = True,
     scatterargs: dict = {},
+    sim: CLSimulator = None,
     **figargs: Any,
 ) -> None:
     """Visualize neurons and interface devices
@@ -256,6 +264,8 @@ def plot(
         that +z represents depth from cortex surface
     scatterargs : dict, optional
         arguments passed to plt.scatter() for each neuron group, such as marker
+    sim: CLSimulator, optional
+        Optional shortcut to include all neuron groups and devices
     **figargs : Any, optional
         keyword arguments passed to plt.figure(), such as figsize
 
@@ -266,6 +276,15 @@ def plot(
     """
     fig = plt.figure(**figargs)
     ax = fig.add_subplot(111, projection="3d")
+    if sim is not None:
+        if len(neuron_groups) == 0:
+            for obj in sim.network.objects:
+                neuron_groups = []
+                if type(obj) == NeuronGroup:
+                    neuron_groups.append(obj)
+        if len(devices) == 0:
+            devices = sim.devices
+
     _plot(
         ax,
         neuron_groups,

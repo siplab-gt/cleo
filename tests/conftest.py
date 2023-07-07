@@ -1,3 +1,4 @@
+from functools import wraps
 import pytest
 from brian2 import prefs
 

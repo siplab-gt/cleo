@@ -5,37 +5,32 @@ from collections.abc import Iterable
 from operator import concat
 from typing import Any, Tuple
 
+from attrs import field, define
 from mpl_toolkits.mplot3d.axes3d import Axes3D
 from matplotlib.artist import Artist
 from brian2 import NeuronGroup, mm, Unit, Quantity, umeter, np
 
 from cleo.base import Recorder
-from cleo.utilities import get_orth_vectors_for_v
+from cleo.utilities import get_orth_vectors_for_V
 
 
+@define(eq=False)
 class Signal(ABC):
     """Base class representing something an electrode can record"""
 
-    name: str
-    """Unique identifier used to organize probe output"""
-    brian_objects: set
+    name: str = field(kw_only=True)
+    """Unique identifier used to organize probe output.
+    Name of the class by default."""
+
+    @name.default
+    def _default_name(self) -> str:
+        return self.__class__.__name__
+
+    brian_objects: set = field(init=False, factory=set)
     """All Brian objects created by the signal.
     Must be kept up-to-date for automatic injection into the network"""
-    probe: Probe
+    probe: Probe = field(init=False, default=None)
     """The probe the signal is configured to record for."""
-
-    def __init__(self, name: str) -> None:
-        """
-        Constructor must be called at beginning of children constructors.
-
-        Parameters
-        ----------
-        name : str
-            Unique identifier used when reading the state from the network
-        """
-        self.name = name
-        self.brian_objects = set()
-        self.probe = None
 
     def init_for_probe(self, probe: Probe) -> None:
         """Called when attached to a probe.
@@ -82,6 +77,7 @@ class Signal(ABC):
         pass
 
 
+@define(eq=False)
 class Probe(Recorder):
     """Picks up specified signals across an array of electrodes.
 
@@ -95,43 +91,30 @@ class Probe(Recorder):
         The color of contact markers. "xkcd:dark gray" by default.
     """
 
-    coords: Quantity
-    """n x 3 array (with Brian length unit) specifying contact locations"""
-    signals: list[Signal]
-    """Signals recorded by the probe"""
-    n: int
-    """Number of electrode contacts in the probe"""
+    coords: Quantity = field(repr=False)
+    """Coordinates of n electrodes. Must be an n x 3 array (with unit)
+    where columns represent x, y, and z"""
 
-    def __init__(
-        self, name: str, coords: Quantity, signals: Iterable[Signal] = []
-    ) -> None:
-        """
-        Parameters
-        ----------
-        name : str
-            Unique identifier for device
-        coords : Quantity
-            Coordinates of n electrodes. Must be an n x 3 array (with unit)
-            where columns represent x, y, and z
-        signals : Iterable[Signal], optional
-            Signals to record with probe, by default [].
-            Can be specified later with :meth:`add_signals`.
+    signals: list[Signal] = field(factory=list)
+    """Signals recorded by the probe.
+    Can be added to post-init with :meth:`add_signals`."""
 
-        Raises
-        ------
-        ValueError
-            When coords aren't n x 3
-        """
-        super().__init__(name)
-        self.coords = np.reshape(coords, (-1, 3))
+    probe: Probe = field(init=False)
+
+    def __attrs_post_init__(self):
+        self.coords = self.coords.reshape((-1, 3))
         if len(self.coords.shape) != 2 or self.coords.shape[1] != 3:
             raise ValueError(
                 "coords must be an n by 3 array (with unit) with x, y, and z"
                 "coordinates for n contact locations."
             )
-        self.n = len(self.coords)
-        self.signals = []
-        self.add_signals(*signals)
+        for signal in self.signals:
+            signal.init_for_probe(self)
+
+    @property
+    def n(self):
+        """Number of electrode contacts in the probe"""
+        return len(self.coords)
 
     def add_signals(self, *signals: Signal) -> None:
         """Add signals to the probe for recording
@@ -339,7 +322,7 @@ def tetrode_shank_coords(
     #    x      -dir*width/sqrt(2)
     # x  .  x   +/- orth*width/sqrt(2)
     #    x      +dir*width/sqrt(2)
-    orth_uvec, _ = get_orth_vectors_for_v(dir_uvec)
+    orth_uvec, _ = get_orth_vectors_for_V(dir_uvec)
     return np.repeat(center_locs, 4, axis=0) + tetrode_width / np.sqrt(2) * np.tile(
         np.vstack([-dir_uvec, -orth_uvec, orth_uvec, dir_uvec]), (tetrode_count, 1)
     )
@@ -382,7 +365,7 @@ def poly2_shank_coords(
     dir_uvec = direction / np.linalg.norm(direction)
     end_location = start_location + array_length * dir_uvec
     out = np.linspace(start_location, end_location, channel_count)
-    orth_uvec, _ = get_orth_vectors_for_v(dir_uvec)
+    orth_uvec, _ = get_orth_vectors_for_V(dir_uvec)
     # place contacts on alternating sides of the central axis
     even_channels = np.arange(channel_count) % 2 == 0
     out[even_channels] += intercol_space / 2 * orth_uvec
@@ -439,7 +422,7 @@ def poly3_shank_coords(
 
     spacing = array_length / n_middle
     side_length = n_side * spacing
-    orth_uvec, _ = get_orth_vectors_for_v(dir_uvec)
+    orth_uvec, _ = get_orth_vectors_for_V(dir_uvec)
     side = np.linspace(
         center_loc - dir_uvec * side_length / 2,
         center_loc + dir_uvec * side_length / 2,

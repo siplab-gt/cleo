@@ -2,11 +2,11 @@
 from collections.abc import MutableMapping
 from math import ceil, floor
 
-from scipy import linalg
+# from scipy import linalg
 import numpy as np
 from matplotlib import pyplot as plt
 
-from brian2 import second
+from brian2 import second, meter, NeuronGroup, Quantity
 from brian2.groups.group import get_dtype
 from brian2.equations.equations import (
     Equations,
@@ -16,12 +16,23 @@ from brian2.equations.equations import (
 )
 
 
-def get_orth_vectors_for_v(v):
-    """Returns w1, w2 as 1x3 row vectors"""
-    q, r = linalg.qr(
-        np.column_stack([v, v, v])
-    )  # get two vectors orthogonal to v from QR decomp
-    return q[:, 1], q[:, 2]
+def normalize_coords(coords: Quantity) -> Quantity:
+    """Normalize coordinates to unit vectors."""
+    return coords / np.linalg.norm(coords, axis=-1, keepdims=True)
+
+
+def get_orth_vectors_for_V(V):
+    """For nx3 block of row vectors V, return nx3 W1, W2 orthogonal
+    vector blocks"""
+    V = V.reshape((-1, 3, 1))
+    n = V.shape[0]
+    V = np.repeat(V, 3, axis=-1)
+    assert V.shape == (n, 3, 3)
+    q, r = np.linalg.qr(V)
+    # get two vectors orthogonal to v from QR decomp
+    W1, W2 = q[..., 1], q[..., 2]
+    assert W1.shape == W2.shape == (n, 3)
+    return W1.squeeze(), W2.squeeze()
 
 
 def xyz_from_rθz(rs, thetas, zs, xyz_start, xyz_end):
@@ -29,8 +40,10 @@ def xyz_from_rθz(rs, thetas, zs, xyz_start, xyz_end):
     # not using np.linalg.norm because it strips units
     cyl_length = np.sqrt(np.sum(np.subtract(xyz_end, xyz_start) ** 2))
     c = (xyz_end - xyz_start) / cyl_length  # unit vector in direction of cylinder
+    m = xyz_start.reshape((-1, 3)).shape[0]
+    n = len(rs)
 
-    r1, r2 = get_orth_vectors_for_v(c)
+    r1, r2 = get_orth_vectors_for_V(c)
 
     def r_unit_vecs(thetas):
         cosines = np.reshape(np.cos(thetas), (len(thetas), 1))
@@ -38,12 +51,17 @@ def xyz_from_rθz(rs, thetas, zs, xyz_start, xyz_end):
         # add axis for broadcasting so result is nx3
         cosines = np.cos(thetas)[..., np.newaxis]
         sines = np.sin(thetas)[..., np.newaxis]
-        return r1 * cosines + r2 * sines
+        return r1.reshape((m, 1, 3)) * cosines + r2.reshape((m, 1, 3)) * sines
 
     coords = (
-        xyz_start + c * zs[..., np.newaxis] + rs[..., np.newaxis] * r_unit_vecs(thetas)
+        xyz_start.reshape((m, 1, 3))
+        + c.reshape((m, 1, 3)) * zs.reshape((1, n, 1))
+        + rs.reshape((1, n, 1)) * r_unit_vecs(thetas)
     )
-    return coords[:, 0], coords[:, 1], coords[:, 2]
+    assert coords.shape == (m, n, 3)
+    return coords[..., 0], coords[..., 1], coords[..., 2]
+    # coords = coords.reshape((m * n), 3)
+    # return coords[:, 0], coords[:, 1], coords[:, 2]
 
 
 def uniform_cylinder_rθz(n, rmax, zmax):
@@ -118,10 +136,16 @@ def modify_model_with_eqs(neuron_group, eqs_to_add):
                 var.set_conditional_write(not_refractory_var)
 
     # Stochastic variables
-    for xi in neuron_group.equations.stochastic_variables:
-        neuron_group.variables.add_auxiliary_variable(
-            xi, dimensions=(second**-0.5).dim
-        )
+    for xi in eqs_to_add.stochastic_variables:
+        try:
+            neuron_group.variables.add_auxiliary_variable(
+                xi, dimensions=(second**-0.5).dim
+            )
+        except KeyError as ex:
+            warnings.warn(
+                "Adding a stochastic variable to a neuron group that already"
+                " has a variable with the same name."
+            )
 
     # Check scalar subexpressions
     for eq in neuron_group.equations.values():
@@ -187,14 +211,17 @@ def wavelength_to_rgb(wavelength_nm, gamma=0.8):
     return (R, G, B)
 
 
-def style_plots_for_docs():
+def style_plots_for_docs(dark=True):
     # some hacky workaround for params not being updated until after first plot
     f = plt.figure()
     plt.plot()
     plt.close(f)
 
-    plt.style.use("dark_background")
+    if dark:
+        plt.style.use("dark_background")
+        for obj in ["figure", "axes", "savefig"]:
+            plt.rc(obj, facecolor="131416")  # color of Furo dark background
+    else:
+        plt.style.use("default")
     plt.rc("savefig", transparent=False)
-    for obj in ["figure", "axes", "savefig"]:
-        plt.rc(obj, facecolor="131416")  # color of Furo dark background
     plt.rc("axes.spines", top=False, right=False)

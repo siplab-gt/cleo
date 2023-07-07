@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 # auto-import submodules
 import cleo.ephys
 import cleo.opto

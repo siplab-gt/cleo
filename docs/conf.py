@@ -19,7 +19,7 @@ sys.path.insert(0, os.path.abspath(".."))
 # -- Project information -----------------------------------------------------
 
 project = "Cleo"
-copyright = "2022"
+copyright = "2023"
 author = "Kyle Johnsen, Nathan Cruzado"
 
 
@@ -92,6 +92,8 @@ html_theme_options = {
     "light_css_variables": {
         "color-brand-primary": "#C500CC",
         "color-brand-content": "#C500CC",
+        "color-api-name": "#36827F",
+        "color-api-pre-name": "#36827F",
         # "color-brand-primary": "#8000b4",
         # "color-brand-content": "#8000b4",
     },
@@ -100,6 +102,8 @@ html_theme_options = {
         # "color-brand-content": "#C500CC",
         "color-brand-primary": "#df87e1",
         "color-brand-content": "#df87e1",
+        "color-api-name": "#69fff8",
+        "color-api-pre-name": "#69fff8",
     },
     "sidebar_hide_name": True,
 }

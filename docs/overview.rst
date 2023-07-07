@@ -67,10 +67,10 @@ Recording
 ^^^^^^^^^
 Recording devices take measurements of the Brian network. Some extremely simple implementations (which do little more than wrap Brian monitors) are available in the :mod:`cleo.recorders` module. 
 
-To use a :class:`~cleo.Recorder`, you must inject it into the simulator via :meth:`~cleo.CLSimulator.inject_recorder`::
+To use a :class:`~cleo.Recorder`, you must inject it into the simulator via :meth:`~cleo.CLSimulator.inject`::
 
     rec = MyRecorder('recorder_name', ...)  # note that all devices need a unique name
-    sim.inject_recorder(rec, neuron_group1, neuron_group2, ...)  # can pass in additional arguments
+    sim.inject(rec, neuron_group1, neuron_group2, ...)  # can pass in additional arguments
 
 The recorder will only record from the neuron groups specified on injection, allowing for such scenarios as singling out a cell type to record from.
 
@@ -97,7 +97,7 @@ Stimulator devices manipulate the Brian network. Usage is similar to recorders::
 
     stim = MyStimulator('stimulator_name', ...)  # again, all devices need a unique name
     # again, specify neuron groups device will affect and any additional arguments needed
-    sim.inject_stimulator(stim, neuron_group1, neuron_group2, ...)
+    sim.inject(stim, neuron_group1, neuron_group2, ...)
 
 As with recorders, you can inject stimulators per neuron group to produce a targeted effect.
 
@@ -110,7 +110,7 @@ Out of the box you can access a four-state Markov model of channelrhodopsin-2 (C
     from cleo.opto import *
     opto = OptogeneticIntervention(
         name="...",
-        opsin_model=FourStateModel(params=ChR2_four_state),
+        opsin_model=FourStateModel(params=chr2_4s),
         light_model_params=default_blue,
         location=(0, 0, 0.5) * mm,
     )

@@ -1,31 +1,21 @@
 """Contains basic stimulators."""
-from brian2 import Unit
+from __future__ import annotations
+from attrs import define, field
+from brian2 import Unit, NeuronGroup
 from cleo.base import Stimulator
 
 
+@define(eq=False)
 class StateVariableSetter(Stimulator):
     """Sets the given state variable of target neuron groups."""
 
-    def __init__(
-        self, name: str, variable_to_ctrl: str, unit: Unit, start_value: float = 0
-    ):
-        """
-        Parameters
-        ----------
-        name : str
-            Unique device name
-        variable_to_ctrl : str
-            Name of state variable to control
-        unit : Unit
-            Unit of that state variable: will be used in :meth:`update`
-        start_value : float, optional
-            Starting variable value, by default 0
-        """
-        super().__init__(name, start_value)
-        self.neuron_groups = []
-        self.var = variable_to_ctrl
-        self.unit = unit
-        self.value = start_value
+    variable_to_ctrl: str = field(kw_only=True)
+    """Name of state variable to control"""
+
+    unit: Unit = field(kw_only=True)
+    """Unit of controlled variable: will be used in :meth:`update`"""
+
+    neuron_groups: list[NeuronGroup] = field(init=False, factory=list)
 
     def connect_to_neuron_group(self, neuron_group):
         self.neuron_groups.append(neuron_group)
@@ -41,4 +31,4 @@ class StateVariableSetter(Stimulator):
             provided on initialization is automatically multiplied.
         """
         for ng in self.neuron_groups:
-            setattr(ng, self.var, ctrl_signal * self.unit)
+            setattr(ng, self.variable_to_ctrl, ctrl_signal * self.unit)
