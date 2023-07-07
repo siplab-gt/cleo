@@ -1,4 +1,5 @@
 """Contains basic stimulators."""
+from __future__ import annotations
 from attrs import define, field
 from brian2 import Unit, NeuronGroup
 from cleo.base import Stimulator
