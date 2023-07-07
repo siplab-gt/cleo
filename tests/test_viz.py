@@ -5,7 +5,7 @@ from cleo import CLSimulator
 from cleo.viz import VideoVisualizer
 from cleo.opto import (
     Light,
-    ChR2_4S,
+    chr2_4s,
     fiber473nm,
 )
 from cleo.coords import assign_coords
@@ -24,7 +24,7 @@ def test_VideoVisualizer():
     )
     assign_coords(ng, 0, 0, 0)
     light = Light(light_model=fiber473nm(), max_Irr0_mW_per_mm2=20)
-    # opsin = ChR2_4S()
+    # opsin = chr2_4s()
     probe = Probe([(0, 0, 0.1)] * mm)
 
     sim = CLSimulator(Network(ng)).inject(light, ng).inject(probe, ng)

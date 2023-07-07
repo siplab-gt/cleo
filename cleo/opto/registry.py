@@ -44,14 +44,16 @@ class LightOpsinRegistry:
     def connect_light_to_opsin_for_ng(
         self, light: "Light", opsin: "Opsin", ng: NeuronGroup
     ):
+        epsilon = opsin.epsilon(light.light_model.wavelength / nmeter)
+        if epsilon == 0:
+            return
+
         light_prop_syn = self._get_or_create_light_prop_syn(opsin, ng)
         if (light, opsin, ng) in self.connections:
             raise ValueError(f"{light} already connected to {opsin.name} for {ng.name}")
 
         i_source = self.subgroup_idx_for_light[light]
-        light_prop_syn.epsilon[i_source, :] = opsin.epsilon(
-            light.light_model.wavelength / nmeter
-        )
+        light_prop_syn.epsilon[i_source, :] = epsilon
         light_prop_syn.T[i_source, :] = light.transmittance(coords_from_ng(ng)).ravel()
         # fmt: off
         # Ephoton = h*c/lambda

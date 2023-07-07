@@ -3,7 +3,7 @@ from brian2 import np, NeuronGroup, mV, Network, umeter, ms, mwatt, mm, nmeter
 
 from cleo import CLSimulator
 from cleo.coords import assign_coords_grid_rect_prism
-from cleo.opto import Light, fiber473nm, ChR2_4S, Opsin, lor_for_sim, VfChrimson_4S
+from cleo.opto import Light, fiber473nm, chr2_4s, Opsin, lor_for_sim, vfchrimson_4s
 
 
 @pytest.fixture
@@ -28,12 +28,14 @@ ng2 = ng1
 
 @pytest.fixture
 def ops1() -> Opsin:
-    return ChR2_4S()
+    return chr2_4s()
 
 
 @pytest.fixture
 def ops2() -> Opsin:
-    return ChR2_4S(name="ChR2_2")
+    ops = chr2_4s()
+    ops.name = "ChR2_2"
+    return ops
 
 
 @pytest.fixture
@@ -145,15 +147,17 @@ def test_multi_channel(sim_ng1_ng2, ops1):
 @pytest.mark.slow
 def test_multi_light_opsin(sim_ng1_ng2):
     sim, ng1, ng2 = sim_ng1_ng2
-    chr2 = ChR2_4S()
+    chr2 = chr2_4s()
     blue = Light(light_model=fiber473nm())
-    vfchrimson = VfChrimson_4S()
+    vfchrimson = vfchrimson_4s()
     orange = Light(light_model=fiber473nm(wavelength=590 * nmeter))
 
-    for dev in [blue, orange]:
-        sim.inject(dev, ng1, ng2)
     sim.inject(chr2, ng1, Iopto_var_name="Iopto")
     sim.inject(vfchrimson, ng2, Iopto_var_name="Iopto2")
+    sim.inject(blue, ng1, ng2)
+    with pytest.warns(UserWarning):
+        sim.inject(orange, ng1)
+    sim.inject(orange, ng2)
 
     blue.update(10)
     sim.run(0.3 * ms)

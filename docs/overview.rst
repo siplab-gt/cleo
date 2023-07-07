@@ -110,7 +110,7 @@ Out of the box you can access a four-state Markov model of channelrhodopsin-2 (C
     from cleo.opto import *
     opto = OptogeneticIntervention(
         name="...",
-        opsin_model=FourStateModel(params=ChR2_4S),
+        opsin_model=FourStateModel(params=chr2_4s),
         light_model_params=default_blue,
         location=(0, 0, 0.5) * mm,
     )

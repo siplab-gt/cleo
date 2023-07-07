@@ -15,7 +15,7 @@ from brian2 import (
 from brian2.core.base import BrianObjectException
 
 from cleo import CLSimulator
-from cleo.opto import ChR2_4S, Opsin, ProportionalCurrentOpsin
+from cleo.opto import chr2_4s, Opsin, ProportionalCurrentOpsin
 from cleo.coords import assign_coords_grid_rect_prism
 
 model = """
@@ -37,12 +37,14 @@ neurons2 = neurons
 
 @pytest.fixture
 def opsin() -> Opsin:
-    return ChR2_4S()
+    return chr2_4s()
 
 
 @pytest.fixture
 def opsin2() -> Opsin:
-    return ChR2_4S(name="ChR2_2")
+    ops = chr2_4s()
+    ops.name = "ChR2_2"
+    return ops
 
 
 def test_inject_opsin(opsin, neurons, neurons2, rand_seed):

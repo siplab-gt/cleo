@@ -9,13 +9,16 @@ from cleo.opto.opsins import (
     Opsin,
     BansalFourStateOpsin,
     BansalThreeStatePump,
+    linear_interpolator,
+    cubic_interpolator,
+    plot_action_spectra,
 )
 from cleo.opto.opsin_library import (
-    ChR2_4S,
-    ChR2_B4S,
-    VfChrimson_4S,
-    Chrimson_4S,
-    GtACR2_4S,
+    chr2_4s,
+    chr2_b4s,
+    vfchrimson_4s,
+    chrimson_4s,
+    gtacr2_4s,
 )
 from cleo.opto.light import (
     Light,

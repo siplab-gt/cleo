@@ -1,6 +1,7 @@
 """Contains opsin models and default parameters"""
 from __future__ import annotations
 from typing import Callable, Tuple
+import warnings
 
 from attrs import define, field, asdict, fields_dict
 from brian2 import (
@@ -32,11 +33,20 @@ from brian2.units import (
 )
 from brian2.units.allunits import radian
 import numpy as np
-from scipy.interpolate import interp1d
+from scipy.interpolate import CubicSpline
 
 from cleo.base import InterfaceDevice
 from cleo.coords import assign_coords
 from cleo.opto.registry import lor_for_sim
+from cleo.utilities import wavelength_to_rgb
+
+
+def linear_interpolator(lambdas_nm, epsilons, lambda_new_nm):
+    return np.interp(lambda_new_nm, lambdas_nm, epsilons)
+
+
+def cubic_interpolator(lambdas_nm, epsilons, lambda_new_nm):
+    return CubicSpline(lambdas_nm, epsilons)(lambda_new_nm)
 
 
 @define(eq=False)
@@ -58,11 +68,13 @@ class Opsin(InterfaceDevice):
     symbols such as V_VAR_NAME to be replaced on injection in 
     :meth:`~OpsinModel.modify_model_and_params_for_ng`."""
 
-    per_ng_unit_replacements: list[Tuple[str, str]] = field(factory=list, init=False)
+    per_ng_unit_replacements: list[Tuple[str, str]] = field(
+        factory=list, init=False, repr=False
+    )
     """List of (UNIT_NAME, neuron_group_specific_unit_name) tuples to be substituted
     in the model string on injection and before checking required variables."""
 
-    required_vars: list[Tuple[str, Unit]] = field(factory=list, init=False)
+    required_vars: list[Tuple[str, Unit]] = field(factory=list, init=False, repr=False)
     """Default names of state variables required in the neuron group,
     along with units, e.g., [('Iopto', amp)].
     
@@ -71,18 +83,26 @@ class Opsin(InterfaceDevice):
     and that these are found in the model string as 
     ``[DEFAULT_NAME]_VAR_NAME`` before replacement."""
 
-    light_agg_ngs: dict[str, NeuronGroup] = field(factory=dict, init=False)
+    light_agg_ngs: dict[str, NeuronGroup] = field(factory=dict, init=False, repr=False)
     """{target_ng.name: light_agg_ng} dict of light aggregator neuron groups."""
 
-    opto_syns: dict[NeuronGroup, Synapses] = field(factory=dict, init=False)
+    opto_syns: dict[NeuronGroup, Synapses] = field(factory=dict, init=False, repr=False)
     """Stores the synapse objects implementing the opsin model,
     with NeuronGroup keys and Synapse values."""
 
-    epsilon: Callable = field(default=(lambda wl: 1))
-    """A callable that returns a value between 0 and 1 when given a wavelength
-    (in nm) representing the relative sensitivity of the opsin to that wavelength."""
+    action_spectrum: list[tuple[float, float]] = field(
+        factory=lambda: [(-1e10, 1), (1e10, 1)]
+    )
+    """List of (wavelength, epsilon) tuples representing the action spectrum."""
 
-    extra_namespace: dict = field(factory=dict, init=False)
+    action_spectrum_interpolator: Callable = field(
+        default=cubic_interpolator, repr=False
+    )
+    """Function of signature (lambdas_nm, epsilons, lambda_new_nm) that interpolates
+    the action spectrum data and returns :math:`\\varepsilon \\in [0,1]` for the new
+    wavelength."""
+
+    extra_namespace: dict = field(factory=dict, repr=False)
     """Additional items (beyond parameters) to be added to the opto synapse namespace"""
 
     def connect_to_neuron_group(self, neuron_group: NeuronGroup, **kwparams) -> None:
@@ -279,6 +299,42 @@ class Opsin(InterfaceDevice):
         """
         pass
 
+    def epsilon(self, lambda_new) -> float:
+        """Returns the epsilon value for a given lambda (in nm)
+        representing the relative sensitivity of the opsin to that wavelength."""
+        action_spectrum = np.array(self.action_spectrum)
+        lambdas = action_spectrum[:, 0]
+        epsilons = action_spectrum[:, 1]
+        if lambda_new < min(lambdas) or lambda_new > max(lambdas):
+            warnings.warn(
+                f"λ = {lambda_new} nm is outside the range of the action spectrum data"
+                f" for {self.name}. Assuming ε = 0."
+            )
+            return 0
+        return self.action_spectrum_interpolator(lambdas, epsilons, lambda_new)
+
+
+def plot_action_spectra(*opsins: Opsin):
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots()
+    for opsin in opsins:
+        action_spectrum = np.array(opsin.action_spectrum)
+        lambdas = action_spectrum[:, 0]
+        epsilons = action_spectrum[:, 1]
+        lambdas_new = np.linspace(min(lambdas), max(lambdas), 100)
+        epsilons_new = opsin.action_spectrum_interpolator(
+            lambdas, epsilons, lambdas_new
+        )
+        c_points = [wavelength_to_rgb(l) for l in lambdas]
+        c_line = wavelength_to_rgb(lambdas_new[np.argmax(epsilons_new)])
+        ax.plot(lambdas_new, epsilons_new, c=c_line, label=opsin.name)
+        ax.scatter(lambdas, epsilons, marker="o", s=50, color=c_points)
+    title = "Action spectra" if len(opsins) > 1 else f"Action spectrum"
+    ax.set(xlabel="λ (nm)", ylabel="ε", title=title)
+    fig.legend()
+    return fig, ax
+
 
 @define(eq=False)
 class MarkovOpsin(Opsin):
@@ -386,7 +442,6 @@ class BansalFourStateOpsin(MarkovOpsin):
     IOPTO_VAR_NAME and V_VAR_NAME are substituted on injection.
     """
 
-    foo: int = 1
     Gd1: Quantity = 0.066 / ms
     Gd2: Quantity = 0.01 / ms
     Gr0: Quantity = 3.33e-4 / ms
@@ -515,9 +570,3 @@ class ProportionalCurrentOpsin(Opsin):
             Iopto_unit = radian
         self.per_ng_unit_replacements = [("IOPTO_UNIT", Iopto_unit.name)]
         self.required_vars = [("Iopto", Iopto_unit)]
-
-
-def linear_interp_from_data(wavelength_nm, epsilon):
-    return interp1d(
-        wavelength_nm, epsilon, kind="linear", fill_value=0, bounds_error=False
-    )
