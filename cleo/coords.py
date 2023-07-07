@@ -58,7 +58,7 @@ def assign_coords_grid_rect_prism(
     y = np.linspace(ylim[0], ylim[1], shape[1])
     z = np.linspace(zlim[0], zlim[1], shape[2])
 
-    x, y, z = np.meshgrid(x, y, z)
+    x, y, z = np.meshgrid(x, y, z, indexing="ij")
     assign_coords(neuron_group, x, y, z)
 
 

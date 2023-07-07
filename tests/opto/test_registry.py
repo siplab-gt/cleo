@@ -167,5 +167,6 @@ def test_multi_light_opsin(sim_ng1_ng2):
     sim.run(0.3 * ms)
     # main effect on ng2
     assert np.all(ng2.v > ng1.v)
-    # some cross-talk on ng1
-    assert np.all(ng1.v > -70 * mV)
+    # no cross-talk on ng1
+    assert chr2.epsilon(590) == 0
+    assert np.all(ng1.v == -70 * mV)

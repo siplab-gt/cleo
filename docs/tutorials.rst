@@ -5,6 +5,7 @@ Tutorials
 
     tutorials/electrodes
     tutorials/optogenetics
+    tutorials/multi_opto
     tutorials/on_off_ctrl
     tutorials/PI_ctrl
     tutorials/lqr_ctrl_ldsctrlest

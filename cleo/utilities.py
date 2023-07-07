@@ -136,10 +136,16 @@ def modify_model_with_eqs(neuron_group, eqs_to_add):
                 var.set_conditional_write(not_refractory_var)
 
     # Stochastic variables
-    for xi in neuron_group.equations.stochastic_variables:
-        neuron_group.variables.add_auxiliary_variable(
-            xi, dimensions=(second**-0.5).dim
-        )
+    for xi in eqs_to_add.stochastic_variables:
+        try:
+            neuron_group.variables.add_auxiliary_variable(
+                xi, dimensions=(second**-0.5).dim
+            )
+        except KeyError as ex:
+            warnings.warn(
+                "Adding a stochastic variable to a neuron group that already"
+                " has a variable with the same name."
+            )
 
     # Check scalar subexpressions
     for eq in neuron_group.equations.values():

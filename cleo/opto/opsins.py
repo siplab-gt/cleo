@@ -24,9 +24,11 @@ from brian2.units import (
     ms,
     second,
     psiemens,
+    nsiemens,
     mV,
     volt,
     amp,
+    mM,
 )
 from brian2.units.allunits import radian
 import numpy as np
@@ -384,21 +386,23 @@ class BansalFourStateOpsin(MarkovOpsin):
     IOPTO_VAR_NAME and V_VAR_NAME are substituted on injection.
     """
 
-    g0: Quantity = 114000 * psiemens
-    gamma: Quantity = 0.00742
-    phim: Quantity = 2.33e17 / mm2 / second  # *photon, not in Brian2
-    k1: Quantity = 4.15 / ms
-    k2: Quantity = 0.868 / ms
-    p: Quantity = 0.833
-    Gf0: Quantity = 0.0373 / ms
-    kf: Quantity = 0.0581 / ms
-    Gb0: Quantity = 0.0161 / ms
-    kb: Quantity = 0.063 / ms
-    q: Quantity = 1.94
-    Gd1: Quantity = 0.105 / ms
-    Gd2: Quantity = 0.0138 / ms
-    Gr0: Quantity = 0.00033 / ms
+    foo: int = 1
+    Gd1: Quantity = 0.066 / ms
+    Gd2: Quantity = 0.01 / ms
+    Gr0: Quantity = 3.33e-4 / ms
+    g0: Quantity = 3.2 * nsiemens
+    phim: Quantity = 1e16 / mm2 / second  # *photon, not in Brian2
+    k1: Quantity = 0.4 / ms
+    k2: Quantity = 0.12 / ms
+    Gf0: Quantity = 0.018 / ms
+    Gb0: Quantity = 0.008 / ms
+    kf: Quantity = 0.01 / ms
+    kb: Quantity = 0.008 / ms
+    gamma: Quantity = 0.05
+    p: Quantity = 1
+    q: Quantity = 1
     E: Quantity = 0 * mV
+
     model: str = field(
         init=False,
         default="""
@@ -416,7 +420,6 @@ class BansalFourStateOpsin(MarkovOpsin):
         Gb = kb*Hq + Gb0 : hertz
 
         fphi = O1 + gamma*O2 : 1
-        fv = 1 : 1
 
         IOPTO_VAR_NAME_post = -g0*fphi*(V_VAR_NAME_post-E)*rho_rel : ampere (summed)
         rho_rel : 1""",
@@ -425,6 +428,64 @@ class BansalFourStateOpsin(MarkovOpsin):
     def init_opto_syn_vars(self, opto_syn: Synapses) -> None:
         for varname, value in {"C1": 1, "O1": 0, "O2": 0}.items():
             setattr(opto_syn, varname, value)
+
+
+@define(eq=False)
+class BansalThreeStatePump(MarkovOpsin):
+    """3-state model from `Bansal et al. 2020 <10.1016/j.neuroscience.2020.09.022>`_.
+
+    rho_rel is channel density relative to standard model fit;
+    modifying it post-injection allows for heterogeneous opsin expression.
+
+    IOPTO_VAR_NAME and V_VAR_NAME are substituted on injection.
+    """
+
+    Gd: Quantity = 0
+    Gr: Quantity = 0
+    ka: Quantity = 0
+    p: Quantity = 0
+    q: Quantity = 0
+    phim: Quantity = 0
+    E: Quantity = 0
+    a: Quantity = 0
+    b: Quantity = 0
+    vartheta_max = 5 * mM
+    kd = 16 * mM
+    model: str = field(
+        init=False,
+        default="""
+        dP0/dt = Gr*P6 - Ga*P0 : 1 (clock-driven)
+        dP4/dt = Ga*P0 - Gd*P4 : 1 (clock-driven)
+        P6 = 1 - P0 - P4 : 1
+
+        Theta = int(phi_pre > 0*phi_pre) : 1
+        Hp = Theta * phi_pre**p/(phi_pre**p + phim**p) : 1
+        Ga = ka*Hp : hertz
+
+        fphi = P4 : 1
+        dCl_in/dt = a*(I_i + b*I_Cl_leak) : molar
+        Cl_out : molar
+        E_Cl = -26.67*mV * log(Cl_out/Cl_in) : volt
+        I_Cl_leak = g_Cl * (E_Cl0 - E_Cl)
+
+        Psi = vartheta_max*Cl_out / (kd + Cl_out) / 4.43 : 1
+        I_i = fphi*(V_VAR_NAME_post-E)*Psi*rho_rel
+
+        IOPTO_VAR_NAME_post = -(I_i + I_Cl_leak) : ampere (summed)
+        rho_rel : 1""",
+    )
+
+    extra_namespace: dict[str, Any] = field(
+        init=False, factory=lambda: {"E_Cl0": -70 * mV, "g_Cl": 2.3 * msiemens / cm2}
+    )
+
+    def init_opto_syn_vars(self, opto_syn: Synapses) -> None:
+        raise NotImplementedError("Still need to figure out [Cl-_out]")
+        opto_syn.P0 = 1
+        opto_syn.P4 = 0
+        opto_syn.P6 = 0
+        opto_syn.Cl_out = 124 * mM
+        opto_syn.Cl_in = np.exp(np.log(124) - 70 / 26.67) * mM
 
 
 @define(eq=False)
@@ -457,4 +518,6 @@ class ProportionalCurrentOpsin(Opsin):
 
 
 def linear_interp_from_data(wavelength_nm, epsilon):
-    return interp1d(wavelength_nm, epsilon, kind="linear")
+    return interp1d(
+        wavelength_nm, epsilon, kind="linear", fill_value=0, bounds_error=False
+    )
