@@ -9,6 +9,7 @@ from brian2 import (
     ms,
     BrianObjectException,
 )
+import neo
 
 from cleo import CLSimulator, IOProcessor, Recorder, Stimulator
 
@@ -109,3 +110,36 @@ def test_namespace_level():
         sim.run(0.1 * ms, level=0)
     with pytest.raises(BrianObjectException):
         sim.run(0.1 * ms, level=2)
+
+
+def test_sim_to_neo():
+    ng = NeuronGroup(1, "v = -70 : 1", threshold="v > -50")
+    sim = CLSimulator(Network(ng))
+
+    n_stims = 2
+    for i in range(n_stims):
+        stim = MyStim(name=f"stim{i}")
+        sim.inject(stim, ng)
+    rec = MyRec(name="rec")
+    sim.inject(rec, ng)
+
+    sim_neo = sim.to_neo()
+    assert type(sim_neo) == neo.core.Block
+    assert len(sim_neo.segments) == 1
+    assert len(sim_neo.data_children_recur) == n_stims
+
+
+def test_stim_to_neo():
+    stim1 = MyStim(name="stim1")
+    stim1.t_ms = [0, 1, 2]
+    stim1.values = [1, 2, 3]
+    stim1_neo = stim1.to_neo()
+    assert stim1_neo.name == stim1.name
+    assert type(stim1_neo) == neo.core.AnalogSignal
+
+    stim2 = MyStim(name="stim2")
+    stim2.t_ms = [0, 1, 4]
+    stim2.values = [1, 2, 3]
+    stim2_neo = stim2.to_neo()
+    assert stim2_neo.name == stim2.name
+    assert type(stim2_neo) == neo.core.IrregularlySampledSignal

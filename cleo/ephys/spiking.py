@@ -2,32 +2,34 @@
 from __future__ import annotations
 from abc import abstractmethod
 from typing import Any, Tuple
+from datetime import datetime
 
 from attrs import define, field, fields
 from bidict import bidict
-from brian2 import NeuronGroup, Quantity, SpikeMonitor, meter, ms
+from brian2 import NeuronGroup, Quantity, SpikeMonitor, meter, ms, mm
 import numpy as np
-
-# import numpy.typing as npt
+import neo
+import quantities as pq
 from nptyping import NDArray
 
+from cleo.base import NeoExportable
 from cleo.ephys.probes import Signal
 
 
 @define(eq=False)
-class Spiking(Signal):
+class Spiking(Signal, NeoExportable):
     """Base class for probabilistically detecting spikes"""
 
-    perfect_detection_radius: Quantity
+    r_perfect_detection: Quantity
     """Radius (with Brian unit) within which all spikes
     are detected"""
-    half_detection_radius: Quantity
+    r_half_detection: Quantity
     """Radius (with Brian unit) within which half of all spikes
     are detected"""
     cutoff_probability: float = 0.01
     """Spike detection probability below which neurons will not be
     considered. For computational efficiency."""
-    save_history: bool = False
+    save_history: bool = True
     """Determines whether :attr:`t_ms`, :attr:`i`, and :attr:`t_samp_ms` are recorded"""
     t_ms: NDArray[(Any,), float] = field(
         init=False, factory=lambda: np.array([], dtype=float), repr=False
@@ -136,8 +138,8 @@ class Spiking(Signal):
 
     def _detection_prob_for_distance(self, r: Quantity) -> float:
         # p(d) = h/(r-c)
-        a = self.perfect_detection_radius
-        b = self.half_detection_radius
+        a = self.r_perfect_detection
+        b = self.r_half_detection
         # solving for p(a) = 1 and p(b) = .5 yields:
         c = 2 * a - b
         h = b - a
@@ -173,6 +175,21 @@ class Spiking(Signal):
         for j, mon in enumerate(self._monitors):
             self._mon_spikes_already_seen[j] = mon.num_spikes
         self._init_saved_vars()
+
+    def to_neo(self) -> neo.Group:
+        group = neo.Group(allowed_types=[neo.SpikeTrain])
+        for i in set(self.i):
+            st = neo.SpikeTrain(
+                times=self.t_ms[self.i == i] * pq.ms,
+                t_stop=self.probe.sim.network.t / ms * pq.ms,
+            )
+            st.annotate(i=int(i))
+            group.add(st)
+
+        group.annotate(export_datetime=datetime.now())
+        group.name = f"{self.probe.name}.{self.name}"
+        group.description = f"Exported from Cleo {self.__class__.__name__} object"
+        return group
 
 
 @define(eq=False)
@@ -217,6 +234,18 @@ class MultiUnitSpiking(Spiking):
         i_spike_detected, i_c_detected = detected_spikes.nonzero()
         t_detected = t[i_spike_detected]
         return i_c_detected, t_detected, y
+
+    def to_neo(self) -> neo.Group:
+        group = super().to_neo()
+        for st in group.spiketrains:
+            i = int(st.annotations["i"])
+            st.annotate(
+                i_channel=i,
+                x_contact=self.probe.coords[i, 0] / mm * pq.mm,
+                y_contact=self.probe.coords[i, 1] / mm * pq.mm,
+                z_contact=self.probe.coords[i, 2] / mm * pq.mm,
+            )
+        return group
 
 
 @define(eq=False)

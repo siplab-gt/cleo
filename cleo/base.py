@@ -3,6 +3,7 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any, Tuple, Iterable
+import datetime
 
 from attrs import define, field
 from brian2 import (
@@ -18,6 +19,24 @@ from brian2 import (
 from matplotlib import pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from matplotlib.artist import Artist
+import neo
+
+import cleo.utilities
+
+
+class NeoExportable(ABC):
+    """Mixin class for classes that can be exported to Neo objects"""
+
+    @abstractmethod
+    def to_neo(self) -> neo.core.BaseNeo:
+        """Return a neo.core.AnalogSignal object with the device's data
+
+        Returns
+        -------
+        neo.core.BaseNeo
+            Neo object representing exported data
+        """
+        pass
 
 
 @define(eq=False)
@@ -192,7 +211,7 @@ class Recorder(InterfaceDevice):
 
 
 @define(eq=False)
-class Stimulator(InterfaceDevice):
+class Stimulator(InterfaceDevice, NeoExportable):
     """Device for manipulating the network"""
 
     value: Any = field(init=False, default=None)
@@ -238,9 +257,16 @@ class Stimulator(InterfaceDevice):
         self.value = self.default_value
         self._init_saved_vars()
 
+    def to_neo(self):
+        signal = cleo.utilities.analog_signal(self.t_ms, self.values, "dimensionless")
+        signal.name = self.name
+        signal.description = "Exported from Cleo stimulator device"
+        signal.annotate(export_datetime=datetime.datetime.now())
+        return signal
+
 
 @define(eq=False)
-class CLSimulator:
+class CLSimulator(NeoExportable):
     """The centerpiece of cleo. Integrates simulation components and runs."""
 
     network: Network = field(repr=False)
@@ -405,3 +431,22 @@ class CLSimulator:
             device.reset(**kwargs)
         if self.io_processor is not None:
             self.io_processor.reset(**kwargs)
+
+    def to_neo(self) -> neo.core.Block:
+        block = neo.Block(
+            description="Exported from Cleo simulation",
+        )
+        block.annotate(export_datetime=datetime.datetime.now())
+        seg = neo.Segment()
+        block.segments.append(seg)
+        for device in self.devices:
+            if not isinstance(device, NeoExportable):
+                continue
+            dev_neo = device.to_neo()
+            if isinstance(dev_neo, neo.core.Group):
+                data_objects = dev_neo.data_children_recur
+                block.groups.append(dev_neo)
+            elif isinstance(dev_neo, neo.core.dataobject.DataObject):
+                data_objects = [dev_neo]
+            cleo.utilities.add_to_neo_segment(seg, *data_objects)
+        return block

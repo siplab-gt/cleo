@@ -1,7 +1,10 @@
 """Tests for ephys.spiking module"""
+import pytest
 import numpy as np
-
 from brian2 import SpikeGeneratorGroup, ms, mm, Network
+import neo
+import quantities as pq
+
 from cleo import CLSimulator
 from cleo.ephys import *
 from cleo.ioproc import RecordOnlyProcessor
@@ -34,8 +37,8 @@ def test_MUS_multiple_contacts():
     sim = CLSimulator(net)
     mus = MultiUnitSpiking(
         name="mus",
-        perfect_detection_radius=0.3 * mm,
-        half_detection_radius=0.75 * mm,
+        r_perfect_detection=0.3 * mm,
+        r_half_detection=0.75 * mm,
         save_history=True,
     )
     probe = Probe(coords=[[0, 0, 0.25], [0, 0, 0.75]] * mm, signals=[mus])
@@ -90,8 +93,8 @@ def test_MUS_multiple_groups():
     sim = CLSimulator(net)
     mus = MultiUnitSpiking(
         name="mus",
-        perfect_detection_radius=0.1 * mm,
-        half_detection_radius=0.2 * mm,
+        r_perfect_detection=0.1 * mm,
+        r_half_detection=0.2 * mm,
         save_history=True,
     )
     probe = Probe([[0, 0, 0], [0, 0, 0.1]] * mm, [mus])
@@ -127,8 +130,8 @@ def test_SortedSpiking():
     sim = CLSimulator(net)
     ss = SortedSpiking(
         name="ss",
-        perfect_detection_radius=0.3 * mm,
-        half_detection_radius=0.75 * mm,
+        r_perfect_detection=0.3 * mm,
+        r_half_detection=0.75 * mm,
         save_history=True,
     )
     probe = Probe([[0, 0, 0.25], [0, 0, 0.75], [0, 0, 10]] * mm, [ss])
@@ -161,8 +164,8 @@ def _test_reset(spike_signal_class):
     sim = CLSimulator(net)
     spike_signal = spike_signal_class(
         name="spikes",
-        perfect_detection_radius=0.3 * mm,
-        half_detection_radius=0.75 * mm,
+        r_perfect_detection=0.3 * mm,
+        r_half_detection=0.75 * mm,
         save_history=True,
     )
     probe = Probe([[0, 0, 0]] * mm, [spike_signal])
@@ -180,3 +183,40 @@ def _test_reset(spike_signal_class):
 
 def test_SortedSpiking_reset():
     _test_reset(SortedSpiking)
+
+
+def _test_spiking_to_neo(spike_signal_class):
+    spike_sig = spike_signal_class(
+        r_perfect_detection=0.3 * mm,
+        r_half_detection=0.75 * mm,
+    )
+    n_channels = 50
+    probe = Probe(np.random.rand(n_channels, 3) * mm, [spike_sig])
+    probe.sim = CLSimulator(Network())
+
+    n_spikes = n_channels
+    spike_sig.i = np.random.randint(0, n_channels, n_spikes)
+    t_end_ms = n_spikes
+    spike_sig.t_ms = np.random.rand(n_spikes) * t_end_ms
+    probe.sim.network.t_ = t_end_ms * ms
+    stgroup = spike_sig.to_neo()
+    assert stgroup.name == f"{spike_sig.probe.name}.{spike_sig.name}"
+    assert len(stgroup.spiketrains) == len(set(spike_sig.i))
+    for st in stgroup.spiketrains:
+        i = int(st.annotations["i"])
+        assert len(st) == np.sum(spike_sig.i == i)
+        assert np.all(st.times / pq.ms == spike_sig.t_ms[spike_sig.i == i])
+    return spike_sig, stgroup
+
+
+def test_MUS_to_neo():
+    spike_sig, stgroup = _test_spiking_to_neo(MultiUnitSpiking)
+    for st in stgroup.spiketrains:
+        i = int(st.annotations["i_channel"])
+        assert st.annotations["x_contact"] / pq.mm == spike_sig.probe.coords[i, 0] / mm
+        assert st.annotations["y_contact"] / pq.mm == spike_sig.probe.coords[i, 1] / mm
+        assert st.annotations["z_contact"] / pq.mm == spike_sig.probe.coords[i, 2] / mm
+
+
+def test_SS_to_neo():
+    spike_sig, stgroup = _test_spiking_to_neo(SortedSpiking)
