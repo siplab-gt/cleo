@@ -14,6 +14,49 @@ from brian2.equations.equations import (
     SUBEXPRESSION,
     PARAMETER,
 )
+import neo
+import quantities as pq
+
+
+def times_are_regular(times):
+    if len(times) < 2:
+        return False
+    return np.allclose(np.diff(times), times[1] - times[0])
+
+
+def analog_signal(t_ms, values_no_unit, units) -> neo.core.basesignal.BaseSignal:
+    if times_are_regular(t_ms):
+        return neo.AnalogSignal(
+            values_no_unit,
+            t_start=t_ms[0] * pq.ms,
+            units=units,
+            sampling_period=(t_ms[1] - t_ms[0]) * pq.ms,
+        )
+    else:
+        return neo.IrregularlySampledSignal(
+            t_ms * pq.ms,
+            values_no_unit,
+            units=units,
+        )
+
+
+def add_to_neo_segment(
+    segment: neo.core.Segment, *objects: neo.core.dataobject.DataObject
+):
+    """Taken from neo.core.group.Group."""
+    container_lookup = {
+        cls_name: getattr(segment, container_name)
+        for cls_name, container_name in zip(
+            segment._child_objects, segment._child_containers
+        )
+    }
+
+    for obj in objects:
+        cls = obj.__class__
+        if hasattr(cls, "proxy_for"):
+            cls = cls.proxy_for
+        container = container_lookup[cls.__name__]
+        container.append(obj)
 
 
 def normalize_coords(coords: Quantity) -> Quantity:

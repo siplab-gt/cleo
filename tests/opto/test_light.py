@@ -1,5 +1,7 @@
 import pytest
-from brian2 import mm, np, asarray
+from brian2 import mm, np, asarray, mwatt, mm2
+import neo
+import quantities as pq
 
 from cleo.opto import Light, fiber473nm, LightModel
 from cleo.utilities import normalize_coords
@@ -152,3 +154,29 @@ def test_viz_points(
         n_to_plot = len(viz_points)
 
     assert len(viz_points) == n_to_plot
+
+
+@pytest.mark.parametrize("squeeze", [True, False])
+@pytest.mark.parametrize("n_light, n_direction", [(1, 1), (4, 1), (4, 4)])
+def test_light_to_neo(n_light, n_direction, squeeze):
+    light = Light(
+        coords=rand_coords(n_light, squeeze),
+        direction=rand_coords(n_direction, squeeze, False),
+        light_model=fiber473nm(),
+    )
+    t = 5
+    light.t_ms = list(range(t))
+    light.values = np.random.rand(t, n_light)
+    sig = light.to_neo()
+
+    assert np.all(sig.array_annotations["x"] / pq.mm == light.coords[..., 0] / mm)
+    assert np.all(sig.array_annotations["y"] / pq.mm == light.coords[..., 1] / mm)
+    assert np.all(sig.array_annotations["z"] / pq.mm == light.coords[..., 2] / mm)
+
+    assert np.all(sig.array_annotations["direction_x"] == light.direction[..., 0])
+    assert np.all(sig.array_annotations["direction_y"] == light.direction[..., 1])
+    assert np.all(sig.array_annotations["direction_z"] == light.direction[..., 2])
+
+    assert np.all(sig.array_annotations["i_channel"] == np.arange(light.n))
+    assert np.all(sig.magnitude == light.values)
+    assert sig.name == light.name

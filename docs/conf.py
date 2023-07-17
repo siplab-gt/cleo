@@ -55,6 +55,7 @@ autoclass_content = "both"
 intersphinx_mapping = {
     "brian2": ("https://brian2.readthedocs.io/en/stable", None),
     "matplotlib": ("http://matplotlib.org/stable", None),
+    "neo": ("https://neo.readthedocs.io/en/latest", None),
 }
 
 autosectionlabel_prefix_document = True

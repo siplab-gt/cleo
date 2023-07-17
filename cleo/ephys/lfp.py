@@ -1,6 +1,7 @@
 """Contains LFP signals"""
 from __future__ import annotations
 from typing import Any
+from datetime import datetime
 
 from attrs import define, field
 from brian2 import NeuronGroup, mm, ms
@@ -8,12 +9,15 @@ from brian2.monitors.spikemonitor import SpikeMonitor
 import numpy as np
 from nptyping import NDArray
 from tklfp import TKLFP
+import quantities as pq
 
+from cleo.base import NeoExportable
 from cleo.ephys.probes import Signal, Probe
+import cleo.utilities
 
 
 @define(eq=False)
-class TKLFPSignal(Signal):
+class TKLFPSignal(Signal, NeoExportable):
     """Records the Teleńczuk kernel LFP approximation.
 
     Requires ``tklfp_type='exc'|'inh'`` to specify cell type
@@ -36,7 +40,7 @@ class TKLFPSignal(Signal):
     to be considered, by default 1e-3.
     This determines the buffer length of past spikes, since the uLFP from a long-past
     spike becomes negligible and is ignored."""
-    save_history: bool = False
+    save_history: bool = True
     """Whether to record output from every timestep in :attr:`lfp_uV`.
     Output is stored every time :meth:`get_state` is called."""
     t_ms: NDArray[(Any,), float] = field(init=False, repr=False)
@@ -169,3 +173,25 @@ class TKLFPSignal(Signal):
         return np.ceil(
             tklfp.compute_min_window_ms(self.uLFP_threshold_uV) / sample_period_ms
         ).astype(int)
+
+    def to_neo(self) -> neo.AnalogSignal:
+        # inherit docstring
+        try:
+            signal = cleo.utilities.analog_signal(
+                self.t_ms,
+                self.lfp_uV,
+                "uV",
+            )
+        except AttributeError:
+            return
+        signal.name = self.probe.name + "." + self.name
+        signal.description = f"Exported from Cleo {self.__class__.__name__} object"
+        signal.annotate(export_datetime=datetime.now())
+        # broadcast in case of uniform direction
+        signal.array_annotate(
+            x=self.probe.coords[..., 0] / mm * pq.mm,
+            y=self.probe.coords[..., 1] / mm * pq.mm,
+            z=self.probe.coords[..., 2] / mm * pq.mm,
+            i_channel=np.arange(self.probe.n),
+        )
+        return signal

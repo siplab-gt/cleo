@@ -4,6 +4,8 @@ from brian2 import mm, Hz, ms, Network, seed, SpikeGeneratorGroup
 import numpy as np
 from brian2.input.poissongroup import PoissonGroup
 from tklfp import TKLFP
+import neo
+import quantities as pq
 
 from cleo import CLSimulator
 from cleo.ioproc import RecordOnlyProcessor
@@ -179,3 +181,36 @@ def test_TKLFP_orientation(seed, is_exc):
     # computes it all post-hoc but TKLFPSignal can only compute using
     # a causal buffer of spikes
     assert np.allclose(tklfp_signal.lfp_uV, tklfp_out, atol=5e-3)
+
+
+@pytest.mark.parametrize(
+    "t,regular_samples", [(0, False), (1, False), (10, False), (10, True)]
+)
+@pytest.mark.parametrize("n_channels", [1, 4])
+def test_tklfp_signal_to_neo(n_channels, t, regular_samples):
+    sig = TKLFPSignal()
+    probe = Probe(np.random.rand(n_channels, 3) * mm, [sig])
+    if regular_samples:
+        sig.t_ms = np.arange(t)
+    else:
+        sig.t_ms = np.sort(np.random.rand(t) * t)
+    sig.lfp_uV = np.random.rand(t, n_channels)
+    neo_sig = sig.to_neo()
+
+    if regular_samples and t > 1:
+        assert type(neo_sig) == neo.AnalogSignal
+    else:
+        assert type(neo_sig) == neo.IrregularlySampledSignal
+
+    assert np.all(
+        neo_sig.array_annotations["x"] / pq.mm == sig.probe.coords[..., 0] / mm
+    )
+    assert np.all(
+        neo_sig.array_annotations["y"] / pq.mm == sig.probe.coords[..., 1] / mm
+    )
+    assert np.all(
+        neo_sig.array_annotations["z"] / pq.mm == sig.probe.coords[..., 2] / mm
+    )
+    assert np.all(neo_sig.array_annotations["i_channel"] == np.arange(probe.n))
+    assert np.all(neo_sig.magnitude == sig.lfp_uV)
+    assert neo_sig.name == f"{sig.probe.name}.{sig.name}"

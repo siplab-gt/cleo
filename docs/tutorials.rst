@@ -10,3 +10,4 @@ Tutorials
     tutorials/PI_ctrl
     tutorials/lqr_ctrl_ldsctrlest
     tutorials/video_visualization
+    tutorials/neo

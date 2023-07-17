@@ -9,8 +9,9 @@ from attrs import field, define
 from mpl_toolkits.mplot3d.axes3d import Axes3D
 from matplotlib.artist import Artist
 from brian2 import NeuronGroup, mm, Unit, Quantity, umeter, np
+import neo
 
-from cleo.base import Recorder
+from cleo.base import Recorder, NeoExportable
 from cleo.utilities import get_orth_vectors_for_V
 
 
@@ -78,7 +79,7 @@ class Signal(ABC):
 
 
 @define(eq=False)
-class Probe(Recorder):
+class Probe(Recorder, NeoExportable):
     """Picks up specified signals across an array of electrodes.
 
     Visualization kwargs
@@ -225,6 +226,16 @@ class Probe(Recorder):
         """
         for signal in self.signals:
             signal.reset()
+
+    def to_neo(self) -> neo.core.Group:
+        group = neo.core.Group(
+            name=self.name, description="Exported from Cleo Probe device"
+        )
+        for sig in self.signals:
+            if not isinstance(sig, NeoExportable):
+                continue
+            group.add(sig.to_neo())
+        return group
 
 
 def concat_coords(*coords: Quantity) -> Quantity:

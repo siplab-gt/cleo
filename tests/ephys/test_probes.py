@@ -1,12 +1,14 @@
 """Tests for electrodes module"""
 from typing import Tuple, Any
 
-# import numpy as np
 import pytest
 from brian2 import NeuronGroup, mm, Network, StateMonitor, umeter, np
+import neo
+import quantities as pq
 
 import cleo
 from cleo import CLSimulator
+from cleo.base import NeoExportable
 from cleo.ephys import (
     Probe,
     linear_shank_coords,
@@ -32,19 +34,23 @@ def test_Probe():
         Probe([[0, 0], [1, 1], [2, 2], [3, 3]] * mm)
 
 
+class DummySignal(Signal, NeoExportable):
+    def connect_to_neuron_group(self, neuron_group: NeuronGroup, **kwparams):
+        self.ng = neuron_group
+        self.value = 1
+        self.brian_objects.add(StateMonitor(self.ng, "v", record=True))
+
+    def get_state(self) -> Any:
+        return self.ng.name
+
+    def reset(self):
+        self.value = 0
+
+    def to_neo(self):
+        return neo.core.AnalogSignal([1, 2, 3], sampling_period=1 * pq.ms, units="uV")
+
+
 def test_Probe_injection():
-    class DummySignal(Signal):
-        def connect_to_neuron_group(self, neuron_group: NeuronGroup, **kwparams):
-            self.ng = neuron_group
-            self.value = 1
-            self.brian_objects.add(StateMonitor(ng, "v", record=True))
-
-        def get_state(self) -> Any:
-            return self.ng.name
-
-        def reset(self):
-            self.value = 0
-
     ng = NeuronGroup(1, "v : 1")
     sim = CLSimulator(Network(ng))
 
@@ -204,3 +210,13 @@ def test_concat_tile_coords():
                 matrix_array[i_coord1:i_coord2, 2], matrix_array[i_coord2:i_coord3, 2]
             )
         )
+
+
+@pytest.mark.parametrize("n_signals", [1, 3])
+def test_probe_to_neo(n_signals):
+    probe = Probe([0, 0, 0] * mm)
+    probe.add_signals(*[DummySignal() for _ in range(n_signals)])
+    probe_neo = probe.to_neo()
+    assert type(probe_neo) == neo.core.Group
+    assert probe_neo.name == probe.name
+    assert len(probe_neo.children) == n_signals

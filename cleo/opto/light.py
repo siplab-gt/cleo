@@ -3,41 +3,29 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Tuple, Any, Union
 import warnings
+import datetime
 
 from attrs import define, field, asdict
 from brian2 import (
-    Synapses,
+    np,
     NeuronGroup,
     Subgroup,
-    Unit,
-    BrianObjectException,
-    get_unit,
-    Equations,
 )
 from nptyping import NDArray
 from brian2.units import (
     mm,
     mm2,
     nmeter,
-    meter,
-    kgram,
     Quantity,
-    second,
-    ms,
-    second,
-    psiemens,
-    mV,
-    volt,
-    amp,
     mwatt,
 )
-from brian2.units.allunits import meter2, radian
-import brian2.units.unitsafefunctions as usf
-import numpy as np
-import matplotlib
+import matplotlib.pyplot as plt
+import matplotlib as mpl
 from matplotlib import colors
 from matplotlib.artist import Artist
 from matplotlib.collections import PathCollection
+import neo
+import quantities as pq
 
 from cleo.base import InterfaceDevice
 from cleo.opto.registry import lor_for_sim
@@ -46,6 +34,7 @@ from cleo.utilities import (
     wavelength_to_rgb,
     xyz_from_rθz,
     normalize_coords,
+    analog_signal,
 )
 from cleo.coords import coords_from_ng, coords_from_xyz
 from cleo.stimulators import Stimulator
@@ -267,7 +256,7 @@ class Light(Stimulator):
     --------------------
     n_points_per_source : int, optional
         The number of points per light source used to represent light intensity in
-        space. By default 1e4.
+        space. By default 1e4. Alias ``n_points``.
     T_threshold : float, optional
         The transmittance below which no points are plotted. By default
         1e-3.
@@ -283,7 +272,7 @@ class Light(Stimulator):
     :class:`FiberModel` for an example."""
 
     coords: Quantity = field(
-        default=(0, 0, 0) * mm, converter=lambda x: x.reshape((-1, 3))
+        default=(0, 0, 0) * mm, converter=lambda x: np.reshape(x, (-1, 3))
     )
     """(x, y, z) coords with Brian unit specifying where to place
     the base of the light source, by default (0, 0, 0)*mm.
@@ -362,28 +351,30 @@ class Light(Stimulator):
 
         T_threshold = kwargs.pop("T_threshold", 0.001)
         n_points_per_source = kwargs.pop("n_points", 1e4)
-        n_points_per_source = kwargs.pop("n_points_per_source", 1e4)
+        n_points_per_source = kwargs.pop("n_points_per_source", n_points_per_source)
         intensity = kwargs.get("intensity", 0.5)
+
+        markersize = plt.rcParams["lines.markersize"]
+        biggest_dim_mm = (
+            max(
+                [
+                    ax.get_xlim()[1] - ax.get_xlim()[0],
+                    ax.get_ylim()[1] - ax.get_ylim()[0],
+                    ax.get_zlim()[1] - ax.get_zlim()[0],
+                ]
+            )
+            * axis_scale_unit
+            / mm
+        )
+        # it looks good when the plot is about 1.5 mm wide
+        markerarea = (markersize * 1.5 / biggest_dim_mm) ** 2
 
         viz_points = self.light_model.viz_points(
             self.coords, self.direction, int(n_points_per_source), T_threshold, **kwargs
         )
         assert viz_points.shape == (self.n, n_points_per_source, 3)
-        # viz_points = viz_points.reshape((-1, 3))
         T = self.light_model.transmittance(self.coords, self.direction, viz_points)
         assert T.shape == (self.n, n_points_per_source)
-        """TODO: I know I need to make this work for multiple sources.
-        I can call set_array on the PathCollection with T*intensity,
-        but I need to map the T values to the correct source.
-
-        *this is looking simpler ⬇️*
-        One option is to make a separate PathCollection for each source.
-
-        Another is to not filter T, keeping it 2D (m, n_points_per_source)
-        since if I filter it, there might not be the same number of points
-        for each source.
-        """
-        # T = T.reshape((-1,))
 
         point_clouds = []
         for i in range(self.n):
@@ -397,6 +388,7 @@ class Light(Stimulator):
                 marker="o",
                 edgecolors="none",
                 label=self.name,
+                s=markerarea,
             )
             with warnings.catch_warnings():
                 warnings.filterwarnings(
@@ -408,7 +400,7 @@ class Light(Stimulator):
 
         handles = ax.get_legend().legendHandles
         c = wavelength_to_rgb(self.light_model.wavelength / nmeter)
-        opto_patch = matplotlib.patches.Patch(color=c, label=self.name)
+        opto_patch = mpl.patches.Patch(color=c, label=self.name)
         handles.append(opto_patch)
         ax.legend(handles=handles)
 
@@ -476,3 +468,21 @@ class Light(Stimulator):
         return colors.LinearSegmentedColormap.from_list(
             "incr_alpha", [(0, c_dimmest), (1, c_brightest)]
         )
+
+    def to_neo(self):
+        signal = analog_signal(self.t_ms, self.values, "mW/mm**2")
+        signal.name = self.name
+        signal.description = "Exported from Cleo Light device"
+        signal.annotate(export_datetime=datetime.datetime.now())
+        # broadcast in case of uniform direction
+        _, direction = np.broadcast_arrays(self.coords, self.direction)
+        signal.array_annotate(
+            x=self.coords[..., 0] / mm * pq.mm,
+            y=self.coords[..., 1] / mm * pq.mm,
+            z=self.coords[..., 2] / mm * pq.mm,
+            direction_x=direction[..., 0],
+            direction_y=direction[..., 1],
+            direction_z=direction[..., 2],
+            i_channel=np.arange(self.n),
+        )
+        return signal
