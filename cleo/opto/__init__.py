@@ -8,7 +8,7 @@ from cleo.opto.opsins import (
     ProportionalCurrentOpsin,
     Opsin,
     BansalFourStateOpsin,
-    BansalThreeStatePump,
+    # BansalThreeStatePump,
     linear_interpolator,
     cubic_interpolator,
     plot_action_spectra,
