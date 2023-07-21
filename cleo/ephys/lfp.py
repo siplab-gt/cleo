@@ -40,14 +40,13 @@ class TKLFPSignal(Signal, NeoExportable):
     to be considered, by default 1e-3.
     This determines the buffer length of past spikes, since the uLFP from a long-past
     spike becomes negligible and is ignored."""
-    save_history: bool = True
-    """Whether to record output from every timestep in :attr:`lfp_uV`.
-    Output is stored every time :meth:`get_state` is called."""
     t_ms: NDArray[(Any,), float] = field(init=False, repr=False)
-    """Times at which LFP is recorded, in ms, stored if :attr:`save_history`"""
+    """Times at which LFP is recorded, in ms, stored if
+    :attr:`~cleo.InterfaceDevice.save_history` on :attr:`~Signal.probe`"""
     lfp_uV: NDArray[(Any, Any), float] = field(init=False, repr=False)
-    """Approximated LFP from every call to :meth:`get_state`, recorded
-    if :attr:`save_history`. Shape is (n_samples, n_channels)."""
+    """Approximated LFP from every call to :meth:`get_state`.
+    Shape is (n_samples, n_channels). Stored if
+    :attr:`~cleo.InterfaceDevice.save_history` on :attr:`~Signal.probe`"""
     _elec_coords_mm: np.ndarray = field(init=False, repr=False)
     _tklfps: list[TKLFP] = field(init=False, factory=list, repr=False)
     _monitors: list[SpikeMonitor] = field(init=False, factory=list, repr=False)
@@ -66,12 +65,12 @@ class TKLFPSignal(Signal, NeoExportable):
         self._init_saved_vars()
 
     def _init_saved_vars(self):
-        if self.save_history:
+        if self.probe.save_history:
             self.t_ms = np.empty((0,))
             self.lfp_uV = np.empty((0, self.probe.n))
 
     def _update_saved_vars(self, t_ms, lfp_uV):
-        if self.save_history:
+        if self.probe.save_history:
             self.t_ms = np.concatenate([self.t_ms, [t_ms]])
             self.lfp_uV = np.vstack([self.lfp_uV, lfp_uV])
 

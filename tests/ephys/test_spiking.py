@@ -39,9 +39,10 @@ def test_MUS_multiple_contacts():
         name="mus",
         r_perfect_detection=0.3 * mm,
         r_half_detection=0.75 * mm,
-        save_history=True,
     )
-    probe = Probe(coords=[[0, 0, 0.25], [0, 0, 0.75]] * mm, signals=[mus])
+    probe = Probe(
+        coords=[[0, 0, 0.25], [0, 0, 0.75]] * mm, signals=[mus], save_history=True
+    )
     sim.inject(probe, sgg)
 
     # remember i here is channel, no longer neuron
@@ -95,9 +96,8 @@ def test_MUS_multiple_groups():
         name="mus",
         r_perfect_detection=0.1 * mm,
         r_half_detection=0.2 * mm,
-        save_history=True,
     )
-    probe = Probe([[0, 0, 0], [0, 0, 0.1]] * mm, [mus])
+    probe = Probe([[0, 0, 0], [0, 0, 0.1]] * mm, [mus], save_history=True)
     sim.inject(probe, sgg1, sgg2, sgg3)
 
     sim.run(10 * ms)
@@ -132,9 +132,10 @@ def test_SortedSpiking():
         name="ss",
         r_perfect_detection=0.3 * mm,
         r_half_detection=0.75 * mm,
-        save_history=True,
     )
-    probe = Probe([[0, 0, 0.25], [0, 0, 0.75], [0, 0, 10]] * mm, [ss])
+    probe = Probe(
+        [[0, 0, 0.25], [0, 0, 0.75], [0, 0, 10]] * mm, [ss], save_history=True
+    )
     # injecting sgg0 before sgg1 needed to predict i_eg
     sim.inject(probe, sgg0, sgg1)
 
@@ -166,9 +167,8 @@ def _test_reset(spike_signal_class):
         name="spikes",
         r_perfect_detection=0.3 * mm,
         r_half_detection=0.75 * mm,
-        save_history=True,
     )
-    probe = Probe([[0, 0, 0]] * mm, [spike_signal])
+    probe = Probe([[0, 0, 0]] * mm, [spike_signal], save_history=True)
     sim.inject(probe, sgg)
     sim.set_io_processor(RecordOnlyProcessor(sample_period_ms=1))
     assert len(spike_signal.i) == 0

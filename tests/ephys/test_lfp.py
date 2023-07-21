@@ -61,7 +61,7 @@ def test_TKLFPSignal(groups_and_types, signal_positive, rand_seed):
     net = Network(*[gt[0] for gt in groups_and_types])
     sim = CLSimulator(net)
 
-    tklfp = TKLFPSignal(save_history=True)
+    tklfp = TKLFPSignal()
     # One probe in middle and another further out.
     # Here we put coords for two probes in one EG.
     # Alternatively you could create two separate EGs
@@ -72,7 +72,7 @@ def test_TKLFPSignal(groups_and_types, signal_positive, rand_seed):
         linear_shank_coords(1.2 * mm, 4, (0, 0, 0) * mm),
         linear_shank_coords(1.2 * mm, 4, (0.2, 0.2, 0) * mm),
     )
-    probe = Probe(contact_coords, signals=[tklfp])
+    probe = Probe(contact_coords, signals=[tklfp], save_history=True)
     for group, tklfp_type in groups_and_types:
         sim.inject(probe, group, tklfp_type=tklfp_type, sample_period_ms=1)
 
@@ -149,8 +149,8 @@ def test_TKLFP_orientation(seed, is_exc):
 
     # cleo setup
     sim = CLSimulator(Network(sgg))
-    tklfp_signal = TKLFPSignal(save_history=True)
-    probe = Probe(elec_coords, [tklfp_signal])
+    tklfp_signal = TKLFPSignal()
+    probe = Probe(elec_coords, [tklfp_signal], save_history=True)
     samp_period = 10 * ms
     sim.set_io_processor(RecordOnlyProcessor(samp_period / ms))  # record every 10 ms
     sim.inject(

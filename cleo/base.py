@@ -51,10 +51,14 @@ class InterfaceDevice(ABC):
     """
     sim: CLSimulator = field(init=False, default=None)
     """The simulator the device is injected into """
-
     name: str = field(kw_only=True)
     """Unique identifier for device, used in sampling, plotting, etc.
     Name of the class by default."""
+    save_history: bool = field(default=True, kw_only=True)
+    """Determines whether times and inputs/outputs are recorded.
+    
+    For stimulators, this is when :meth:`~Stimulator.update` is called.
+    For recorders, it is when :meth:`~Recorder.get_state` is called."""
 
     @name.default
     def _default_name(self) -> str:
@@ -223,8 +227,6 @@ class Stimulator(InterfaceDevice, NeoExportable):
     values: list[Any] = field(factory=list, init=False, repr=False)
     """Values taken by the stimulator at each :meth:`~update` call, 
     stored if :attr:`save_history`"""
-    save_history: bool = True
-    """Determines whether :attr:`t_ms` and :attr:`values` are recorded"""
 
     def __attrs_post_init__(self):
         self.value = self.default_value

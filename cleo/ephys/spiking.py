@@ -29,22 +29,22 @@ class Spiking(Signal, NeoExportable):
     cutoff_probability: float = 0.01
     """Spike detection probability below which neurons will not be
     considered. For computational efficiency."""
-    save_history: bool = True
-    """Determines whether :attr:`t_ms`, :attr:`i`, and :attr:`t_samp_ms` are recorded"""
     t_ms: NDArray[(Any,), float] = field(
         init=False, factory=lambda: np.array([], dtype=float), repr=False
     )
-    """Spike times in ms, stored if :attr:`save_history`"""
+    """Spike times in ms, stored if
+    :attr:`~cleo.InterfaceDevice.save_history` on :attr:`~Signal.probe`"""
     i: NDArray[(Any,), np.uint] = field(
         init=False, factory=lambda: np.array([], dtype=np.uint), repr=False
     )
     """Channel (for multi-unit) or neuron (for sorted) indices
-    of spikes, stored if :attr:`save_history`"""
+    of spikes, stored if
+    :attr:`~cleo.InterfaceDevice.save_history` on :attr:`~Signal.probe`"""
     t_samp_ms: NDArray[(Any,), float] = field(
         init=False, factory=lambda: np.array([], dtype=float), repr=False
     )
-    """Sample times in ms when each spike was recorded, stored 
-    if :attr:`save_history`"""
+    """Sample times in ms when each spike was recorded, stored if
+    :attr:`~cleo.InterfaceDevice.save_history` on :attr:`~Signal.probe`"""
     i_probe_by_i_ng: bidict = field(init=False, factory=bidict, repr=False)
     """(neuron_group, i_ng) keys,  i_probe values. bidict for converting between
     neuron group indices and the indices the probe uses"""
@@ -55,13 +55,13 @@ class Spiking(Signal, NeoExportable):
     )
 
     def _init_saved_vars(self):
-        if self.save_history:
+        if self.probe.save_history:
             self.t_ms = fields(type(self)).t_ms.default.factory()
             self.i = fields(type(self)).i.default.factory()
             self.t_samp_ms = fields(type(self)).t_samp_ms.default.factory()
 
     def _update_saved_vars(self, t_ms, i, t_samp_ms):
-        if self.save_history:
+        if self.probe.save_history:
             self.i = np.concatenate([self.i, i])
             self.t_ms = np.concatenate([self.t_ms, t_ms])
             self.t_samp_ms = np.concatenate([self.t_samp_ms, [t_samp_ms]])
