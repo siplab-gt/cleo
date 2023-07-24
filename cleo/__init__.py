@@ -9,6 +9,7 @@ import cleo.recorders
 import cleo.ioproc
 import cleo.utilities
 import cleo.viz
+import cleo.imaging
 
 from cleo.base import (
     CLSimulator,

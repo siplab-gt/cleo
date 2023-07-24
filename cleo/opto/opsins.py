@@ -54,10 +54,10 @@ class Opsin(InterfaceDevice):
     """Base class for opsin model.
 
     We approximate dynamics under multiple wavelengths using a weighted sum
-    of photon fluxes, where the :math:`\\varepsilon` factor indicates the activation
+    of photon fluxes, where the ε factor indicates the activation
     relative to the peak-sensitivy wavelength for an equivalent number of photons
     (see Mager et al, 2018). This weighted sum is an approximation of a nonlinear
-    peak-non-peak wavelength relation; see notebooks/multi_wavelength_model.ipynb
+    peak-non-peak wavelength relation; see ``notebooks/multi_wavelength_model.ipynb``
     for details."""
 
     model: str = field(init=False)

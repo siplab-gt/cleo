@@ -188,13 +188,12 @@ def assign_coords(
 def coords_from_xyz(x: Quantity, y: Quantity, z: Quantity) -> Quantity:
     """Get ...x3 coordinate array from x, y, z arrays (with units)."""
     # have to add unit back on since it's stripped by vstack
-    n = x.shape[-1]
     return (
         np.concatenate(
             [
-                np.reshape(x, (-1, n, 1)),
-                np.reshape(y, (-1, n, 1)),
-                np.reshape(z, (-1, n, 1)),
+                np.reshape(x, (*x.shape, 1)),
+                np.reshape(y, (*y.shape, 1)),
+                np.reshape(z, (*z.shape, 1)),
             ],
             axis=-1,
         )

@@ -39,7 +39,6 @@ class LightOpsinRegistry:
         Ephoton : joule
         Irr_post = epsilon * T * Irr0_pre : watt/meter**2 (summed)
         phi_post = Irr_post / Ephoton : 1/second/meter**2 (summed)
-        # phi_post = epsilon * T * Irr0_pre / Ephoton : 1/second/meter**2 (summed)
     """
 
     def connect_light_to_opsin_for_ng(
