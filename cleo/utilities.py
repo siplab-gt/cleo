@@ -1,12 +1,9 @@
 """Assorted utilities for developers."""
 from collections.abc import MutableMapping
-from math import ceil, floor
 
-# from scipy import linalg
-import numpy as np
 from matplotlib import pyplot as plt
 
-from brian2 import second, meter, NeuronGroup, Quantity
+from brian2 import np, second, Quantity
 from brian2.groups.group import get_dtype
 from brian2.equations.equations import (
     Equations,
@@ -16,6 +13,9 @@ from brian2.equations.equations import (
 )
 import neo
 import quantities as pq
+
+
+rng = np.random.default_rng()
 
 
 def times_are_regular(times):

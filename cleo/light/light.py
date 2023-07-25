@@ -28,7 +28,7 @@ import neo
 import quantities as pq
 
 from cleo.base import InterfaceDevice
-from cleo.opto.registry import lor_for_sim
+from cleo.registry import registry_for_sim
 from cleo.utilities import (
     uniform_cylinder_rθz,
     wavelength_to_rgb,
@@ -319,19 +319,19 @@ class Light(Stimulator):
         )
 
     def init_for_simulator(self, sim: CLSimulator) -> None:
-        lor = lor_for_sim(sim)
-        lor.init_register_light(self)
+        registry = registry_for_sim(sim)
+        registry.init_register_light(self)
         self.reset()
 
     def connect_to_neuron_group(
         self, neuron_group: NeuronGroup, **kwparams: Any
     ) -> None:
-        lor = lor_for_sim(self.sim)
-        if self in lor.lights_for_ng.get(neuron_group, set()):
+        registry = registry_for_sim(self.sim)
+        if self in registry.lights_for_ng.get(neuron_group, set()):
             raise ValueError(
                 f"Light {self} already connected to neuron group {neuron_group}"
             )
-        lor.register_light(self, neuron_group)
+        registry.register_light(self, neuron_group)
 
     @property
     def n(self):
@@ -341,8 +341,8 @@ class Light(Stimulator):
 
     @property
     def source(self) -> Subgroup:
-        lor = lor_for_sim(self.sim)
-        return lor.source_for_light(self)
+        registry = registry_for_sim(self.sim)
+        return registry.source_for_light(self)
 
     def add_self_to_plot(self, ax, axis_scale_unit, **kwargs) -> list[PathCollection]:
         # show light with point field, assigning r and z coordinates

@@ -3,7 +3,9 @@ from brian2 import np, NeuronGroup, mV, Network, umeter, ms, mwatt, mm, nmeter
 
 from cleo import CLSimulator
 from cleo.coords import assign_coords_grid_rect_prism
-from cleo.opto import Light, fiber473nm, chr2_4s, Opsin, lor_for_sim, vfchrimson_4s
+from cleo.opto import chr2_4s, Opsin, vfchrimson_4s
+from cleo.light import Light, fiber473nm
+from cleo.registry import registry_for_sim
 
 
 @pytest.fixture

@@ -10,9 +10,9 @@ from cleo.coords import coords_from_ng
 
 
 @define(repr=False)
-class LightOpsinRegistry:
+class DeviceInteractionRegistry:
     """Facilitates the creation and maintenance of 'neurons' and 'synapses'
-    implementing many-to-many light-opsin optogenetics"""
+    implementing many-to-many light-opsin/indicator optogenetics"""
 
     sim: CLSimulator = field()
 
@@ -21,15 +21,17 @@ class LightOpsinRegistry:
     light_source_ng: NeuronGroup = field(init=False, default=None)
     """Represents ALL light sources (multiple devices)"""
 
-    opsins_for_ng: dict[NeuronGroup, set["Opsin"]] = field(factory=dict, init=False)
-
-    lights_for_ng: dict[NeuronGroup, set["Light"]] = field(factory=dict, init=False)
-
-    light_prop_syns: dict[Tuple["Opsin", NeuronGroup], Synapses] = field(
+    ldds_for_ng: dict[NeuronGroup, set["LightDependentDevice"]] = field(
         factory=dict, init=False
     )
 
-    connections: set[Tuple["Light", "Opsin", NeuronGroup]] = field(
+    lights_for_ng: dict[NeuronGroup, set["Light"]] = field(factory=dict, init=False)
+
+    light_prop_syns: dict[Tuple["LightDependentDevice", NeuronGroup], Synapses] = field(
+        factory=dict, init=False
+    )
+
+    connections: set[Tuple["Light", "LightDependentDevice", NeuronGroup]] = field(
         factory=set, init=False
     )
 
@@ -41,16 +43,16 @@ class LightOpsinRegistry:
         phi_post = Irr_post / Ephoton : 1/second/meter**2 (summed)
     """
 
-    def connect_light_to_opsin_for_ng(
-        self, light: "Light", opsin: "Opsin", ng: NeuronGroup
+    def connect_light_to_ldd_for_ng(
+        self, light: "Light", ldd: "LightDependentDevice", ng: NeuronGroup
     ):
-        epsilon = opsin.epsilon(light.light_model.wavelength / nmeter)
+        epsilon = ldd.epsilon(light.light_model.wavelength / nmeter)
         if epsilon == 0:
             return
 
-        light_prop_syn = self._get_or_create_light_prop_syn(opsin, ng)
-        if (light, opsin, ng) in self.connections:
-            raise ValueError(f"{light} already connected to {opsin.name} for {ng.name}")
+        light_prop_syn = self._get_or_create_light_prop_syn(ldd, ng)
+        if (light, ldd, ng) in self.connections:
+            raise ValueError(f"{light} already connected to {ldd.name} for {ng.name}")
 
         i_source = self.subgroup_idx_for_light[light]
         light_prop_syn.epsilon[i_source, :] = epsilon
@@ -63,36 +65,36 @@ class LightOpsinRegistry:
             / light.light_model.wavelength
         )
         # fmt: on
-        self.connections.add((light, opsin, ng))
+        self.connections.add((light, ldd, ng))
 
     def _get_or_create_light_prop_syn(
-        self, opsin: "Opsin", ng: NeuronGroup
+        self, ldd: "LightDependentDevice", ng: NeuronGroup
     ) -> Synapses:
-        if (opsin, ng) not in self.light_prop_syns:
-            light_agg_ng = opsin.light_agg_ngs[ng.name]
+        if (ldd, ng) not in self.light_prop_syns:
+            light_agg_ng = ldd.light_agg_ngs[ng.name]
 
             light_prop_syn = Synapses(
                 self.light_source_ng,
                 light_agg_ng,
                 model=self.light_prop_model,
-                name=f"light_prop_{opsin.name}_{ng.name}",
+                name=f"light_prop_{ldd.name}_{ng.name}",
             )
             light_prop_syn.connect()
             # non-zero initialization to avoid nans from /0
             light_prop_syn.Ephoton = 1 * joule
             self.sim.network.add(light_prop_syn)
-            self.light_prop_syns[(opsin, ng)] = light_prop_syn
+            self.light_prop_syns[(ldd, ng)] = light_prop_syn
 
-        return self.light_prop_syns[(opsin, ng)]
+        return self.light_prop_syns[(ldd, ng)]
 
-    def register_opsin(self, opsin: "Opsin", ng: NeuronGroup):
+    def register_ldd(self, ldd: "LightDependentDevice", ng: NeuronGroup):
         """Connects lights previously injected into this neuron group to this opsin"""
-        if ng not in self.opsins_for_ng:
-            self.opsins_for_ng[ng] = set()
-        self.opsins_for_ng[ng].add(opsin)
+        if ng not in self.ldds_for_ng:
+            self.ldds_for_ng[ng] = set()
+        self.ldds_for_ng[ng].add(ldd)
         prev_injct_lights = self.lights_for_ng.get(ng, set())
         for light in prev_injct_lights:
-            self.connect_light_to_opsin_for_ng(light, opsin, ng)
+            self.connect_light_to_ldd_for_ng(light, ldd, ng)
 
     def init_register_light(self, light: "Light"):
         if self.light_source_ng is not None:
@@ -119,33 +121,34 @@ class LightOpsinRegistry:
         prev_cxns = self.connections.copy()
         self.connections.clear()
         self.light_prop_syns.clear()
-        for light, opsin, ng in prev_cxns:
-            self.connect_light_to_opsin_for_ng(light, opsin, ng)
+        for light, ldd, ng in prev_cxns:
+            self.connect_light_to_ldd_for_ng(light, ldd, ng)
         assert prev_cxns == self.connections
 
         return self.light_source_ng[n_prev : n_prev + light.n]
 
     def register_light(self, light: "Light", ng: NeuronGroup):
-        """Connects light to opsins already injected into this neuron group"""
+        """Connects light to opsins and indicators already injected into this neuron
+        group"""
         # create new connections for this light
         if ng not in self.lights_for_ng:
             self.lights_for_ng[ng] = set()
         self.lights_for_ng[ng].add(light)
-        prev_injct_opsins = self.opsins_for_ng.get(ng, set())
-        for opsin in prev_injct_opsins:
-            self.connect_light_to_opsin_for_ng(light, opsin, ng)
+        prev_injct_ldds = self.ldds_for_ng.get(ng, set())
+        for ldd in prev_injct_ldds:
+            self.connect_light_to_ldd_for_ng(light, ldd, ng)
 
     def source_for_light(self, light: "Light") -> Subgroup:
         i = self.subgroup_idx_for_light[light]
         return self.light_source_ng[i]
 
 
-registries: dict[CLSimulator, LightOpsinRegistry] = {}
+registries: dict[CLSimulator, DeviceInteractionRegistry] = {}
 
 
-def lor_for_sim(sim: CLSimulator) -> LightOpsinRegistry:
+def registry_for_sim(sim: CLSimulator) -> DeviceInteractionRegistry:
     """Returns the registry for the given simulator"""
     assert sim is not None
     if sim not in registries:
-        registries[sim] = LightOpsinRegistry(sim)
+        registries[sim] = DeviceInteractionRegistry(sim)
     return registries[sim]

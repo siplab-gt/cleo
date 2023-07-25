@@ -24,3 +24,7 @@
 # ) -> Quantity:
 #     """returns nx3 array with units"""
 #     pass
+
+
+def targets_from_scope(scope):
+    pass

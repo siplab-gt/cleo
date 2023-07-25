@@ -3,7 +3,7 @@ from brian2 import mm, np, asarray, mwatt, mm2
 import neo
 import quantities as pq
 
-from cleo.opto import Light, fiber473nm, LightModel
+from cleo.light import Light, fiber473nm, LightModel
 from cleo.utilities import normalize_coords
 
 

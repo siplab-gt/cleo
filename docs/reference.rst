@@ -27,10 +27,28 @@ cleo.ephys module
    :undoc-members:
    :show-inheritance:
 
-cleo.opto module
+cleo.light module
 -------------------
 
+.. automodule:: cleo.light
+   :members:
+   :imported-members:
+   :undoc-members:
+   :show-inheritance:
+
+cleo.opto module
+----------------
+
 .. automodule:: cleo.opto
+   :members:
+   :imported-members:
+   :undoc-members:
+   :show-inheritance:
+
+cleo.imaging module
+-------------------
+
+.. automodule:: cleo.imaging
    :members:
    :imported-members:
    :undoc-members:
@@ -73,6 +91,14 @@ cleo.utilities module
 ------------------------
 
 .. automodule:: cleo.utilities
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+cleo.registry module
+--------------------
+
+.. automodule:: cleo.registry
    :members:
    :undoc-members:
    :show-inheritance:

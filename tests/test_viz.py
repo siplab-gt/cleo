@@ -3,11 +3,8 @@ import pytest
 
 from cleo import CLSimulator
 from cleo.viz import VideoVisualizer
-from cleo.opto import (
-    Light,
-    chr2_4s,
-    fiber473nm,
-)
+from cleo.light import Light, fiber473nm
+from cleo.opto import chr2_4s
 from cleo.coords import assign_coords
 from cleo.ephys import Probe
 

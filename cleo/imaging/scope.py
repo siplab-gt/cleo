@@ -12,7 +12,7 @@ from cleo.base import Recorder
 
 from cleo.imaging.indicators import Indicator
 from cleo.coords import coords_from_ng
-from cleo.utilities import normalize_coords
+from cleo.utilities import normalize_coords, rng
 
 
 def target_neurons_in_plane(
@@ -76,11 +76,6 @@ class Scope(Recorder):
         factory=list, repr=False, init=False
     )
 
-    _rng: np.random.Generator = field(init=False, repr=False)
-
-    def __attrs_post_init__(self):
-        self._rng = np.random.default_rng(self.rand_seed)
-
     def target_neurons_in_plane(
         self, ng, focus_depth: Quantity = None, soma_radius: Quantity = None
     ) -> tuple[NDArray[(Any,), int], NDArray[(Any,), float]]:
@@ -100,9 +95,7 @@ class Scope(Recorder):
         snr = np.concatenate(self.snr_per_injct)
         signal = np.concatenate(self.indicator.get_state()) * snr / (1 + snr)
         std_noise = 1 / (1 + snr)
-        noise = self._rng.normal(0, std_noise, len(signal))
-        # for noise in self.noises:
-        #     out += noise.compute(self.t_ms)
+        noise = rng.normal(0, std_noise, len(signal))
         return signal + noise
 
     def connect_to_neuron_group(self, neuron_group: NeuronGroup, **kwparams) -> None:
@@ -127,20 +120,10 @@ class Scope(Recorder):
             _, snr = np.broadcast_arrays(i_targets, snr)
         assert len(i_targets) == len(snr)
 
-        self.indicator.connect_to_neuron_group(neuron_group, i_targets, **kwparams)
+        self.sim.inject(self.indicator, neuron_group, i_targets=i_targets, **kwparams)
         self.neuron_groups.append(neuron_group)
         self.i_targets_per_injct.append(i_targets)
         self.snr_per_injct.append(snr)
-
-        # for noise in self.noises:
-        #     noise.init_for_ng(
-        #         neuron_group,
-        #         i_targets,
-        #         self.location,
-        #         self.direction,
-        #         focus_depth,
-        #         **kwparams,
-        #     )
 
     def add_self_to_plot(
         self, ax: Axes3D, axis_scale_unit: Unit, **kwargs
