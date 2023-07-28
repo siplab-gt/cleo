@@ -157,7 +157,7 @@ def assign_coords_uniform_cylinder(
     assign_coords(neuron_group, xs, ys, zs, unit)
 
 
-def assign_coords(
+def assign_xyz(
     neuron_group: NeuronGroup,
     x: np.ndarray,
     y: np.ndarray,
@@ -183,6 +183,32 @@ def assign_coords(
     neuron_group.x = np.reshape(x, (-1,)) * unit
     neuron_group.y = np.reshape(y, (-1,)) * unit
     neuron_group.z = np.reshape(z, (-1,)) * unit
+
+
+def assign_coords(
+    neuron_group: NeuronGroup,
+    coords: np.ndarray,
+    unit: Unit = mm,
+):
+    """Assign arbitrary coordinates to neuron group.
+
+    Parameters
+    ----------
+    neuron_group : NeuronGroup
+        neurons to be assigned coordinates
+    x : np.ndarray
+        x positions to assign (preferably 1D with no unit)
+    y : np.ndarray
+        y positions to assign (preferably 1D with no unit)
+    z : np.ndarray
+        z positions to assign (preferably 1D with no unit)
+    unit : Unit, optional
+        Brian unit determining what scale to use for coordinates, by default mm
+    """
+    _init_variables(neuron_group)
+    neuron_group.x = np.reshape(coords[..., 0], (-1,)) * unit
+    neuron_group.y = np.reshape(coords[..., 0], (-1,)) * unit
+    neuron_group.z = np.reshape(coords[..., 0], (-1,)) * unit
 
 
 def coords_from_xyz(x: Quantity, y: Quantity, z: Quantity) -> Quantity:
