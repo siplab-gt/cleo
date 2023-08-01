@@ -7,7 +7,7 @@ from cleo.imaging import (
     # UniformGaussianNoise,
     jgcamp7f,
     target_neurons_in_plane,
-    Indicator,
+    Sensor,
 )
 from cleo.coords import assign_coords, assign_coords_rand_rect_prism
 
@@ -16,7 +16,7 @@ def test_scope():
     scope = Scope(
         focus_depth=200 * um,
         img_width=500 * um,
-        indicator=Indicator(location="cytoplasm", snr=2),
+        indicator=Sensor(location="cytoplasm", snr=2),
     )
     assert np.all(scope.direction == [0, 0, 1])
     assert np.all(scope.location == [0, 0, 0] * um)

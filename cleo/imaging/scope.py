@@ -10,7 +10,7 @@ from nptyping import NDArray
 
 from cleo.base import Recorder
 
-from cleo.imaging.indicators import Indicator
+from cleo.imaging.sensors import Sensor
 from cleo.coords import coords_from_ng
 from cleo.utilities import normalize_coords, rng
 
@@ -54,7 +54,7 @@ def target_neurons_in_plane(
 
 @define(eq=False)
 class Scope(Recorder):
-    indicator: Indicator = field()
+    indicator: Sensor = field()
     focus_depth: Quantity = field()
     img_width: Quantity = field()
     location: Quantity = [0, 0, 0] * mm
@@ -93,7 +93,12 @@ class Scope(Recorder):
 
     def get_state(self) -> NDArray[(Any,), float]:
         snr = np.concatenate(self.snr_per_injct)
-        signal = np.concatenate(self.indicator.get_state()) * snr / (1 + snr)
+        signal_per_ng = self.indicator.get_state()
+        signal = (
+            np.concatenate([signal_per_ng[ng] for ng in self.neuron_groups])
+            * snr
+            / (1 + snr)
+        )
         std_noise = 1 / (1 + snr)
         noise = rng.normal(0, std_noise, len(signal))
         return signal + noise

@@ -5,10 +5,11 @@ from abc import ABC, abstractmethod
 from typing import Any, Tuple, Iterable
 import datetime
 
-from attrs import define, field
+from attrs import define, field, asdict, fields_dict
 from brian2 import (
     np,
     NeuronGroup,
+    Equations,
     Synapses,
     Subgroup,
     Network,
@@ -17,6 +18,7 @@ from brian2 import (
     ms,
     Unit,
     Quantity,
+    BrianObjectException,
 )
 from matplotlib import pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
@@ -518,7 +520,12 @@ class SynapseDevice(InterfaceDevice):
             A tuple containing the source neuron group and indices to use in Synapses
         """
         # by default the source is the target group itself
-        return target_ng, i_targets
+        if not hasattr(self, "light_receptor"):
+            return target_ng, i_targets
+        else:
+            return self.light_receptor.create_light_agg_source_for_synapse(
+                self, target_ng, i_targets
+            )
 
     def connect_to_neuron_group(self, neuron_group: NeuronGroup, **kwparams) -> None:
         """Transfect neuron group with device.
@@ -598,3 +605,117 @@ class SynapseDevice(InterfaceDevice):
 
         registry = registry_for_sim(self.sim)
         registry.register(self, neuron_group)
+
+    def modify_model_and_params_for_ng(
+        self, neuron_group: NeuronGroup, injct_params: dict
+    ) -> Tuple[Equations, dict]:
+        """Adapt model for given neuron group on injection
+
+        This enables the specification of variable names
+        differently for each neuron group, allowing for custom names
+        and avoiding conflicts.
+
+        Parameters
+        ----------
+        neuron_group : NeuronGroup
+            NeuronGroup this opsin model is being connected to
+        injct_params : dict
+            kwargs passed in on injection, could contain variable
+            names to plug into the model
+
+        Keyword Args
+        ------------
+        model : str, optional
+            Model to start with, by default that defined for the class.
+            This allows for prior string manipulations before it can be
+            parsed as an `Equations` object.
+
+        Returns
+        -------
+        Equations, dict
+            A tuple containing an Equations object
+            and a parameter dictionary, constructed from :attr:`~model`
+            and :attr:`~params`, respectively, with modified names for use
+            in :attr:`~cleo.opto.OptogeneticIntervention.synapses`
+        """
+        model = self.model
+
+        # perform unit substitutions
+        for unit_name, neuron_group_unit_name in self.per_ng_unit_replacements:
+            model = model.replace(unit_name, neuron_group_unit_name)
+
+        # check required variables/units and replace placeholder names
+        for default_name, unit in self.required_vars:
+            var_name = injct_params.get(f"{default_name}_var_name", default_name)
+            if var_name not in neuron_group.variables or not neuron_group.variables[
+                var_name
+            ].unit.has_same_dimensions(unit):
+                raise BrianObjectException(
+                    (
+                        f"{var_name} : {unit.name} needed in the model of NeuronGroup "
+                        f"{neuron_group.name} to connect Opsin {self.name}."
+                    ),
+                    neuron_group,
+                )
+            # opsin synapse model needs modified names
+            to_replace = f"{default_name}_var_name".upper()
+            model = model.replace(to_replace, var_name)
+
+        # Synapse variable and parameter names cannot be the same as any
+        # neuron group variable name
+        return self._fix_name_conflicts(model, neuron_group)
+
+    @property
+    def params(self) -> dict:
+        """Returns a dictionary of parameters for the model"""
+        params = asdict(self, recurse=False)
+        # remove generic fields that are not parameters
+        # assume we only want fields in the last class in the
+        # hierarchy
+        parent_class = type(self).__mro__[1]
+        for field in fields_dict(parent_class):
+            params.pop(field)
+        # remove private attributes
+        for key in list(params.keys()):
+            if key.startswith("_"):
+                params.pop(key)
+        return params
+
+    def _fix_name_conflicts(
+        self, modified_model: str, neuron_group: NeuronGroup
+    ) -> Tuple[Equations, dict]:
+        modified_params = self.params.copy()
+        rename = lambda x: f"{x}_syn"
+
+        # get variables to rename
+        opsin_eqs = Equations(modified_model)
+        substitutions = {}
+        for var in opsin_eqs.names:
+            if var in neuron_group.variables:
+                substitutions[var] = rename(var)
+
+        # and parameters
+        for param in self.params.keys():
+            if param in neuron_group.variables:
+                substitutions[param] = rename(param)
+                modified_params[rename(param)] = modified_params[param]
+                del modified_params[param]
+
+        mod_opsin_eqs = opsin_eqs.substitute(**substitutions)
+        return mod_opsin_eqs, modified_params
+
+    def reset(self, **kwargs):
+        for opto_syn in self.synapses.values():
+            self.init_opto_syn_vars(opto_syn)
+
+    def init_opto_syn_vars(self, opto_syn: Synapses) -> None:
+        """Initializes appropriate variables in Synapses implementing the model
+
+        Can also be used to reset the variables.
+
+        Parameters
+        ----------
+        opto_syn : Synapses
+            The synapses object implementing this model
+        """
+        pass

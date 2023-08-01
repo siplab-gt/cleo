@@ -263,3 +263,7 @@ def test_opto_syn_param_name_conflict(opsin):
         assert not param in opto_syn.equations.names
         assert f"{param}_syn" in opto_syn.namespace
     sim.run(0.1 * ms)
+
+
+if __name__ == "__main__":
+    pytest.main(["-s", __file__])

@@ -5,13 +5,10 @@ import warnings
 
 from attrs import define, field, asdict, fields_dict
 from brian2 import (
-    Synapses,
-    Function,
     NeuronGroup,
+    Synapses,
     Unit,
-    BrianObjectException,
     get_unit,
-    Equations,
     implementation,
     check_units,
 )
@@ -23,7 +20,6 @@ from brian2.units import (
     Quantity,
     second,
     ms,
-    second,
     psiemens,
     nsiemens,
     mV,
@@ -34,13 +30,13 @@ from brian2.units import (
 from brian2.units.allunits import radian
 from scipy.interpolate import CubicSpline
 
-from cleo.base import InterfaceDevice
+from cleo.base import SynapseDevice
 from cleo.coords import assign_coords
-from cleo.light import LightDependentDevice
+from cleo.light import LightReceptor
 
 
 @define(eq=False)
-class Opsin(LightDependentDevice):
+class Opsin(SynapseDevice):
     """Base class for opsin model.
 
     We approximate dynamics under multiple wavelengths using a weighted sum
@@ -49,6 +45,17 @@ class Opsin(LightDependentDevice):
     (see Mager et al, 2018). This weighted sum is an approximation of a nonlinear
     peak-non-peak wavelength relation; see ``notebooks/multi_wavelength_model.ipynb``
     for details."""
+
+    light_receptor: LightReceptor = field(kw_only=True, default=LightReceptor())
+
+    @property
+    def action_spectrum(self):
+        """Alias for ``light_receptor.spectrum``"""
+        return self.light_receptor.spectrum
+
+    @property
+    def light_agg_ngs(self):
+        return self.source_ngs
 
 
 @define(eq=False)
