@@ -36,7 +36,6 @@ from scipy.interpolate import CubicSpline
 
 from cleo.base import InterfaceDevice
 from cleo.coords import assign_coords
-from cleo.registry import registry_for_sim
 from cleo.light import LightDependentDevice
 
 

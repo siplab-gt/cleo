@@ -5,7 +5,6 @@ from attrs import define, field
 from brian2 import NeuronGroup, Synapses, Subgroup
 from brian2.units.allunits import meter2, nmeter, kgram, second, meter, joule
 
-from cleo.base import CLSimulator
 from cleo.coords import coords_from_ng
 
 
@@ -14,7 +13,7 @@ class DeviceInteractionRegistry:
     """Facilitates the creation and maintenance of 'neurons' and 'synapses'
     implementing many-to-many light-opsin/indicator optogenetics"""
 
-    sim: CLSimulator = field()
+    sim: "CLSimulator" = field()
 
     subgroup_idx_for_light: dict["Light", slice] = field(factory=dict, init=False)
 
@@ -42,6 +41,14 @@ class DeviceInteractionRegistry:
         Irr_post = epsilon * T * Irr0_pre : watt/meter**2 (summed)
         phi_post = Irr_post / Ephoton : 1/second/meter**2 (summed)
     """
+
+    def register(self, device: "InterfaceDevice", ng: NeuronGroup):
+        """Registers a device with the registry"""
+        ancestor_classes = [t.__name__ for t in type(device).__mro__]
+        if "Light" in ancestor_classes:
+            self.register_light(device, ng)
+        elif "LightDependentDevice" in ancestor_classes:
+            self.register_ldd(device, ng)
 
     def connect_light_to_ldd_for_ng(
         self, light: "Light", ldd: "LightDependentDevice", ng: NeuronGroup
@@ -143,10 +150,10 @@ class DeviceInteractionRegistry:
         return self.light_source_ng[i]
 
 
-registries: dict[CLSimulator, DeviceInteractionRegistry] = {}
+registries: dict["CLSimulator", DeviceInteractionRegistry] = {}
 
 
-def registry_for_sim(sim: CLSimulator) -> DeviceInteractionRegistry:
+def registry_for_sim(sim: "CLSimulator") -> DeviceInteractionRegistry:
     """Returns the registry for the given simulator"""
     assert sim is not None
     if sim not in registries:

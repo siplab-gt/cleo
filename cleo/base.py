@@ -7,7 +7,9 @@ import datetime
 
 from attrs import define, field
 from brian2 import (
+    np,
     NeuronGroup,
+    Synapses,
     Subgroup,
     Network,
     NetworkOperation,
@@ -20,6 +22,7 @@ from matplotlib import pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from matplotlib.artist import Artist
 import neo
+from cleo.registry import registry_for_sim
 
 import cleo.utilities
 
@@ -452,3 +455,146 @@ class CLSimulator(NeoExportable):
                 data_objects = [dev_neo]
             cleo.utilities.add_to_neo_segment(seg, *data_objects)
         return block
+
+
+@define(eq=False)
+class SynapseDevice(InterfaceDevice):
+    """Base class for devices that record from/stimulate neurons via
+    a Synapses object with device-specific model. Used for opsin and
+    indicator classes"""
+
+    model: str = field(init=False)
+    """Basic Brian model equations string.
+    
+    Should contain a `rho_rel` term reflecting relative expression 
+    levels. Will likely also contain special NeuronGroup-dependent
+    symbols such as V_VAR_NAME to be replaced on injection in 
+    :meth:`modify_model_and_params_for_ng`."""
+
+    synapses: dict[str, Synapses] = field(factory=dict, init=False, repr=False)
+    """Stores the synapse objects implementing the model, connecting from source
+    (light aggregator neurons or the target group itself) to target neuron groups,
+    with :class:`NeuronGroup` name keys and :class:`Synapses` values."""
+
+    source_ngs: dict[str, NeuronGroup] = field(factory=dict, init=False, repr=False)
+    """``{target_ng.name: souce_ng}`` dict of source neuron groups.
+    
+    The source is the target itself by default or light aggregator neurons for
+    :class:`~cleo.light.LightDependentDevice`."""
+
+    per_ng_unit_replacements: list[Tuple[str, str]] = field(
+        factory=list, init=False, repr=False
+    )
+    """List of (UNIT_NAME, neuron_group_specific_unit_name) tuples to be substituted
+    in the model string on injection and before checking required variables."""
+
+    required_vars: list[Tuple[str, Unit]] = field(factory=list, init=False, repr=False)
+    """Default names of state variables required in the neuron group,
+    along with units, e.g., [('Iopto', amp)].
+    
+    It is assumed that non-default values can be passed in on injection
+    as a keyword argument ``[default_name]_var_name=[non_default_name]``
+    and that these are found in the model string as 
+    ``[DEFAULT_NAME]_VAR_NAME`` before replacement."""
+
+    extra_namespace: dict = field(factory=dict, repr=False)
+    """Additional items (beyond parameters) to be added to the opto synapse namespace"""
+
+    def _get_source_for_synapse(
+        self, target_ng: NeuronGroup, i_targets: list[int]
+    ) -> Tuple[NeuronGroup, list[int]]:
+        """Get the source neuron group and indices of source neurons.
+
+        Parameters
+        ----------
+        ng : NeuronGroup
+            The target neuron group.
+        i_targets : list[int]
+            The indices of the target neurons in the target neuron group.
+
+        Returns
+        -------
+        Tuple[NeuronGroup, list[int]]
+            A tuple containing the source neuron group and indices to use in Synapses
+        """
+        # by default the source is the target group itself
+        return target_ng, i_targets
+
+    def connect_to_neuron_group(self, neuron_group: NeuronGroup, **kwparams) -> None:
+        """Transfect neuron group with device.
+
+        Parameters
+        ----------
+        neuron_group : NeuronGroup
+            The neuron group to transform
+
+        Keyword args
+        ------------
+        p_expression : float
+            Probability (0 <= p <= 1) that a given neuron in the group
+            will express the protein. 1 by default.
+        i_targets : array-like
+            Indices of neurons in the group to transfect. recommended for efficiency
+            when stimulating or imaging a small subset of the group.
+            Incompatible with ``p_expression``.
+        rho_rel : float
+            The expression level, relative to the standard model fit,
+            of the protein. 1 by default. For heterogeneous expression,
+            this would have to be modified in the light-dependent synapse
+            post-injection, e.g., ``opsin.syns["neuron_group_name"].rho_rel = ...``
+        Iopto_var_name : str
+            The name of the variable in the neuron group model representing
+            current from the opsin
+        v_var_name : str
+            The name of the variable in the neuron group model representing
+            membrane potential
+        """
+        if neuron_group.name in self.source_ngs:
+            assert neuron_group.name in self.synapses
+            raise ValueError(
+                f"{self.__class__.__name__} {self.name} already connected to neuron group"
+                f" {neuron_group.name}"
+            )
+
+        # get modified synapse model string (i.e., with names/units specified)
+        mod_syn_model, mod_syn_params = self.modify_model_and_params_for_ng(
+            neuron_group, kwparams
+        )
+
+        # handle p_expression
+        if "p_expression" in kwparams:
+            if "i_targets" in kwparams:
+                raise ValueError("p_expression and i_targets are incompatible")
+            p_expression = kwparams.get("p_expression", 1)
+            expr_bool = np.random.rand(neuron_group.N) < p_expression
+            i_targets = np.where(expr_bool)[0]
+        elif "i_targets" in kwparams:
+            i_targets = kwparams["i_targets"]
+        else:
+            i_targets = list(range(neuron_group.N))
+        if len(i_targets) == 0:
+            return
+
+        source_ng, i_sources = self._get_source_for_synapse(neuron_group, i_targets)
+
+        syn = Synapses(
+            source_ng,
+            neuron_group,
+            model=mod_syn_model,
+            namespace=mod_syn_params,
+            name=f"syn_{self.name}_{neuron_group.name}",
+        )
+        syn.namespace.update(self.extra_namespace)
+        syn.connect(i=i_sources, j=i_targets)
+        self.init_opto_syn_vars(syn)
+        # relative protein density
+        syn.rho_rel = kwparams.get("rho_rel", 1)
+
+        # store at the end, after all checks have passed
+        self.source_ngs[neuron_group.name] = source_ng
+        self.brian_objects.add(source_ng)
+        self.synapses[neuron_group.name] = syn
+        self.brian_objects.add(syn)
+
+        registry = registry_for_sim(self.sim)
+        registry.register(self, neuron_group)

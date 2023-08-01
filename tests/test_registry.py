@@ -157,7 +157,9 @@ def test_multi_light_opsin(sim_ng1_ng2):
     sim.inject(chr2, ng1, Iopto_var_name="Iopto")
     sim.inject(vfchrimson, ng2, Iopto_var_name="Iopto2")
     sim.inject(blue, ng1, ng2)
-    with pytest.warns(UserWarning):
+    with pytest.warns(
+        UserWarning, match="outside the range of the action spectrum data"
+    ):
         sim.inject(orange, ng1)
     sim.inject(orange, ng2)
 
@@ -176,3 +178,7 @@ def test_multi_light_opsin(sim_ng1_ng2):
     # no cross-talk on ng1
     assert chr2.epsilon(590) == 0
     assert np.all(ng1.v == -70 * mV)
+
+
+if __name__ == "__main__":
+    pytest.main(["-s", __file__])

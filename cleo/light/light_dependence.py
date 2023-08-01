@@ -35,9 +35,8 @@ from brian2.units.allunits import radian
 import numpy as np
 from scipy.interpolate import CubicSpline
 
-from cleo.base import InterfaceDevice
+from cleo.base import InterfaceDevice, SynapseDevice
 from cleo.coords import assign_coords
-from cleo.registry import registry_for_sim
 from cleo.utilities import wavelength_to_rgb
 
 
@@ -50,46 +49,15 @@ def cubic_interpolator(lambdas_nm, epsilons, lambda_new_nm):
 
 
 @define(eq=False)
-class LightDependentDevice(InterfaceDevice):
+class LightDependentDevice(SynapseDevice):
     """Base class for opsin and indicator. TODO
 
     We approximate dynamics under multiple wavelengths using a weighted sum
     of photon fluxes, where the ε factor indicates the activation
-    relative to the peak-sensitivy wavelength for an equivalent number of photons
+    relative to the peak-sensitivity wavelength for an equivalent number of photons
     (see Mager et al, 2018). This weighted sum is an approximation of a nonlinear
     peak-non-peak wavelength relation; see ``notebooks/multi_wavelength_model.ipynb``
     for details."""
-
-    model: str = field(init=False)
-    """Basic Brian model equations string.
-    
-    Should contain a `rho_rel` term reflecting relative expression 
-    levels. Will likely also contain special NeuronGroup-dependent
-    symbols such as V_VAR_NAME to be replaced on injection in 
-    :meth:`modify_model_and_params_for_ng`."""
-
-    per_ng_unit_replacements: list[Tuple[str, str]] = field(
-        factory=list, init=False, repr=False
-    )
-    """List of (UNIT_NAME, neuron_group_specific_unit_name) tuples to be substituted
-    in the model string on injection and before checking required variables."""
-
-    required_vars: list[Tuple[str, Unit]] = field(factory=list, init=False, repr=False)
-    """Default names of state variables required in the neuron group,
-    along with units, e.g., [('Iopto', amp)].
-    
-    It is assumed that non-default values can be passed in on injection
-    as a keyword argument ``[default_name]_var_name=[non_default_name]``
-    and that these are found in the model string as 
-    ``[DEFAULT_NAME]_VAR_NAME`` before replacement."""
-
-    light_agg_ngs: dict[str, NeuronGroup] = field(factory=dict, init=False, repr=False)
-    """{target_ng.name: light_agg_ng} dict of light aggregator neuron groups."""
-
-    ldsyns: dict[NeuronGroup, Synapses] = field(factory=dict, init=False, repr=False)
-    """Stores the synapse objects implementing the model, connecting from
-    :attr:`light_agg_ngs` to target neuron groups, with NeuronGroup keys and Synapse
-    values."""
 
     spectrum: list[tuple[float, float]] = field(factory=lambda: [(-1e10, 1), (1e10, 1)])
     """List of (wavelength, epsilon) tuples representing the action (opsin) or
@@ -102,64 +70,13 @@ class LightDependentDevice(InterfaceDevice):
     the action spectrum data and returns :math:`\\varepsilon \\in [0,1]` for the new
     wavelength."""
 
-    extra_namespace: dict = field(factory=dict, repr=False)
-    """Additional items (beyond parameters) to be added to the opto synapse namespace"""
+    @property
+    def light_agg_ngs(self):
+        return self.source_ngs
 
-    def connect_to_neuron_group(self, neuron_group: NeuronGroup, **kwparams) -> None:
-        """Transfect neuron group with device.
-
-        Parameters
-        ----------
-        neuron_group : NeuronGroup
-            The neuron group to transform
-
-        Keyword args
-        ------------
-        p_expression : float
-            Probability (0 <= p <= 1) that a given neuron in the group
-            will express the protein. 1 by default.
-        i_targets : array-like
-            Indices of neurons in the group to transfect. recommended for efficiency
-            when stimulating or imaging a small subset of the group.
-            Incompatible with ``p_expression``.
-        rho_rel : float
-            The expression level, relative to the standard model fit,
-            of the protein. 1 by default. For heterogeneous expression,
-            this would have to be modified in the light-dependent synapse
-            post-injection, e.g., ``opto.ldsyns["neuron_group_name"].rho_rel = ...``
-        Iopto_var_name : str
-            The name of the variable in the neuron group model representing
-            current from the opsin
-        v_var_name : str
-            The name of the variable in the neuron group model representing
-            membrane potential
-        """
-        if neuron_group.name in self.light_agg_ngs:
-            assert neuron_group.name in self.ldsyns
-            raise ValueError(
-                f"{self.__class__.__name__} {self.name} already connected to neuron group"
-                f" {neuron_group.name}"
-            )
-
-        # get modified synapse model string (i.e., with names/units specified)
-        mod_ldsyn_model, mod_ldsyn_params = self.modify_model_and_params_for_ng(
-            neuron_group, kwparams
-        )
-
-        # handle p_expression
-        if "p_expression" in kwparams:
-            if "i_targets" in kwparams:
-                raise ValueError("p_expression and i_targets are incompatible")
-            p_expression = kwparams.get("p_expression", 1)
-            expr_bool = np.random.rand(neuron_group.N) < p_expression
-            i_targets = np.where(expr_bool)[0]
-        elif "i_targets" in kwparams:
-            i_targets = kwparams["i_targets"]
-        else:
-            i_targets = list(range(neuron_group.N))
-        if len(i_targets) == 0:
-            return
-
+    def _get_source_for_synapse(
+        self, target_ng: NeuronGroup, i_targets: list[int]
+    ) -> Tuple[NeuronGroup, list[int]]:
         # create light aggregator neurons
         light_agg_ng = NeuronGroup(
             len(i_targets),
@@ -167,37 +84,16 @@ class LightDependentDevice(InterfaceDevice):
             phi : 1/second/meter**2
             Irr : watt/meter**2
             """,
-            name=f"light_agg_{self.name}_{neuron_group.name}",
+            name=f"light_agg_{self.name}_{target_ng.name}",
         )
         assign_coords(
             light_agg_ng,
-            neuron_group.x[i_targets] / mm,
-            neuron_group.y[i_targets] / mm,
-            neuron_group.z[i_targets] / mm,
+            target_ng.x[i_targets] / mm,
+            target_ng.y[i_targets] / mm,
+            target_ng.z[i_targets] / mm,
             unit=mm,
         )
-
-        ldsyn = Synapses(
-            light_agg_ng,
-            neuron_group,
-            model=mod_ldsyn_model,
-            namespace=mod_ldsyn_params,
-            name=f"ldsyn_{self.name}_{neuron_group.name}",
-        )
-        ldsyn.namespace.update(self.extra_namespace)
-        ldsyn.connect(i=range(len(i_targets)), j=i_targets)
-        self.init_opto_syn_vars(ldsyn)
-        # relative protein density
-        ldsyn.rho_rel = kwparams.get("rho_rel", 1)
-
-        # store at the end, after all checks have passed
-        self.light_agg_ngs[neuron_group.name] = light_agg_ng
-        self.brian_objects.add(light_agg_ng)
-        self.ldsyns[neuron_group.name] = ldsyn
-        self.brian_objects.add(ldsyn)
-
-        registry = registry_for_sim(self.sim)
-        registry.register_ldd(self, neuron_group)
+        return light_agg_ng, list(range(len(i_targets)))
 
     def modify_model_and_params_for_ng(
         self, neuron_group: NeuronGroup, injct_params: dict
@@ -229,7 +125,7 @@ class LightDependentDevice(InterfaceDevice):
             A tuple containing an Equations object
             and a parameter dictionary, constructed from :attr:`~model`
             and :attr:`~params`, respectively, with modified names for use
-            in :attr:`~cleo.opto.OptogeneticIntervention.ldsyns`
+            in :attr:`~cleo.opto.OptogeneticIntervention.synapses`
         """
         model = self.model
 
@@ -295,7 +191,7 @@ class LightDependentDevice(InterfaceDevice):
         return mod_opsin_eqs, modified_params
 
     def reset(self, **kwargs):
-        for opto_syn in self.ldsyns.values():
+        for opto_syn in self.synapses.values():
             self.init_opto_syn_vars(opto_syn)
 
     def init_opto_syn_vars(self, opto_syn: Synapses) -> None:

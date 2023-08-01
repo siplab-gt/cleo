@@ -18,4 +18,5 @@ from cleo.base import (
     Stimulator,
     InterfaceDevice,
     IOProcessor,
+    SynapseDevice,
 )
