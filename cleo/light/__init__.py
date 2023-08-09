@@ -5,7 +5,7 @@ from cleo.light.light import (
     LightModel,
 )
 from cleo.light.light_dependence import (
-    LightReceptor,
+    LightDependent,
     linear_interpolator,
     cubic_interpolator,
     plot_spectra,

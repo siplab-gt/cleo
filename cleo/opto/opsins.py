@@ -28,15 +28,14 @@ from brian2.units import (
     mM,
 )
 from brian2.units.allunits import radian
-from scipy.interpolate import CubicSpline
 
 from cleo.base import SynapseDevice
-from cleo.coords import assign_coords
-from cleo.light import LightReceptor
+from cleo.light import LightDependent
 
 
+# hacky MRO stuff: base class order is important here
 @define(eq=False)
-class Opsin(SynapseDevice):
+class Opsin(LightDependent, SynapseDevice):
     """Base class for opsin model.
 
     We approximate dynamics under multiple wavelengths using a weighted sum
@@ -46,16 +45,10 @@ class Opsin(SynapseDevice):
     peak-non-peak wavelength relation; see ``notebooks/multi_wavelength_model.ipynb``
     for details."""
 
-    light_receptor: LightReceptor = field(kw_only=True, default=LightReceptor())
-
     @property
     def action_spectrum(self):
         """Alias for ``light_receptor.spectrum``"""
-        return self.light_receptor.spectrum
-
-    @property
-    def light_agg_ngs(self):
-        return self.source_ngs
+        return self.spectrum
 
 
 @define(eq=False)
@@ -147,7 +140,7 @@ class FourStateOpsin(MarkovOpsin):
         init=False, factory=lambda: {"f_unless_x0": f_unless_x0}
     )
 
-    def init_opto_syn_vars(self, opto_syn: Synapses) -> None:
+    def init_syn_vars(self, opto_syn: Synapses) -> None:
         for varname, value in {"C1": 1, "O1": 0, "O2": 0}.items():
             setattr(opto_syn, varname, value)
 
@@ -202,7 +195,7 @@ class BansalFourStateOpsin(MarkovOpsin):
         rho_rel : 1""",
     )
 
-    def init_opto_syn_vars(self, opto_syn: Synapses) -> None:
+    def init_syn_vars(self, opto_syn: Synapses) -> None:
         for varname, value in {"C1": 1, "O1": 0, "O2": 0}.items():
             setattr(opto_syn, varname, value)
 

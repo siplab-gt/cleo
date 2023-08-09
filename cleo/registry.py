@@ -20,17 +20,17 @@ class DeviceInteractionRegistry:
     light_source_ng: NeuronGroup = field(init=False, default=None)
     """Represents ALL light sources (multiple devices)"""
 
-    ldds_for_ng: dict[NeuronGroup, set["SynapseDevice"]] = field(
+    ldds_for_ng: dict[NeuronGroup, set["LightDependent"]] = field(
         factory=dict, init=False
     )
 
     lights_for_ng: dict[NeuronGroup, set["Light"]] = field(factory=dict, init=False)
 
-    light_prop_syns: dict[Tuple["SynapseDevice", NeuronGroup], Synapses] = field(
+    light_prop_syns: dict[Tuple["LightDependent", NeuronGroup], Synapses] = field(
         factory=dict, init=False
     )
 
-    connections: set[Tuple["Light", "SynapseDevice", NeuronGroup]] = field(
+    connections: set[Tuple["Light", "LightDependent", NeuronGroup]] = field(
         factory=set, init=False
     )
 
@@ -38,6 +38,7 @@ class DeviceInteractionRegistry:
         T : 1
         epsilon : 1
         Ephoton : joule
+        # TODO: epsilon is defined for photon flux, not irradiance
         Irr_post = epsilon * T * Irr0_pre : watt/meter**2 (summed)
         phi_post = Irr_post / Ephoton : 1/second/meter**2 (summed)
     """
@@ -47,13 +48,13 @@ class DeviceInteractionRegistry:
         ancestor_classes = [t.__name__ for t in type(device).__mro__]
         if "Light" in ancestor_classes:
             self.register_light(device, ng)
-        elif hasattr(device, "light_receptor"):
+        elif "LightDependent" in ancestor_classes:
             self.register_ldd(device, ng)
 
     def connect_light_to_ldd_for_ng(
-        self, light: "Light", ldd: "SynapseDevice", ng: NeuronGroup
+        self, light: "Light", ldd: "LightDependent", ng: NeuronGroup
     ):
-        epsilon = ldd.light_receptor.epsilon(light.light_model.wavelength / nmeter)
+        epsilon = ldd.epsilon(light.light_model.wavelength / nmeter)
         if epsilon == 0:
             return
 
@@ -75,10 +76,10 @@ class DeviceInteractionRegistry:
         self.connections.add((light, ldd, ng))
 
     def _get_or_create_light_prop_syn(
-        self, ldd: "SynapseDevice", ng: NeuronGroup
+        self, ldd: "LightDependent", ng: NeuronGroup
     ) -> Synapses:
         if (ldd, ng) not in self.light_prop_syns:
-            light_agg_ng = ldd.source_ngs[ng.name]
+            light_agg_ng = ldd.light_agg_ngs[ng.name]
 
             light_prop_syn = Synapses(
                 self.light_source_ng,
@@ -94,9 +95,8 @@ class DeviceInteractionRegistry:
 
         return self.light_prop_syns[(ldd, ng)]
 
-    def register_ldd(self, ldd: "SynapseDevice", ng: NeuronGroup):
-        """Connects lights previously injected into this neuron group to this
-        light-dependent device"""
+    def register_ldd(self, ldd: "LightDependent", ng: NeuronGroup):
+        """Connects lights previously injected into this neuron group to this opsin"""
         if ng not in self.ldds_for_ng:
             self.ldds_for_ng[ng] = set()
         self.ldds_for_ng[ng].add(ldd)

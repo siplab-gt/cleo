@@ -520,12 +520,7 @@ class SynapseDevice(InterfaceDevice):
             A tuple containing the source neuron group and indices to use in Synapses
         """
         # by default the source is the target group itself
-        if not hasattr(self, "light_receptor"):
-            return target_ng, i_targets
-        else:
-            return self.light_receptor.create_light_agg_source_for_synapse(
-                self, target_ng, i_targets
-            )
+        return target_ng, i_targets
 
     def connect_to_neuron_group(self, neuron_group: NeuronGroup, **kwparams) -> None:
         """Transfect neuron group with device.
@@ -593,7 +588,7 @@ class SynapseDevice(InterfaceDevice):
         )
         syn.namespace.update(self.extra_namespace)
         syn.connect(i=i_sources, j=i_targets)
-        self.init_opto_syn_vars(syn)
+        self.init_syn_vars(syn)
         # relative protein density
         syn.rho_rel = kwparams.get("rho_rel", 1)
 
@@ -706,16 +701,16 @@ class SynapseDevice(InterfaceDevice):
 
     def reset(self, **kwargs):
         for opto_syn in self.synapses.values():
-            self.init_opto_syn_vars(opto_syn)
+            self.init_syn_vars(opto_syn)
 
-    def init_opto_syn_vars(self, opto_syn: Synapses) -> None:
+    def init_syn_vars(self, syn: Synapses) -> None:
         """Initializes appropriate variables in Synapses implementing the model
 
         Can also be used to reset the variables.
 
         Parameters
         ----------
-        opto_syn : Synapses
+        syn : Synapses
             The synapses object implementing this model
         """
         pass
