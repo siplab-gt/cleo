@@ -1,7 +1,7 @@
 from cleo.light.light import (
     Light,
     fiber473nm,
-    FiberModel,
+    OpticFiber,
     LightModel,
 )
 from cleo.light.light_dependence import (

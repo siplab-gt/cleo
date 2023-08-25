@@ -69,7 +69,7 @@ class LightModel(ABC):
 
 
 @define
-class FiberModel(LightModel):
+class OpticFiber(LightModel):
     """Optic fiber light model from Foutz et al., 2012.
 
     Defaults are from paper for 473 nm wavelength."""
@@ -220,11 +220,11 @@ def fiber473nm(
     K=0.125 / mm,  # absorbance coefficient
     S=7.37 / mm,  # scattering coefficient
     ntis=1.36,  # tissue index of refraction
-) -> FiberModel:
+) -> OpticFiber:
     """Light parameters for 473 nm wavelength delivered via an optic fiber.
 
     From Foutz et al., 2012. See :class:`FiberModel` for parameter descriptions."""
-    return FiberModel(
+    return OpticFiber(
         R0=R0,
         NAfib=NAfib,
         wavelength=wavelength,
