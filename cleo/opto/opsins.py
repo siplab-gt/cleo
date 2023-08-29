@@ -123,9 +123,7 @@ class FourStateOpsin(MarkovOpsin):
         Gb = kb*Hq + Gb0 : hertz
 
         fphi = O1 + gamma*O2 : 1
-        # TODO: get this voltage dependence right 
         # v1/v0 when v-E == 0 via l'Hopital's rule
-        # fv = (1 - exp(-(V_VAR_NAME_post-E)/v0)) / -2 : 1
         fv = f_unless_x0(
             (1 - exp(-(V_VAR_NAME_post-E)/v0)) / ((V_VAR_NAME_post-E)/v1),
             V_VAR_NAME_post - E,

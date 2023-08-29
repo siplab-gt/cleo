@@ -54,7 +54,7 @@ class DeviceInteractionRegistry:
     def connect_light_to_ldd_for_ng(
         self, light: "Light", ldd: "LightDependent", ng: NeuronGroup
     ):
-        epsilon = ldd.epsilon(light.light_model.wavelength / nmeter)
+        epsilon = ldd.epsilon(light.wavelength / nmeter)
         if epsilon == 0:
             return
 
@@ -70,7 +70,7 @@ class DeviceInteractionRegistry:
         light_prop_syn.Ephoton[i_source, :] = (
             6.63e-34 * meter2 * kgram / second
             * 2.998e8 * meter / second
-            / light.light_model.wavelength
+            / light.wavelength
         )
         # fmt: on
         self.connections.add((light, ldd, ng))

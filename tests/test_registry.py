@@ -152,7 +152,7 @@ def test_multi_light_opsin(sim_ng1_ng2):
     chr2 = chr2_4s()
     blue = Light(light_model=fiber473nm())
     vfchrimson = vfchrimson_4s()
-    orange = Light(light_model=fiber473nm(wavelength=590 * nmeter))
+    orange = Light(light_model=fiber473nm(), wavelength=590 * nmeter)
 
     sim.inject(chr2, ng1, Iopto_var_name="Iopto")
     sim.inject(vfchrimson, ng2, Iopto_var_name="Iopto2")

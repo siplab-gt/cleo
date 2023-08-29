@@ -1,48 +1,52 @@
 import pytest
-from brian2 import mm, np, asarray, mwatt, mm2
+from brian2 import mm, np, asarray, mwatt, mm2, nmeter, um
 import neo
 import quantities as pq
 
-from cleo.light import Light, fiber473nm, LightModel
+from cleo.light import Light, fiber473nm, LightModel, GaussianEllipsoid
 from cleo.utilities import normalize_coords
 
 
-def rand_coords(rows, squeeze, add_units=True):
+def rand_coords(rows, squeeze, repr_dist=1 * mm):
     coords = np.random.rand(rows, 3)
     if squeeze:
         coords = coords.squeeze()
-    if add_units:
-        coords = coords * mm
+    coords = coords * repr_dist
     return coords
 
 
-@pytest.mark.parametrize("light_model", [fiber473nm])
+@pytest.mark.parametrize(
+    "light_model, repr_dist",
+    [(fiber473nm(), 1 * mm), (GaussianEllipsoid(), 50 * um)],
+)
 @pytest.mark.parametrize("m, squeeze_target", [(1, True), (1, False), (4, False)])
 @pytest.mark.parametrize("n, squeeze_source", [(1, True), (1, False), (6, False)])
 def test_transmittance_decrease_with_distance(
-    m, n, squeeze_source, squeeze_target, light_model, rand_seed
+    m, n, squeeze_source, squeeze_target, light_model, repr_dist, rand_seed
 ):
-    # TODO: add other light models when implemented
+    """repr_dist refers to a representative distance between light sources and neurons,
+    specific to each light model."""
     np.random.seed(rand_seed)
 
     # range lights from close to far along a narrow rod, same direction
     coords = (
-        1e-3 * rand_coords(m, squeeze_source)
-        + np.linspace(-1, -3, m)[:, np.newaxis] * mm
+        1e-3 * rand_coords(m, squeeze_source, repr_dist)
+        + np.linspace(-1, -3, m)[:, np.newaxis] * repr_dist
     )
-    light = Light(light_model=light_model(), coords=coords, direction=(1, 1, 1))
+    light = Light(light_model=light_model, coords=coords, direction=(1, 1, 1))
     # neurons can be widely distributed (1mm^3 box)
-    target_coords = rand_coords(n, squeeze_target)
+    target_coords = rand_coords(n, squeeze_target, repr_dist)
     T = light.transmittance(target_coords)
     assert T.shape == (m, n)
     assert np.all(np.diff(T, axis=0) <= 0)
 
     # keep random light sources constant, test neurons close to far
-    coords = rand_coords(m, squeeze_source) - 1 * mm
-    light = Light(light_model=fiber473nm(), coords=coords, direction=(1, 1, 1))
-    # keep in small box (to ensure transmittances all decrease with further fibers)
+    coords = rand_coords(m, squeeze_source, repr_dist) - repr_dist
+    light = Light(light_model=light_model, coords=coords, direction=(1, 1, 1))
+    # keep in small box (to ensure transmittances all decrease with further sources)
     target_coords = (
-        1e-3 * rand_coords(n, squeeze_target) + np.linspace(1, 4, n)[:, np.newaxis] * mm
+        1e-3 * rand_coords(n, squeeze_target, repr_dist)
+        + np.linspace(1, 4, n)[:, np.newaxis] * repr_dist
     )
     T = light.transmittance(target_coords)
     assert T.shape == (m, n)
@@ -51,13 +55,14 @@ def test_transmittance_decrease_with_distance(
 
     # randomize both, adjust direction of random light sources to point toward neurons
     coords = (
-        1e-1 * rand_coords(m, squeeze_source)
-        + np.linspace(-1, -3, m)[:, np.newaxis] * mm
+        1e-1 * rand_coords(m, squeeze_source, repr_dist)
+        + np.linspace(-1, -3, m)[:, np.newaxis] * repr_dist
     )
     direction = asarray((0.5, 0.5, 0.5) * mm - coords)
-    light = Light(light_model=fiber473nm(), coords=coords, direction=direction)
+    light = Light(light_model=light_model, coords=coords, direction=direction)
     target_coords = (
-        1e-1 * rand_coords(n, squeeze_target) + np.linspace(0, 1, n)[:, np.newaxis] * mm
+        1e-1 * rand_coords(n, squeeze_target, repr_dist)
+        + np.linspace(0, 1, n)[:, np.newaxis] * repr_dist
     )
     T = light.transmittance(target_coords)
     assert T.shape == (m, n)
@@ -66,15 +71,17 @@ def test_transmittance_decrease_with_distance(
     assert np.all(np.diff(T, axis=1) <= 0)
 
     # decrease with radius from light axis (z-axis in this test)
-    coords = 1e-2 * rand_coords(m, squeeze_source)
-    coords[..., 0] += np.linspace(0, 1, m).squeeze() * mm  # series of lights on x axis
+    coords = 1e-2 * rand_coords(m, squeeze_source, repr_dist)
+    coords[..., 0] += (
+        np.linspace(0, 1, m).squeeze() * repr_dist
+    )  # series of lights on x axis
     direction = (0, 0, 1)
-    light = Light(light_model=fiber473nm(), coords=coords, direction=direction)
-    target_coords = 1e-2 * rand_coords(n, squeeze_target)
+    light = Light(light_model=light_model, coords=coords, direction=direction)
+    target_coords = 1e-2 * rand_coords(n, squeeze_target, repr_dist)
     target_coords[..., 1] += (
-        np.linspace(0, 1, n).squeeze() * mm
+        np.linspace(0, 1, n).squeeze() * repr_dist
     )  # series of neurons on y axis
-    target_coords[..., 2] += 1 * mm  # move neurons up 1mm
+    target_coords[..., 2] += repr_dist  # move neurons up
     T = light.transmittance(target_coords)
     assert T.shape == (m, n)
     assert not np.any(T == 0)
@@ -82,7 +89,7 @@ def test_transmittance_decrease_with_distance(
     assert np.all(np.diff(T, axis=1) <= 0)
 
 
-def test_FiberModel():
+def test_OpticFiber():
     # range from close to far
     source_coords = (np.random.rand(4, 3) + np.arange(1, 5)[:, np.newaxis]) * mm
     target_coords = np.random.rand(10, 3) * mm
@@ -104,7 +111,7 @@ def test_coords():
     assert light.coords.shape == (2, 3)
 
 
-@pytest.mark.parametrize("light_model", [fiber473nm()])
+@pytest.mark.parametrize("light_model", [fiber473nm(), GaussianEllipsoid()])
 @pytest.mark.parametrize(
     "m, squeeze_coords, squeeze_dir",
     [
@@ -125,7 +132,6 @@ def test_viz_points(
     rand_seed,
 ):
     np.random.seed(rand_seed)
-    # TODO: add other light models when implemented
     light_coords = rand_coords(m, squeeze_coords)
     light_direction = rand_coords(m, squeeze_dir, False)
 
@@ -136,8 +142,8 @@ def test_viz_points(
     viz_points = light_model.viz_points(
         light_coords,
         light_direction,
+        0.5,
         n_points_per_source,
-        T_threshold=0.5,
     )
     check_viz_points(viz_points)
     n_to_plot = len(viz_points)
@@ -161,7 +167,7 @@ def test_viz_points(
 def test_light_to_neo(n_light, n_direction, squeeze):
     light = Light(
         coords=rand_coords(n_light, squeeze),
-        direction=rand_coords(n_direction, squeeze, False),
+        direction=rand_coords(n_direction, squeeze, 1),
         light_model=fiber473nm(),
     )
     t = 5
@@ -180,3 +186,7 @@ def test_light_to_neo(n_light, n_direction, squeeze):
     assert np.all(sig.array_annotations["i_channel"] == np.arange(light.n))
     assert np.all(sig.magnitude == light.values)
     assert sig.name == light.name
+
+
+if __name__ == "__main__":
+    pytest.main(["-xs", __file__])

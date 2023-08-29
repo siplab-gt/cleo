@@ -42,9 +42,6 @@ from cleo.stimulators import Stimulator
 
 @define
 class LightModel(ABC):
-    wavelength: Quantity
-    """light wavelength"""
-
     @abstractmethod
     def transmittance(
         self,
@@ -60,12 +57,51 @@ class LightModel(ABC):
         self,
         coords: Quantity,
         direction: NDArray[(Any, 3), Any],
-        n_points_per_source: int,
         T_threshold: float,
+        n_points_per_source: int = None,
         **kwargs,
     ) -> Quantity:
         """Outputs m x n_points_per_source x 3 array"""
         pass
+
+    def _get_rz_for_xyz(self, source_coords, source_direction, target_coords):
+        """Assumes x, y, z already have units"""
+        m = source_coords.reshape((-1, 3)).shape[0]
+        if target_coords.ndim > 1:
+            n = target_coords.shape[-2]
+        elif target_coords.ndim == 1:
+            n = 1
+        # either shared or per-source targets
+        assert target_coords.shape in [(m, n, 3), (1, n, 3), (n, 3), (3,)]
+
+        # relative to light source(s)
+        rel_coords = target_coords - source_coords.reshape((m, 1, 3))
+        assert rel_coords.shape == (m, n, 3)
+        # now m x n x 3 array, where m is number of sources, n is number of targets
+        # must use brian2's dot function for matrix multiply to preserve
+        # units correctly.
+        # zc = usf.dot(rel_coords, source_direction)  # mxn distance along cylinder axis
+        #           m x n x 3    m x 1 x 3
+        zc = np.sum(
+            rel_coords * source_direction.reshape((-1, 1, 3)), axis=-1
+        )  # mxn distance along cylinder axis
+        assert zc.shape == (m, n)
+        # just need length (norm) of radius vectors
+        # not using np.linalg.norm because it strips units
+        r = np.sqrt(
+            np.sum(
+                (
+                    rel_coords
+                    #    m x n                 m x 3
+                    # --> m x n x 1             m x 1 x 3
+                    - zc.reshape((m, n, 1)) * source_direction.reshape((-1, 1, 3))
+                )
+                ** 2,
+                axis=-1,
+            )
+        )
+        assert r.shape == (m, n)
+        return r, zc
 
 
 @define
@@ -78,7 +114,6 @@ class OpticFiber(LightModel):
     """optical fiber radius"""
     NAfib: Quantity = 0.37
     """optical fiber numerical aperture"""
-    wavelength: Quantity = 473 * nmeter
     K: Quantity = 0.125 / mm
     """absorbance coefficient (wavelength/tissue dependent)"""
     S: Quantity = 7.37 / mm
@@ -141,57 +176,16 @@ class OpticFiber(LightModel):
         self,
         coords: Quantity,
         direction: NDArray[(Any, 3), Any],
-        n_points_per_source: int,
         T_threshold: float,
+        n_points_per_source: int = 3e3,
         **kwargs,
     ) -> Quantity:
         r_thresh, zc_thresh = self._find_rz_thresholds(T_threshold)
         r, theta, zc = uniform_cylinder_rθz(n_points_per_source, r_thresh, zc_thresh)
 
-        # T = self._Foutz12_transmittance(r, zc)
-
         end = coords + zc_thresh * direction
         x, y, z = xyz_from_rθz(r, theta, zc, coords, end)
         return coords_from_xyz(x, y, z)
-
-    def _get_rz_for_xyz(self, source_coords, source_direction, target_coords):
-        """Assumes x, y, z already have units"""
-        m = source_coords.reshape((-1, 3)).shape[0]
-        if target_coords.ndim > 1:
-            n = target_coords.shape[-2]
-        elif target_coords.ndim == 1:
-            n = 1
-        # either shared or per-source targets
-        assert target_coords.shape in [(m, n, 3), (1, n, 3), (n, 3), (3,)]
-
-        # relative to light source(s)
-        rel_coords = target_coords - source_coords.reshape((m, 1, 3))
-        assert rel_coords.shape == (m, n, 3)
-        # now m x n x 3 array, where m is number of sources, n is number of targets
-        # must use brian2's dot function for matrix multiply to preserve
-        # units correctly.
-        # zc = usf.dot(rel_coords, source_direction)  # mxn distance along cylinder axis
-        #           m x n x 3    m x 1 x 3
-        zc = np.sum(
-            rel_coords * source_direction.reshape((-1, 1, 3)), axis=-1
-        )  # mxn distance along cylinder axis
-        assert zc.shape == (m, n)
-        # just need length (norm) of radius vectors
-        # not using np.linalg.norm because it strips units
-        r = np.sqrt(
-            np.sum(
-                (
-                    rel_coords
-                    #    m x n                 m x 3
-                    # --> m x n x 1             m x 1 x 3
-                    - zc.reshape((m, n, 1)) * source_direction.reshape((-1, 1, 3))
-                )
-                ** 2,
-                axis=-1,
-            )
-        )
-        assert r.shape == (m, n)
-        return r, zc
 
     def _find_rz_thresholds(self, thresh):
         """find r and z thresholds for visualization purposes"""
@@ -216,18 +210,16 @@ class OpticFiber(LightModel):
 def fiber473nm(
     R0=0.1 * mm,  # optical fiber radius
     NAfib=0.37,  # optical fiber numerical aperture
-    wavelength=473 * nmeter,
     K=0.125 / mm,  # absorbance coefficient
     S=7.37 / mm,  # scattering coefficient
     ntis=1.36,  # tissue index of refraction
 ) -> OpticFiber:
     """Light parameters for 473 nm wavelength delivered via an optic fiber.
 
-    From Foutz et al., 2012. See :class:`FiberModel` for parameter descriptions."""
+    From Foutz et al., 2012. See :class:`OpticFiber` for parameter descriptions."""
     return OpticFiber(
         R0=R0,
         NAfib=NAfib,
-        wavelength=wavelength,
         K=K,
         S=S,
         ntis=ntis,
@@ -256,7 +248,7 @@ class Light(Stimulator):
     --------------------
     n_points_per_source : int, optional
         The number of points per light source used to represent light intensity in
-        space. By default 1e4. Alias ``n_points``.
+        space. Default varies by ``light_model``. Alias ``n_points``.
     T_threshold : float, optional
         The transmittance below which no points are plotted. By default
         1e-3.
@@ -269,7 +261,7 @@ class Light(Stimulator):
 
     light_model: LightModel = field(kw_only=True)
     """LightModel object defining how light is emitted. See
-    :class:`FiberModel` for an example."""
+    :class:`OpticFiber` for an example."""
 
     coords: Quantity = field(
         default=(0, 0, 0) * mm, converter=lambda x: np.reshape(x, (-1, 3))
@@ -278,6 +270,9 @@ class Light(Stimulator):
     the base of the light source, by default (0, 0, 0)*mm.
     Can also be an nx3 array for multiple sources.
     """
+
+    wavelength: Quantity = field(default=473 * nmeter, kw_only=True)
+    """light wavelength with unit (usually nmeter)"""
 
     @coords.validator
     def _check_coords(self, attribute, value):
@@ -349,10 +344,11 @@ class Light(Stimulator):
         # to all points
         # filter out points with <0.001 transmittance to make plotting faster
 
-        T_threshold = kwargs.pop("T_threshold", 0.001)
-        n_points_per_source = kwargs.pop("n_points", 1e4)
-        n_points_per_source = kwargs.pop("n_points_per_source", n_points_per_source)
-        intensity = kwargs.get("intensity", 0.5)
+        # alias
+        if "n_points" in kwargs and "n_points_per_source" not in kwargs:
+            kwargs["n_points_per_source"] = kwargs.pop("n_points")
+        intensity = kwargs.get("intensity", 1)
+        T_threshold = kwargs.pop("T_threshold", 1e-3)
 
         markersize = plt.rcParams["lines.markersize"]
         biggest_dim_mm = (
@@ -366,13 +362,15 @@ class Light(Stimulator):
             * axis_scale_unit
             / mm
         )
-        # it looks good when the plot is about 1.5 mm wide
-        markerarea = (markersize * 1.5 / biggest_dim_mm) ** 2
+        # it looks good when the plot is about 4 mm wide
+        markerarea = (markersize * 4 / biggest_dim_mm) ** 2
 
         viz_points = self.light_model.viz_points(
-            self.coords, self.direction, int(n_points_per_source), T_threshold, **kwargs
+            self.coords, self.direction, T_threshold, **kwargs
         )
-        assert viz_points.shape == (self.n, n_points_per_source, 3)
+        assert viz_points.shape[0] == self.n
+        assert viz_points.shape[2] == 3
+        n_points_per_source = viz_points.shape[1]
         T = self.light_model.transmittance(self.coords, self.direction, viz_points)
         assert T.shape == (self.n, n_points_per_source)
 
@@ -399,7 +397,7 @@ class Light(Stimulator):
             point_clouds.append(point_cloud)
 
         handles = ax.get_legend().legendHandles
-        c = wavelength_to_rgb(self.light_model.wavelength / nmeter)
+        c = wavelength_to_rgb(self.wavelength / nmeter)
         opto_patch = mpl.patches.Patch(color=c, label=self.name)
         handles.append(opto_patch)
         ax.legend(handles=handles)
@@ -460,7 +458,7 @@ class Light(Stimulator):
         self.source.Irr0 = Irr0_mW_per_mm2 * mwatt / mm2
 
     def _alpha_cmap_for_wavelength(self, intensity):
-        c = wavelength_to_rgb(self.light_model.wavelength / nmeter)
+        c = wavelength_to_rgb(self.wavelength / nmeter)
         c_dimmest = (*c, 0)
         alpha_max = 0.6
         alpha_brightest = alpha_max * intensity
