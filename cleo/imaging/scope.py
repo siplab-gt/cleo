@@ -36,10 +36,11 @@ def target_neurons_in_plane(
     r_soma_visible = np.sqrt(soma_radius**2 - perp_distances**2)
     r_soma_visible[np.isnan(r_soma_visible)] = 0
     if indicator_location == "cytoplasm":
-        snr_focus_factor *= (r_soma_visible / soma_radius) ** 2
+        relative_num_pixels = (r_soma_visible / soma_radius) ** 2
     else:
         assert indicator_location == "membrane"
-        snr_focus_factor *= r_soma_visible / soma_radius
+        relative_num_pixels *= r_soma_visible / soma_radius
+    snr_focus_factor *= np.sqrt(relative_num_pixels)
 
     # get only neurons in view
     coords_on_plane = ng_coords - plane_normal * perp_distances[:, np.newaxis]
@@ -54,7 +55,7 @@ def target_neurons_in_plane(
 
 @define(eq=False)
 class Scope(Recorder):
-    indicator: Sensor = field()
+    sensor: Sensor = field()
     focus_depth: Quantity = field()
     img_width: Quantity = field()
     location: Quantity = [0, 0, 0] * mm
@@ -88,12 +89,12 @@ class Scope(Recorder):
             self.location,
             self.direction,
             soma_radius,
-            self.indicator.location,
+            self.sensor.location,
         )
 
     def get_state(self) -> NDArray[(Any,), float]:
         snr = np.concatenate(self.snr_per_injct)
-        signal_per_ng = self.indicator.get_state()
+        signal_per_ng = self.sensor.get_state()
         signal = (
             np.concatenate([signal_per_ng[ng] for ng in self.neuron_groups])
             * snr
@@ -115,17 +116,17 @@ class Scope(Recorder):
             i_targets, snr_focus_factor = self.target_neurons_in_plane(
                 neuron_group, focus_depth, soma_radius
             )
-            base_snr = kwparams.get("base_snr", self.indicator.snr)
+            base_snr = kwparams.get("base_snr", self.sensor.snr)
             snr = snr_focus_factor * base_snr
             i_targets = i_targets[snr > self.snr_cutoff]
             snr = snr[snr > self.snr_cutoff]
         else:
             i_targets = kwparams.pop("i_targets", neuron_group.i_)
-            snr = kwparams.get("snr", self.indicator.snr)
+            snr = kwparams.get("snr", self.sensor.snr)
             _, snr = np.broadcast_arrays(i_targets, snr)
         assert len(i_targets) == len(snr)
 
-        self.sim.inject(self.indicator, neuron_group, i_targets=i_targets, **kwparams)
+        self.sim.inject(self.sensor, neuron_group, i_targets=i_targets, **kwparams)
         self.neuron_groups.append(neuron_group)
         self.i_targets_per_injct.append(i_targets)
         self.snr_per_injct.append(snr)
@@ -197,7 +198,7 @@ class Scope(Recorder):
             c=color,
             s=5,
             # cmap="Greens",
-            label=self.indicator.name,
+            label=self.sensor.name,
             **kwargs,
         )
         color_rgba = target_markers.get_facecolor()
