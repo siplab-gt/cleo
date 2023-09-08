@@ -1,13 +1,18 @@
 from cleo.imaging.scope import Scope, target_neurons_in_plane
 
-# from cleo.imaging.noise import UniformGaussianNoise
 from cleo.imaging.sensors import (
     Sensor,
-    BaseGECI,
-    LightGECI,
-    HasCalDynamicsModel,
-    CalDynamicGECI,
-    CalDynamicLightGECI,
+    GECI,
+    geci,
+    CalBindingActivationModel,
+    NullBindingActivation,
+    DoubExpCalBindingActivation,
+    ExcitationModel,
+    LightExcitation,
+    NullExcitation,
+    CalciumModel,
+    DynamicCalcium,
+    PreexistingCalcium,
     gcamp3,
     gcamp6f,
     gcamp6s,
