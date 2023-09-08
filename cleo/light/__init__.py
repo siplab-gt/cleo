@@ -6,6 +6,7 @@ from cleo.light.light import (
 )
 from cleo.light.light_dependence import (
     LightDependent,
+    equal_photon_flux_spectrum,
     linear_interpolator,
     cubic_interpolator,
     plot_spectra,

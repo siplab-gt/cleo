@@ -38,7 +38,6 @@ class DeviceInteractionRegistry:
         T : 1
         epsilon : 1
         Ephoton : joule
-        # TODO: epsilon is defined for photon flux, not irradiance
         Irr_post = epsilon * T * Irr0_pre : watt/meter**2 (summed)
         phi_post = Irr_post / Ephoton : 1/second/meter**2 (summed)
     """

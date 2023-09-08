@@ -56,8 +56,10 @@ class LightDependent:
 
     We approximate dynamics under multiple wavelengths using a weighted sum
     of photon fluxes, where the ε factor indicates the activation
-    relative to the peak-sensitivity wavelength for an equivalent number of photons
-    (see Mager et al, 2018). This weighted sum is an approximation of a nonlinear
+    relative to the peak-sensitivity wavelength for a equivalent power, which
+    most papers report. When they report the action spectrum for equivalent
+    photon flux instead (see Mager et al, 2018), use :func:`equal_photon_flux_spectrum`.
+    This weighted sum is an approximation of a nonlinear
     peak-non-peak wavelength relation; see ``notebooks/multi_wavelength_model.ipynb``
     for details."""
 
@@ -108,6 +110,18 @@ class LightDependent:
             )
             return 0
         return self.spectrum_interpolator(lambdas, epsilons, lambda_new)
+
+
+def equal_photon_flux_spectrum(
+    spectrum: list[tuple[float, float]]
+) -> list[tuple[float, float]]:
+    """Converts an equival photon flux spectrum to an equal power density spectrum."""
+    spectrum = np.array(spectrum)
+    lambdas = spectrum[:, 0]
+    eps_phi = spectrum[:, 1]
+    eps_Irr = eps_phi / lambdas
+    eps_Irr /= np.max(eps_Irr)
+    return list(zip(lambdas, eps_Irr))
 
 
 def plot_spectra(*ldds: LightDependent):

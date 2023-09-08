@@ -19,7 +19,7 @@ from brian2.units import (
     amp,
     mwatt,
 )
-from cleo.light.light_dependence import plot_spectra
+from cleo.light.light_dependence import plot_spectra, equal_photon_flux_spectrum
 
 from cleo.opto.opsins import (
     FourStateOpsin,
@@ -138,17 +138,19 @@ def vfchrimson_4s() -> BansalFourStateOpsin:
         q=1,
         E=0 * mV,
         name="VfChrimson",
-        spectrum=[
-            (470, 0.34),
-            (490, 0.51),
-            (510, 0.71),
-            (530, 0.75),
-            (550, 0.86),
-            (570, 1),
-            (590, 1),
-            (610, 0.8),
-            (630, 0.48),
-        ],
+        spectrum=equal_photon_flux_spectrum(
+            [
+                (470, 0.34),
+                (490, 0.51),
+                (510, 0.71),
+                (530, 0.75),
+                (550, 0.86),
+                (570, 1),
+                (590, 1),
+                (610, 0.8),
+                (630, 0.48),
+            ]
+        ),
     )
 
 
@@ -179,17 +181,19 @@ def chrimson_4s() -> BansalFourStateOpsin:
         q=1,
         E=0 * mV,
         name="Chrimson",
-        spectrum=[
-            (470, 0.31),
-            (490, 0.47),
-            (510, 0.69),
-            (530, 0.75),
-            (550, 0.88),
-            (570, 0.97),
-            (590, 1),
-            (610, 0.88),
-            (630, 0.55),
-        ],
+        spectrum=equal_photon_flux_spectrum(
+            [
+                (470, 0.31),
+                (490, 0.47),
+                (510, 0.69),
+                (530, 0.75),
+                (550, 0.88),
+                (570, 0.97),
+                (590, 1),
+                (610, 0.88),
+                (630, 0.55),
+            ]
+        ),
     )
 
 
