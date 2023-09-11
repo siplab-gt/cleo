@@ -4,12 +4,12 @@ import matplotlib
 import numpy as np
 from attrs import define, field
 from brian2 import NeuronGroup, Quantity
-from brian2.units import meter, um, mm
+from brian2.units import meter, um, mm, nmeter
 from nptyping import NDArray
 from scipy.spatial.distance import cdist
 
-from cleo.coords import coords_from_ng, coords_from_xyz
-from cleo.light import LightModel
+from cleo.coords import concat_coords, coords_from_ng, coords_from_xyz
+from cleo.light import LightModel, Light
 from cleo.utilities import normalize_coords, uniform_cylinder_rθz, xyz_from_rθz
 
 
@@ -23,6 +23,7 @@ class GaussianEllipsoid(LightModel):
     ======================== ========== ============= =======
     Publication              axial      lateral       measure
     ======================== ========== ============= =======
+    Prakash et al., 2012     13 μm      7 μm          photocurrent
     Rickgauer et al., 2014   8 μm       4 μm          Ca2+ dF/F response
     Packer et al., 2015      18 μm      8 μm          AP probability
     Chen et al., 2019        18/11 μm   8/? μm        AP probability/photocurrent
@@ -41,20 +42,30 @@ class GaussianEllipsoid(LightModel):
         r, z = self._get_rz_for_xyz(source_coords, source_dir_uvec, target_coords)
         return self._gaussian_transmittance(r, z)
 
-    def viz_points(
+    def viz_params(
         self,
         coords: Quantity,
         direction: NDArray[(Any, 3), Any],
         T_threshold: float,
-        n_points_per_source: int = 3e2,
+        n_points_per_source: int = 800,
         **kwargs,
     ) -> Quantity:
         r_thresh, zc_thresh = self._find_rz_thresholds(T_threshold)
-        r, theta, zc = uniform_cylinder_rθz(n_points_per_source, r_thresh, zc_thresh)
+        r, theta, zc = uniform_cylinder_rθz(
+            n_points_per_source, r_thresh, zc_thresh * 2
+        )
+        zc -= zc_thresh
 
         end = coords + zc_thresh * direction
         x, y, z = xyz_from_rθz(r, theta, zc, coords, end)
-        return coords_from_xyz(x, y, z)  # m x n x 3
+        # m x n x 3
+        density_factor = 3
+        cyl_vol = np.pi * r_thresh**2 * zc_thresh
+        markersize_um = ((cyl_vol / n_points_per_source * density_factor)) ** (
+            1 / 3
+        ) / um
+        intensity_scale = (800 / n_points_per_source) ** (1 / 3)
+        return coords_from_xyz(x, y, z), markersize_um, intensity_scale
 
     def _gaussian_transmittance(self, r, z):
         """r is lateral distance, z is axial distance from focal point.
@@ -85,5 +96,16 @@ class GaussianEllipsoid(LightModel):
         return r_thresh, zc_thresh
 
 
-def target_coords_from_scope(scope):
-    pass
+def tp_light_from_scope(scope, **kwargs):
+    coords = []
+    for ng, i_targets in zip(scope.neuron_groups, scope.i_targets_per_injct):
+        coords.append(coords_from_ng(ng)[i_targets])
+    coords = concat_coords(*coords)
+    light = Light(
+        coords=coords,
+        direction=scope.direction,
+        light_model=GaussianEllipsoid(),
+        wavelength=1060 * nmeter,
+        **kwargs,
+    )
+    return light

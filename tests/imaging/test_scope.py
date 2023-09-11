@@ -72,6 +72,8 @@ def test_scope():
         # can't specify both i_targets and focus_depth
         sim.inject(scope, ng, focus_depth=200 * um, i_targets=range(86, 90))
 
+    scope.inject_sensor_for_targets()
+
 
 def test_target_neurons_in_plane(rand_seed):
     rng = np.random.default_rng(rand_seed)

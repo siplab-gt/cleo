@@ -9,11 +9,11 @@ import quantities as pq
 import cleo
 from cleo import CLSimulator
 from cleo.base import NeoExportable
+from cleo.coords import concat_coords
 from cleo.ephys import (
     Probe,
     linear_shank_coords,
     Signal,
-    concat_coords,
     poly2_shank_coords,
     poly3_shank_coords,
     tetrode_shank_coords,

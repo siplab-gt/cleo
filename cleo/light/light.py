@@ -13,6 +13,7 @@ from brian2 import (
 )
 from nptyping import NDArray
 from brian2.units import (
+    um,
     mm,
     mm2,
     nmeter,
@@ -53,7 +54,7 @@ class LightModel(ABC):
         pass
 
     @abstractmethod
-    def viz_points(
+    def viz_params(
         self,
         coords: Quantity,
         direction: NDArray[(Any, 3), Any],
@@ -61,7 +62,7 @@ class LightModel(ABC):
         n_points_per_source: int = None,
         **kwargs,
     ) -> Quantity:
-        """Outputs m x n_points_per_source x 3 array"""
+        """Outputs (m x n_points_per_source x 3 array, marker_scale)"""
         pass
 
     def _get_rz_for_xyz(self, source_coords, source_direction, target_coords):
@@ -172,7 +173,7 @@ class OpticFiber(LightModel):
         T[z < 0] = 0
         return T
 
-    def viz_points(
+    def viz_params(
         self,
         coords: Quantity,
         direction: NDArray[(Any, 3), Any],
@@ -185,7 +186,7 @@ class OpticFiber(LightModel):
 
         end = coords + zc_thresh * direction
         x, y, z = xyz_from_rθz(r, theta, zc, coords, end)
-        return coords_from_xyz(x, y, z)
+        return coords_from_xyz(x, y, z), 4 * 3e3 / n_points_per_source
 
     def _find_rz_thresholds(self, thresh):
         """find r and z thresholds for visualization purposes"""
@@ -264,7 +265,7 @@ class Light(Stimulator):
     :class:`OpticFiber` for an example."""
 
     coords: Quantity = field(
-        default=(0, 0, 0) * mm, converter=lambda x: np.reshape(x, (-1, 3))
+        default=(0, 0, 0) * mm, converter=lambda x: np.reshape(x, (-1, 3)), repr=False
     )
     """(x, y, z) coords with Brian unit specifying where to place
     the base of the light source, by default (0, 0, 0)*mm.
@@ -302,7 +303,7 @@ class Light(Stimulator):
     Only relevant in video visualization.
     """
 
-    default_value: NDArray[(Any,), float] = field(kw_only=True)
+    default_value: NDArray[(Any,), float] = field(kw_only=True, repr=False)
 
     @default_value.default
     def _default_default(self):
@@ -347,11 +348,22 @@ class Light(Stimulator):
         # alias
         if "n_points" in kwargs and "n_points_per_source" not in kwargs:
             kwargs["n_points_per_source"] = kwargs.pop("n_points")
-        intensity = kwargs.get("intensity", 1)
         T_threshold = kwargs.pop("T_threshold", 1e-3)
 
-        markersize = plt.rcParams["lines.markersize"]
-        biggest_dim_mm = (
+        viz_points, markersize_um, intensity_scale = self.light_model.viz_params(
+            self.coords, self.direction, T_threshold, **kwargs
+        )
+        assert viz_points.shape[0] == self.n
+        assert viz_points.shape[2] == 3
+        n_points_per_source = viz_points.shape[1]
+        intensity = kwargs.get("intensity", 0.4 * intensity_scale)
+
+        biggest_dim_pixels = max([ax.bbox.height, ax.bbox.width])
+        dpi = 100  # default
+        pt_per_in = 72
+        biggest_dim_pt = biggest_dim_pixels / dpi * pt_per_in
+
+        biggest_dim_um = (
             max(
                 [
                     ax.get_xlim()[1] - ax.get_xlim()[0],
@@ -360,17 +372,12 @@ class Light(Stimulator):
                 ]
             )
             * axis_scale_unit
-            / mm
+            / um
         )
-        # it looks good when the plot is about 4 mm wide
-        markerarea = (markersize * 4 / biggest_dim_mm) ** 2
 
-        viz_points = self.light_model.viz_points(
-            self.coords, self.direction, T_threshold, **kwargs
-        )
-        assert viz_points.shape[0] == self.n
-        assert viz_points.shape[2] == 3
-        n_points_per_source = viz_points.shape[1]
+        markersize_pt = markersize_um / biggest_dim_um * biggest_dim_pt
+        markerarea = markersize_pt**2
+
         T = self.light_model.transmittance(self.coords, self.direction, viz_points)
         assert T.shape == (self.n, n_points_per_source)
 
@@ -432,21 +439,30 @@ class Light(Stimulator):
 
         return updated_artists
 
-    def update(self, Irr0_mW_per_mm2: Union[float, np.ndarray]) -> None:
-        """Set the light intensity, in mW/mm2 (without unit)
+    def update(self, value: Union[float, np.ndarray]) -> None:
+        """Set the light intensity, in mW/mm2 (without unit) for 1P
+        excitation or laser power (mW) for 2P excitation (GaussianEllipsoid light model).
 
         Parameters
         ----------
         Irr0_mW_per_mm2 : float
             Desired light intensity for light source
         """
-        if type(Irr0_mW_per_mm2) != np.ndarray:
-            Irr0_mW_per_mm2 = np.array(Irr0_mW_per_mm2).reshape((-1,))
-        if Irr0_mW_per_mm2.shape not in [(), (1,), (self.n,)]:
+        if type(value) != np.ndarray:
+            value = np.array(value).reshape((-1,))
+        if value.shape not in [(), (1,), (self.n,)]:
             raise ValueError(
-                f"Input to light Irr0_mW_per_mm2 must be a scalar or an array of"
-                f" length {self.n}. Got {Irr0_mW_per_mm2.shape} instead."
+                f"Input to light must be a scalar or an array of"
+                f" length {self.n}. Got {value.shape} instead."
             )
+        if type(self.light_model) == "GaussianEllipsoid":
+            # 10 microns, on upper end of what's used as spot size in Ronzitti et al., 2017
+            # Irr0 = P / spot_area, as in Ronzitti et al., 2017
+            cell_radius = 0.010  # mm
+            cell_area = np.pi * cell_radius**2
+            Irr0_mW_per_mm2 = value / cell_area
+        else:
+            Irr0_mW_per_mm2 = value
         if np.any(Irr0_mW_per_mm2 < 0):
             warnings.warn(f"{self.name}: negative light intensity Irr0 clipped to 0")
             Irr0_mW_per_mm2[Irr0_mW_per_mm2 < 0] = 0

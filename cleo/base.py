@@ -48,7 +48,7 @@ class NeoExportable(ABC):
 class InterfaceDevice(ABC):
     """Base class for devices to be injected into the network"""
 
-    brian_objects: set = field(factory=set, init=False)
+    brian_objects: set = field(factory=set, init=False, repr=False)
     """All the Brian objects added to the network by this device.
     Must be kept up-to-date in :meth:`connect_to_neuron_group` and
     other functions so that those objects can be automatically added
@@ -479,10 +479,10 @@ class SynapseDevice(InterfaceDevice):
     with :class:`NeuronGroup` name keys and :class:`Synapses` values."""
 
     source_ngs: dict[str, NeuronGroup] = field(factory=dict, init=False, repr=False)
-    """``{target_ng.name: souce_ng}`` dict of source neuron groups.
+    """``{target_ng.name: source_ng}`` dict of source neuron groups.
     
     The source is the target itself by default or light aggregator neurons for
-    :class:`~cleo.light.LightDependentDevice`."""
+    :class:`~cleo.light.LightDependent`."""
 
     per_ng_unit_replacements: list[Tuple[str, str]] = field(
         factory=list, init=False, repr=False
@@ -544,12 +544,8 @@ class SynapseDevice(InterfaceDevice):
             of the protein. 1 by default. For heterogeneous expression,
             this would have to be modified in the light-dependent synapse
             post-injection, e.g., ``opsin.syns["neuron_group_name"].rho_rel = ...``
-        Iopto_var_name : str
-            The name of the variable in the neuron group model representing
-            current from the opsin
-        v_var_name : str
-            The name of the variable in the neuron group model representing
-            membrane potential
+        [default_name]_var_name : str
+            See :attr:`~required_vars`. Allows for custom variable names.
         """
         if neuron_group.name in self.source_ngs:
             assert neuron_group.name in self.synapses

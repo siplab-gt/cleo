@@ -139,7 +139,7 @@ def test_viz_points(
         assert coords.shape[0] <= m * n_points_per_source
         assert coords.shape[-1] == 3
 
-    viz_points = light_model.viz_points(
+    viz_points = light_model.viz_params(
         light_coords,
         light_direction,
         0.5,
@@ -149,7 +149,7 @@ def test_viz_points(
     n_to_plot = len(viz_points)
 
     for T_threshold in [1e-1, 1e-3, 0]:
-        viz_points = light_model.viz_points(
+        viz_points = light_model.viz_params(
             light_coords,
             light_direction,
             n_points_per_source,

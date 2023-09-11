@@ -9,8 +9,8 @@ import quantities as pq
 
 from cleo import CLSimulator
 from cleo.ioproc import RecordOnlyProcessor
-from cleo.ephys import linear_shank_coords, concat_coords, TKLFPSignal, Probe
-from cleo.coords import assign_coords_rand_rect_prism, assign_coords
+from cleo.ephys import linear_shank_coords, TKLFPSignal, Probe
+from cleo.coords import assign_coords_rand_rect_prism, assign_coords, concat_coords
 
 
 def _groups_types_ei(n_e, n_i):

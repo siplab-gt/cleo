@@ -3,7 +3,7 @@
 from __future__ import annotations
 from typing import Tuple
 
-from brian2 import mm, meter, Unit
+from brian2 import Quantity, mm, meter, Unit, np
 from brian2.groups.group import Group
 from brian2.groups.neurongroup import NeuronGroup
 from brian2.units.fundamentalunits import get_dimensions
@@ -226,3 +226,20 @@ def _init_variables(group: Group):
                 raise NotImplementedError(
                     "Coordinate assignment only implemented for brian2.Group objects"
                 )
+
+
+def concat_coords(*coords: Quantity) -> Quantity:
+    """Combine multiple coordinate Quantity arrays into one
+
+    Parameters
+    ----------
+    *coords : Quantity
+        Multiple coordinate n x 3 Quantity arrays to combine
+
+    Returns
+    -------
+    Quantity
+        A single n x 3 combined Quantity array
+    """
+    out = np.vstack([c / mm for c in coords])
+    return out * mm

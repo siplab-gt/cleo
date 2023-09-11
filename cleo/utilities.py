@@ -81,7 +81,7 @@ def get_orth_vectors_for_V(V):
 def xyz_from_rθz(rs, thetas, zs, xyz_start, xyz_end):
     """Convert from cylindrical to Cartesian coordinates."""
     # not using np.linalg.norm because it strips units
-    cyl_length = np.sqrt(np.sum(np.subtract(xyz_end, xyz_start) ** 2))
+    cyl_length = np.sqrt(np.sum((xyz_end - xyz_start) ** 2, axis=-1, keepdims=True))
     c = (xyz_end - xyz_start) / cyl_length  # unit vector in direction of cylinder
     m = xyz_start.reshape((-1, 3)).shape[0]
     n = len(rs)

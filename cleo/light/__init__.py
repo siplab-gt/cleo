@@ -13,5 +13,5 @@ from cleo.light.light_dependence import (
 )
 from cleo.light.two_photon import (
     GaussianEllipsoid,
-    target_coords_from_scope,
+    tp_light_from_scope,
 )

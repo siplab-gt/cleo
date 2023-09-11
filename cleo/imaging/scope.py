@@ -139,11 +139,17 @@ class Scope(Recorder):
         self.sigma_per_injct.append(sigma_noise)
         self.focus_coords_per_injct.append(focus_coords)
 
-    def inject_sensor_for_targets(self, **kwparams) -> None:
-        i_all_targets_per_ng = {}
+    def i_targets_for_neuron_group(self, neuron_group):
+        """can handle multiple injections into same ng"""
+        i_targets_for_ng = []
         for ng, i_targets in zip(self.neuron_groups, self.i_targets_per_injct):
-            i_all_targets_per_ng.get(ng, []).extend(i_targets)
-        for ng, i_all_targets in i_all_targets_per_ng.items():
+            if ng is neuron_group:
+                i_targets_for_ng.extend(i_targets)
+        return i_targets_for_ng
+
+    def inject_sensor_for_targets(self, **kwparams) -> None:
+        for ng in set(self.neuron_groups):
+            i_all_targets = self.i_targets_for_neuron_group(ng)
             self.sim.inject(self.sensor, ng, i_targets=i_all_targets, **kwparams)
 
     def add_self_to_plot(

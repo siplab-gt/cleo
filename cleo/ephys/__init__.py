@@ -4,7 +4,6 @@ from cleo.ephys.spiking import MultiUnitSpiking, SortedSpiking, Spiking
 from cleo.ephys.probes import (
     Probe,
     Signal,
-    concat_coords,
     linear_shank_coords,
     tetrode_shank_coords,
     poly2_shank_coords,
