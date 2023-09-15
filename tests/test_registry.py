@@ -150,9 +150,9 @@ def test_multi_channel(sim_ng1_ng2, ops1):
 def test_multi_light_opsin(sim_ng1_ng2):
     sim, ng1, ng2 = sim_ng1_ng2
     chr2 = chr2_4s()
-    blue = Light(light_model=fiber473nm())
+    blue = Light(light_model=fiber473nm(), name="blue")
     vfchrimson = vfchrimson_4s()
-    orange = Light(light_model=fiber473nm(), wavelength=590 * nmeter)
+    amber = Light(light_model=fiber473nm(), wavelength=590 * nmeter, name="amber")
 
     sim.inject(chr2, ng1, Iopto_var_name="Iopto")
     sim.inject(vfchrimson, ng2, Iopto_var_name="Iopto2")
@@ -160,8 +160,8 @@ def test_multi_light_opsin(sim_ng1_ng2):
     with pytest.warns(
         UserWarning, match="outside the range of the action spectrum data"
     ):
-        sim.inject(orange, ng1)
-    sim.inject(orange, ng2)
+        sim.inject(amber, ng1)
+    sim.inject(amber, ng2)
 
     blue.update(10)
     sim.run(0.3 * ms)
@@ -171,7 +171,7 @@ def test_multi_light_opsin(sim_ng1_ng2):
     assert np.all(ng2.v > -70 * mV)
 
     sim.reset()
-    orange.update(10)
+    amber.update(10)
     sim.run(0.3 * ms)
     # main effect on ng2
     assert np.all(ng2.v > ng1.v)

@@ -335,8 +335,22 @@ class CLSimulator(NeoExportable):
                 self.network.add(brian_object)
         self.network.store(self._net_store_name)
         if isinstance(device, Recorder):
+            if (
+                device.name in self.recorders
+                and device is not self.recorders[device.name]
+            ):
+                raise ValueError(
+                    f"Another Recorder with name {device.name} has already been injected"
+                )
             self.recorders[device.name] = device
         if isinstance(device, Stimulator):
+            if (
+                device.name in self.stimulators
+                and device is not self.stimulators[device.name]
+            ):
+                raise ValueError(
+                    f"Another Stimulator with name {device.name} has already been injected"
+                )
             self.stimulators[device.name] = device
         self.devices.add(device)
         return self
@@ -473,6 +487,9 @@ class SynapseDevice(InterfaceDevice):
     symbols such as V_VAR_NAME to be replaced on injection in 
     :meth:`modify_model_and_params_for_ng`."""
 
+    on_pre: str = field(init=False, default="")
+    """Model string for Synapses reacting to spikes."""
+
     synapses: dict[str, Synapses] = field(factory=dict, init=False, repr=False)
     """Stores the synapse objects implementing the model, connecting from source
     (light aggregator neurons or the target group itself) to target neuron groups,
@@ -579,6 +596,7 @@ class SynapseDevice(InterfaceDevice):
             source_ng,
             neuron_group,
             model=mod_syn_model,
+            on_pre=self.on_pre,
             namespace=mod_syn_params,
             name=f"syn_{self.name}_{neuron_group.name}",
         )

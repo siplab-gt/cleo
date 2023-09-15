@@ -62,7 +62,7 @@ class LightModel(ABC):
         n_points_per_source: int = None,
         **kwargs,
     ) -> Quantity:
-        """Outputs (m x n_points_per_source x 3 array, marker_scale)"""
+        """Outputs (m x n_points_per_source x 3 viz_points array, markersize_um, intensity_scale)"""
         pass
 
     def _get_rz_for_xyz(self, source_coords, source_direction, target_coords):
@@ -178,7 +178,7 @@ class OpticFiber(LightModel):
         coords: Quantity,
         direction: NDArray[(Any, 3), Any],
         T_threshold: float,
-        n_points_per_source: int = 3e3,
+        n_points_per_source: int = 4000,
         **kwargs,
     ) -> Quantity:
         r_thresh, zc_thresh = self._find_rz_thresholds(T_threshold)
@@ -186,7 +186,13 @@ class OpticFiber(LightModel):
 
         end = coords + zc_thresh * direction
         x, y, z = xyz_from_rθz(r, theta, zc, coords, end)
-        return coords_from_xyz(x, y, z), 4 * 3e3 / n_points_per_source
+        density_factor = 3
+        cyl_vol = np.pi * r_thresh**2 * zc_thresh
+        markersize_um = ((cyl_vol / n_points_per_source * density_factor)) ** (
+            1 / 3
+        ) / um
+        intensity_scale = (1e3 / n_points_per_source) ** (1 / 3)
+        return coords_from_xyz(x, y, z), markersize_um, intensity_scale
 
     def _find_rz_thresholds(self, thresh):
         """find r and z thresholds for visualization purposes"""
@@ -356,7 +362,7 @@ class Light(Stimulator):
         assert viz_points.shape[0] == self.n
         assert viz_points.shape[2] == 3
         n_points_per_source = viz_points.shape[1]
-        intensity = kwargs.get("intensity", 0.4 * intensity_scale)
+        intensity = kwargs.get("intensity", 0.5 * intensity_scale)
 
         biggest_dim_pixels = max([ax.bbox.height, ax.bbox.width])
         dpi = 100  # default

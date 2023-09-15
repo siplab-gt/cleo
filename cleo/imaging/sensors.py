@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from attrs import define, field, fields_dict, asdict
-from brian2 import np, Quantity, NeuronGroup, second, umolar, nmolar
+from brian2 import Synapses, np, Quantity, NeuronGroup, second, umolar, nmolar
 
 from cleo.base import SynapseDevice
 from cleo.light import LightDependent
@@ -82,6 +82,9 @@ class DynamicCalcium(CalciumModel):
     dCa_T: Quantity = field(kw_only=True)
     """total Ca2+ concentration increase per spike (molar)"""
 
+    def init_syn_vars(self, syn: Synapses) -> None:
+        syn.Ca = self.Ca_rest
+
 
 @define(eq=False)
 class CalBindingActivationModel:
@@ -94,7 +97,7 @@ class CalBindingActivationModel:
 class NullBindingActivation(CalBindingActivationModel):
     """Doesn't model binding/activation; i.e., goes straight from [Ca2+] to ΔF/F"""
 
-    model: str = field(default="CaB_active = Ca", init=False)
+    model: str = field(default="CaB_active = Ca: mmolar", init=False)
 
 
 @define(eq=False)
@@ -104,31 +107,53 @@ class DoubExpCalBindingActivation(CalBindingActivationModel):
     Convolution is implemented via ODEs; see ``notebooks/double_exp_conv_as_ode.ipynb``
     for derivation.
 
+    A, tau_on, and tau_off are the versions with proper scale and units of NAOMi's
+    ca_amp, t_on, and t_off.
+
     Some parameters found `here <https://bitbucket.org/adamshch/naomi_sim/src/25908cf432cd487fffe1f6442548d0fc8f4e8add/code/TimeTraceCode/check_cal_params.m?at=master#lines-90>`_.
     Parameters fit `here <https://bitbucket.org/adamshch/naomi_sim/src/25908cf432cd487fffe1f6442548d0fc8f4e8add/code/MiscCode/fit_NAOMi_calcium.m?at=master#fit_NAOMi_calcium.m>`_.
     """
 
-    on_pre: str = field(default="", init=False)
     model: str = field(
         default="""
-            dCaB_active/dt = beta : mmolar (clock-driven)
-            lam = 1/t_off + 1/t_on : 1/second
-            kap = 1/t_off : 1/second
+            CaB_active = Ca_rest + b : mmolar  # add tiny bit to avoid /0
+            db/dt = beta : mmolar (clock-driven)
+            lam = 1/tau_off + 1/tau_on : 1/second
+            kap = 1/tau_off : 1/second
             dbeta/dt = (                    # should be M/s/s
-                ca_amp * (lam - kap) * Ca   # M/s
+                A * (lam - kap) * (Ca - Ca_rest)  # M/s/s
                 - (kap + lam) * beta        # M/s/s
-                - kap * lam * CaB_active    # M/s/s
+                - kap * lam * b    # M/s/s
             ) : mmolar/second (clock-driven)
             """,
         init=False,
     )
 
-    ca_amp: float = field(kw_only=True)
+    A: float = field(kw_only=True)
     """amplitude of double exponential kernel"""
-    t_on: Quantity = field(kw_only=True)
+    tau_on: Quantity = field(kw_only=True)
     """CaB binding/activation time constant (sec)"""
-    t_off: Quantity = field(kw_only=True)
+    tau_off: Quantity = field(kw_only=True)
     """CaB unbinding/deactivation time constant (sec)"""
+    Ca_rest: Quantity = field(kw_only=True)
+    """Resting Ca2+ concentration (molar)."""
+
+    @property
+    def _kap(self):
+        return 1 / self.t_off
+
+    @property
+    def _lam(self):
+        return 1 / self.t_on + 1 / self.t_off
+
+    def init_syn_vars(self, syn: Synapses) -> None:
+        # solve for resting state values
+        # dCaB/dt = beta = 0
+        # Ca = Ca_rest
+        # dbeta/dt = 0 = 0 - 0 - kap * lam * Ca_cov
+        # Ca_conv = 0
+        syn.b = 0
+        syn.beta = 0
 
 
 @define(eq=False)
@@ -168,7 +193,11 @@ class GECI(Sensor):
 
     fluor_model: str = field(
         default="""
-            dFF = exc_factor * rho_rel * dFF_max / (1 + (K_d / CaB_active) ** n_H) : 1
+            dFF_baseline = 1 / (1 + (K_d / Ca_rest) ** n_H) : 1
+            dFF = exc_factor * rho_rel * dFF_max  * (
+                1 / (1 + (K_d / CaB_active) ** n_H)
+                - dFF_baseline
+            ) : 1
             rho_rel : 1
         """,
         init=False,
@@ -194,6 +223,12 @@ class GECI(Sensor):
                 self.fluor_model,
             ]
         )
+        self.on_pre = self.cal_model.on_pre
+
+    def init_syn_vars(self, syn: Synapses) -> None:
+        for model in [self.cal_model, self.bind_act_model, self.exc_model]:
+            if hasattr(model, "init_syn_vars"):
+                model.init_syn_vars(syn)
 
     @property
     def params(self) -> dict:
@@ -228,18 +263,18 @@ def geci(light_dependent, doub_exp_conv, pre_existing_cal, **kwparams):
     CalModel = PreexistingCalcium if pre_existing_cal else DynamicCalcium
     BAModel = DoubExpCalBindingActivation if doub_exp_conv else NullBindingActivation
 
-    subset = lambda to_keep: {k: kwparams[k] for k in to_keep}
-
-    def init_from_kwparams(model):
+    def init_from_kwparams(cls, **more_kwargs):
+        kwparams.update(more_kwargs)
         kwparams_to_keep = {}
-        for field_name, field in fields_dict(model).items():
+        for field_name, field in fields_dict(cls).items():
             if field.init and field_name in kwparams:
-                kwparams_to_keep[field_name] = kwparams.pop(field_name)
-        return model(**kwparams_to_keep)
+                kwparams_to_keep[field_name] = kwparams[field_name]
+        return cls(**kwparams_to_keep)
 
     GECIClass = LightDependentGECI if light_dependent else GECI
 
-    return GECIClass(
+    return init_from_kwparams(
+        GECIClass,
         cal_model=init_from_kwparams(CalModel),
         exc_model=init_from_kwparams(ExcModel),
         bind_act_model=init_from_kwparams(BAModel),
@@ -262,7 +297,7 @@ def _create_geci_fn(
     """convenience function for creating GECI model functions.
 
     K_d is in nM.
-    ca_amp is actually 1/sec, to cancel out time in convolution
+    TODO: ca_amp is actually 1/sec, to cancel out time in convolution.
     t_on, t_off are in 1/100 sec, as in NAOMi's code.
 
     dFF_1AP and sigma_noise are relative to GCaMP6s, since noise values obtained indirectly
@@ -275,7 +310,7 @@ def _create_geci_fn(
     the relative values given in Zhang et al., 2023 and for indiciators not in Zhang 2023
     supp table 1 (GCaMP3).
     """
-    gcamp6s_dFF_1AP_dana2019 = 13.3
+    gcamp6s_dFF_1AP_dana2019 = 0.133
     gcamp6s_snr_1AP_dana2019 = 4.4
     sigma_gcamp6s = gcamp6s_dFF_1AP_dana2019 / gcamp6s_snr_1AP_dana2019
     sigma_noise = sigma_noise_rel * sigma_gcamp6s
@@ -283,13 +318,6 @@ def _create_geci_fn(
         dFF_1AP = dFF_1AP_rel * gcamp6s_dFF_1AP_dana2019
     else:
         dFF_1AP = None
-
-    if ca_amp:
-        ca_amp = ca_amp / second
-    if t_on:
-        t_on = t_on * second / 100
-    if t_off:
-        t_off = t_off * second / 100
 
     def geci_fn(
         light_dependent=False,
@@ -306,8 +334,9 @@ def _create_geci_fn(
         Ca_rest=50 * nmolar,
         kappa_S=110,
         gamma=292.3 / second,
-        B_T=10 * umolar,
+        B_T=200 * umolar,
         dCa_T=7.6 * umolar,  # Lütke et al., 2013 and NAOMi code
+        name=name,
         **kwparams,
     ):
         """Returns a GECI model with parameters given in
@@ -317,6 +346,12 @@ def _create_geci_fn(
         Only those parameters used in chosen model components apply.
         If the default is ``None``, then we don't have it fit yet.
         """
+        # dt implicit in NAOMi's code, always s/100
+        A = ca_amp / (second / 100) if ca_amp else None
+        # had to reverse-engineer NAOMi code, which had surprising time constants
+        tau_on = second / t_on if t_on else None
+        tau_off = second / t_off if t_off else None
+
         return geci(
             light_dependent,
             doub_exp_conv,
@@ -326,9 +361,9 @@ def _create_geci_fn(
             dFF_max=dFF_max,
             sigma_noise=sigma_noise,
             dFF_1AP=dFF_1AP,
-            ca_amp=ca_amp,
-            t_on=t_on,
-            t_off=t_off,
+            A=A,
+            tau_on=tau_on,
+            tau_off=tau_off,
             Ca_rest=Ca_rest,
             kappa_S=kappa_S,
             gamma=gamma,

@@ -9,7 +9,7 @@ from cleo.imaging import (
     target_neurons_in_plane,
     Sensor,
 )
-from cleo.coords import assign_coords, assign_coords_rand_rect_prism
+from cleo.coords import assign_xyz, assign_coords_rand_rect_prism
 
 
 def test_scope():
@@ -21,8 +21,8 @@ def test_scope():
     assert np.all(scope.direction == [0, 0, 1])
     assert np.all(scope.location == [0, 0, 0] * um)
 
-    ng = NeuronGroup(100, "dv/dt = -v / (10*ms) : 1")
-    assign_coords(ng, 0, 0, 0)
+    ng = NeuronGroup(100, "dv/dt = -v / (10*ms) : 1", threshold="v > 1")
+    assign_xyz(ng, 0, 0, 0)
     ng.z[0:40] = 200 * um
     ng.z[40:75] = 300 * um
     ng.z[75:] = 400 * um

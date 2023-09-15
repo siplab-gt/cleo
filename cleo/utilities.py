@@ -81,10 +81,13 @@ def get_orth_vectors_for_V(V):
 def xyz_from_rθz(rs, thetas, zs, xyz_start, xyz_end):
     """Convert from cylindrical to Cartesian coordinates."""
     # not using np.linalg.norm because it strips units
-    cyl_length = np.sqrt(np.sum((xyz_end - xyz_start) ** 2, axis=-1, keepdims=True))
-    c = (xyz_end - xyz_start) / cyl_length  # unit vector in direction of cylinder
     m = xyz_start.reshape((-1, 3)).shape[0]
     n = len(rs)
+
+    cyl_length = np.sqrt(np.sum((xyz_end - xyz_start) ** 2, axis=-1, keepdims=True))
+    assert cyl_length.shape in [(m, 1), (1,)]
+    c = (xyz_end - xyz_start) / cyl_length  # unit vector in direction of cylinder
+    assert c.shape in [(m, 3), (3,)]
 
     r1, r2 = get_orth_vectors_for_V(c)
 
@@ -268,3 +271,4 @@ def style_plots_for_docs(dark=True):
         plt.style.use("default")
     plt.rc("savefig", transparent=False)
     plt.rc("axes.spines", top=False, right=False)
+    plt.rc("font", **{"sans-serif": "Open Sans"})

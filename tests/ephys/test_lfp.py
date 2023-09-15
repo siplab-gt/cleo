@@ -10,7 +10,7 @@ import quantities as pq
 from cleo import CLSimulator
 from cleo.ioproc import RecordOnlyProcessor
 from cleo.ephys import linear_shank_coords, TKLFPSignal, Probe
-from cleo.coords import assign_coords_rand_rect_prism, assign_coords, concat_coords
+from cleo.coords import assign_coords_rand_rect_prism, assign_xyz, concat_coords
 
 
 def _groups_types_ei(n_e, n_i):
@@ -111,7 +111,7 @@ def test_TKLFPSignal_out_of_range():
     pgs = []
     for i in range(4):
         pg = PoissonGroup(n, 500 * Hz)
-        assign_coords(pg, 5 * i, 5 * i, 5 * i)  # ranging from close (origin) to far
+        assign_xyz(pg, 5 * i, 5 * i, 5 * i)  # ranging from close (origin) to far
         pgs.append(pg)
     net = Network(*pgs)
     sim = CLSimulator(net)
@@ -145,7 +145,7 @@ def test_TKLFP_orientation(seed, is_exc):
     t_spk = 40 * rng.random((n_spk,)) * ms
     sgg = SpikeGeneratorGroup(n_nrns, i_spk, t_spk)
     sgg._N = n_nrns  # hack for assign_coords to work
-    assign_coords(sgg, c_mm[:, 0], c_mm[:, 1], c_mm[:, 2])
+    assign_xyz(sgg, c_mm[:, 0], c_mm[:, 1], c_mm[:, 2])
 
     # cleo setup
     sim = CLSimulator(Network(sgg))

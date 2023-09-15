@@ -2,8 +2,8 @@ import pytest
 from brian2 import NeuronGroup, asarray, mm, np, nmeter
 from brian2.units import Quantity, um
 
-from cleo.coords import assign_coords
-from cleo.light import Light, GaussianEllipsoid, target_coords_from_scope
+from cleo.coords import assign_xyz
+from cleo.light import Light, GaussianEllipsoid
 from cleo.utilities import normalize_coords
 
 

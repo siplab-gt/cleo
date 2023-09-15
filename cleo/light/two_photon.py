@@ -47,7 +47,7 @@ class GaussianEllipsoid(LightModel):
         coords: Quantity,
         direction: NDArray[(Any, 3), Any],
         T_threshold: float,
-        n_points_per_source: int = 800,
+        n_points_per_source: int = 4000,
         **kwargs,
     ) -> Quantity:
         r_thresh, zc_thresh = self._find_rz_thresholds(T_threshold)
@@ -64,7 +64,7 @@ class GaussianEllipsoid(LightModel):
         markersize_um = ((cyl_vol / n_points_per_source * density_factor)) ** (
             1 / 3
         ) / um
-        intensity_scale = (800 / n_points_per_source) ** (1 / 3)
+        intensity_scale = (1000 / n_points_per_source) ** (1 / 3)
         return coords_from_xyz(x, y, z), markersize_um, intensity_scale
 
     def _gaussian_transmittance(self, r, z):
@@ -96,7 +96,7 @@ class GaussianEllipsoid(LightModel):
         return r_thresh, zc_thresh
 
 
-def tp_light_from_scope(scope, **kwargs):
+def tp_light_from_scope(scope, wavelength=1060 * nmeter, **kwargs):
     coords = []
     for ng, i_targets in zip(scope.neuron_groups, scope.i_targets_per_injct):
         coords.append(coords_from_ng(ng)[i_targets])
@@ -105,7 +105,7 @@ def tp_light_from_scope(scope, **kwargs):
         coords=coords,
         direction=scope.direction,
         light_model=GaussianEllipsoid(),
-        wavelength=1060 * nmeter,
+        wavelength=wavelength,
         **kwargs,
     )
     return light

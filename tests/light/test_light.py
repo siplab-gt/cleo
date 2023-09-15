@@ -123,7 +123,7 @@ def test_coords():
     ],
 )
 @pytest.mark.parametrize("n_points_per_source", [1, 100, 10000])
-def test_viz_points(
+def test_viz_params(
     light_model: LightModel,
     m,
     n_points_per_source,
@@ -139,7 +139,7 @@ def test_viz_points(
         assert coords.shape[0] <= m * n_points_per_source
         assert coords.shape[-1] == 3
 
-    viz_points = light_model.viz_params(
+    viz_points, _, _ = light_model.viz_params(
         light_coords,
         light_direction,
         0.5,
@@ -149,11 +149,11 @@ def test_viz_points(
     n_to_plot = len(viz_points)
 
     for T_threshold in [1e-1, 1e-3, 0]:
-        viz_points = light_model.viz_params(
+        viz_points, _, _ = light_model.viz_params(
             light_coords,
             light_direction,
-            n_points_per_source,
             T_threshold,
+            n_points_per_source,
         )
         check_viz_points(viz_points)
         assert len(viz_points) >= n_to_plot

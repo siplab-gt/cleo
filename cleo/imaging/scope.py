@@ -3,7 +3,7 @@ from typing import Any
 import warnings
 
 from attrs import define, field
-from brian2 import NeuronGroup, Unit, mm, np, Quantity, um, meter
+from brian2 import NeuronGroup, Unit, mm, np, Quantity, um, meter, ms
 import matplotlib as mpl
 from matplotlib.artist import Artist
 from mpl_toolkits.mplot3d import Axes3D
@@ -34,14 +34,17 @@ def target_neurons_in_plane(
     perp_distances = np.abs(np.dot(ng_coords - plane_center, plane_normal))
     noise_focus_factor = np.ones(ng.N)
     # signal falloff with shrinking cross-section (or circumference)
-    r_soma_visible = np.sqrt(soma_radius**2 - perp_distances**2)
+    # ignore numpy warning
+    with np.errstate(invalid="ignore"):
+        r_soma_visible = np.sqrt(soma_radius**2 - perp_distances**2)
     r_soma_visible[np.isnan(r_soma_visible)] = 0
     if sensor_location == "cytoplasm":
         relative_num_pixels = (r_soma_visible / soma_radius) ** 2
     else:
         assert sensor_location == "membrane"
         relative_num_pixels = r_soma_visible / soma_radius
-    noise_focus_factor /= np.sqrt(relative_num_pixels)
+    with np.errstate(divide="ignore"):
+        noise_focus_factor /= np.sqrt(relative_num_pixels)
 
     # get only neurons in view
     coords_on_plane = ng_coords - plane_normal * perp_distances[:, np.newaxis]
@@ -68,6 +71,11 @@ class Scope(Recorder):
     """applied only when not focus_depth is not None"""
     rand_seed: int = field(default=None, repr=False)
     dFF: list[NDArray[(Any,), float]] = field(factory=list, init=False, repr=False)
+    """ΔF/F from every call to :meth:`get_state`.
+    Shape is (n_samples, n_ROIs). Stored if :attr:`~cleo.InterfaceDevice.save_history`"""
+    t_ms: list[float] = field(factory=list, init=False, repr=False)
+    """Times at which sensor traces are recorded, in ms, stored if
+    :attr:`~cleo.InterfaceDevice.save_history`"""
 
     neuron_groups: list[NeuronGroup] = field(factory=list, repr=False, init=False)
     i_targets_per_injct: list[NDArray[(Any,), int]] = field(
@@ -79,6 +87,26 @@ class Scope(Recorder):
     focus_coords_per_injct: list[NDArray[(Any,), float]] = field(
         factory=list, repr=False, init=False
     )
+
+    @property
+    def n(self):
+        return np.sum(len(i_t) for i_t in self.i_targets_per_injct)
+
+    def _init_saved_vars(self):
+        if self.save_history:
+            self.t_ms = []
+            self.dFF = []
+
+    def _update_saved_vars(self, t_ms, dFF):
+        if self.save_history:
+            self.t_ms.append(t_ms)
+            self.dFF.append(dFF)
+
+    def __attrs_post_init__(self):
+        self._init_saved_vars()
+
+    def reset(self, **kwargs) -> None:
+        self._init_saved_vars()
 
     def target_neurons_in_plane(
         self, ng, focus_depth: Quantity = None, soma_radius: Quantity = None
@@ -97,9 +125,23 @@ class Scope(Recorder):
 
     def get_state(self) -> NDArray[(Any,), float]:
         sigma_noise = np.concatenate(self.sigma_per_injct)
+        signal = []
         signal_per_ng = self.sensor.get_state()
-        signal = np.concatenate([signal_per_ng[ng] for ng in self.neuron_groups])
+        # sensor has just one signal for neuron group, not storing
+        # separately for each injection, so we'll recover that here
+        n_prev_targets_for_ng = {}
+        for ng, i_targets in zip(self.neuron_groups, self.i_targets_per_injct):
+            subset_start = n_prev_targets_for_ng.get(ng, 0)
+            subset_for_injct = slice(subset_start, subset_start + len(i_targets))
+            signal.append(signal_per_ng[ng.name][subset_for_injct])
+            n_prev_targets_for_ng[ng] = subset_start + len(i_targets)
+        signal = np.concatenate(signal)
         noise = rng.normal(0, sigma_noise, len(signal))
+        assert self.n == len(signal) == len(noise) == len(sigma_noise)
+
+        state = signal + noise
+        now_ms = self.sim.network.t / ms
+        self._update_saved_vars(now_ms, state)
         return signal + noise
 
     def connect_to_neuron_group(self, neuron_group: NeuronGroup, **kwparams) -> None:
@@ -181,7 +223,7 @@ class Scope(Recorder):
             lw=5,
             label=self.name,
             pivot="tip",
-            length=0.1,
+            length=100 * um / axis_scale_unit,
             normalize=True,
         )
 
@@ -214,11 +256,8 @@ class Scope(Recorder):
             coords[:, 1] / axis_scale_unit,
             coords[:, 2] / axis_scale_unit,
             marker="^",
-            # s=snr * 100,
-            # alpha=self._rng.uniform(0, 1, len(snr)),
             c=color,
             s=5,
-            # cmap="Greens",
             label=self.sensor.name,
             **kwargs,
         )

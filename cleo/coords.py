@@ -59,7 +59,7 @@ def assign_coords_grid_rect_prism(
     z = np.linspace(zlim[0], zlim[1], shape[2])
 
     x, y, z = np.meshgrid(x, y, z, indexing="ij")
-    assign_coords(neuron_group, x, y, z)
+    assign_xyz(neuron_group, x, y, z)
 
 
 def assign_coords_rand_rect_prism(
@@ -87,7 +87,7 @@ def assign_coords_rand_rect_prism(
     x = (xlim[1] - xlim[0]) * np.random.random(len(neuron_group)) + xlim[0]
     y = (ylim[1] - ylim[0]) * np.random.random(len(neuron_group)) + ylim[0]
     z = (zlim[1] - zlim[0]) * np.random.random(len(neuron_group)) + zlim[0]
-    assign_coords(neuron_group, x, y, z)
+    assign_xyz(neuron_group, x, y, z, unit)
 
 
 def assign_coords_rand_cylinder(
@@ -122,7 +122,7 @@ def assign_coords_rand_cylinder(
 
     xs, ys, zs = xyz_from_rθz(rs, thetas, z_cyls, xyz_start, xyz_end)
 
-    assign_coords(neuron_group, xs, ys, zs, unit)
+    assign_xyz(neuron_group, xs, ys, zs, unit)
 
 
 def assign_coords_uniform_cylinder(
@@ -154,10 +154,10 @@ def assign_coords_uniform_cylinder(
     rs, thetas, z_cyls = uniform_cylinder_rθz(len(neuron_group), radius, cyl_length)
     xs, ys, zs = xyz_from_rθz(rs, thetas, z_cyls, xyz_start, xyz_end)
 
-    assign_coords(neuron_group, xs, ys, zs, unit)
+    assign_xyz(neuron_group, xs, ys, zs, unit)
 
 
-def assign_coords(
+def assign_xyz(
     neuron_group: NeuronGroup,
     x: np.ndarray,
     y: np.ndarray,
@@ -183,6 +183,11 @@ def assign_coords(
     neuron_group.x = np.reshape(x, (-1,)) * unit
     neuron_group.y = np.reshape(y, (-1,)) * unit
     neuron_group.z = np.reshape(z, (-1,)) * unit
+
+
+def assign_coords(neuron_group: NeuronGroup, coords: Quantity):
+    x, y, z = coords.T / mm
+    assign_xyz(neuron_group, x, y, z, mm)
 
 
 def coords_from_xyz(x: Quantity, y: Quantity, z: Quantity) -> Quantity:

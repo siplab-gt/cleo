@@ -36,7 +36,7 @@ import numpy as np
 from scipy.interpolate import CubicSpline
 
 from cleo.base import InterfaceDevice, SynapseDevice
-from cleo.coords import assign_coords
+from cleo.coords import assign_xyz
 from cleo.utilities import wavelength_to_rgb
 
 
@@ -88,7 +88,7 @@ class LightDependent:
             """,
             name=f"light_agg_{self.name}_{target_ng.name}",
         )
-        assign_coords(
+        assign_xyz(
             light_agg_ng,
             target_ng.x[i_targets] / mm,
             target_ng.y[i_targets] / mm,
@@ -109,7 +109,11 @@ class LightDependent:
                 f" for {self.name}. Assuming ε = 0."
             )
             return 0
-        return self.spectrum_interpolator(lambdas, epsilons, lambda_new)
+        eps_new = self.spectrum_interpolator(lambdas, epsilons, lambda_new)
+        if eps_new < 0:
+            warnings.warn(f"ε = {eps_new} < 0 for {self.name}. Setting ε = 0.")
+            eps_new = 0
+        return eps_new
 
 
 def equal_photon_flux_spectrum(
