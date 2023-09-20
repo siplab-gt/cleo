@@ -257,7 +257,6 @@ class Scope(Recorder):
             coords[:, 2] / axis_scale_unit,
             marker="^",
             c=color,
-            s=5,
             label=self.sensor.name,
             **kwargs,
         )
