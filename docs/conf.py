@@ -77,6 +77,14 @@ html_theme = "furo"
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ["_static"]
+
+
+# These paths are either relative to html_static_path
+# or fully qualified paths (eg. https://...)
+html_css_files = [
+    "css/custom.css",
+]
+
 html_logo = "_static/logo.svg"
 # favicon_url = "_static/favicon.png"
 favicons = [
