@@ -9,7 +9,16 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as anim
 from mpl_toolkits.mplot3d import Axes3D
-from brian2 import mm, Unit, NeuronGroup, ms, NetworkOperation, Quantity, SpikeMonitor
+from brian2 import (
+    mm,
+    um,
+    Unit,
+    NeuronGroup,
+    ms,
+    NetworkOperation,
+    Quantity,
+    SpikeMonitor,
+)
 
 from cleo.base import CLSimulator, InterfaceDevice
 
@@ -170,7 +179,7 @@ def _plot(
     ylim: Tuple[float, float] = None,
     zlim: Tuple[float, float] = None,
     colors: Iterable = None,
-    axis_scale_unit: Unit = mm,
+    axis_scale_unit: Unit = um,
     devices: Iterable[Union[InterfaceDevice, Tuple[InterfaceDevice, dict]]] = [],
     invert_z: bool = True,
     scatterargs: dict = {},
@@ -234,7 +243,7 @@ def plot(
     ylim: Tuple[float, float] = None,
     zlim: Tuple[float, float] = None,
     colors: Iterable = None,
-    axis_scale_unit: Unit = mm,
+    axis_scale_unit: Unit = um,
     devices: Iterable[Union[InterfaceDevice, Tuple[InterfaceDevice, dict]]] = [],
     invert_z: bool = True,
     scatterargs: dict = {},

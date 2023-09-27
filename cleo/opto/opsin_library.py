@@ -19,11 +19,11 @@ from brian2.units import (
     amp,
     mwatt,
 )
+from cleo.light.light_dependence import plot_spectra, equal_photon_flux_spectrum
 
 from cleo.opto.opsins import (
     FourStateOpsin,
     BansalFourStateOpsin,
-    plot_action_spectra,
 )
 
 
@@ -56,7 +56,7 @@ def chr2_4s() -> FourStateOpsin:
         v0=43 * mV,
         v1=17.1 * mV,
         name="ChR2",
-        action_spectrum=[
+        spectrum=[
             (400, 0.34),
             (422, 0.65),
             (460, 0.96),
@@ -97,7 +97,7 @@ def chr2_b4s() -> BansalFourStateOpsin:
         q=1,
         E=0 * mV,
         name="ChR2",
-        action_spectrum=[
+        spectrum=[
             (400, 0.34),
             (422, 0.65),
             (460, 0.96),
@@ -138,17 +138,19 @@ def vfchrimson_4s() -> BansalFourStateOpsin:
         q=1,
         E=0 * mV,
         name="VfChrimson",
-        action_spectrum=[
-            (470, 0.34),
-            (490, 0.51),
-            (510, 0.71),
-            (530, 0.75),
-            (550, 0.86),
-            (570, 1),
-            (590, 1),
-            (610, 0.8),
-            (630, 0.48),
-        ],
+        spectrum=equal_photon_flux_spectrum(
+            [
+                (470, 0.34),
+                (490, 0.51),
+                (510, 0.71),
+                (530, 0.75),
+                (550, 0.86),
+                (570, 1),
+                (590, 1),
+                (610, 0.8),
+                (630, 0.48),
+            ]
+        ),
     )
 
 
@@ -179,17 +181,19 @@ def chrimson_4s() -> BansalFourStateOpsin:
         q=1,
         E=0 * mV,
         name="Chrimson",
-        action_spectrum=[
-            (470, 0.31),
-            (490, 0.47),
-            (510, 0.69),
-            (530, 0.75),
-            (550, 0.88),
-            (570, 0.97),
-            (590, 1),
-            (610, 0.88),
-            (630, 0.55),
-        ],
+        spectrum=equal_photon_flux_spectrum(
+            [
+                (470, 0.31),
+                (490, 0.47),
+                (510, 0.69),
+                (530, 0.75),
+                (550, 0.88),
+                (570, 0.97),
+                (590, 1),
+                (610, 0.88),
+                (630, 0.55),
+            ]
+        ),
     )
 
 
@@ -220,7 +224,7 @@ def gtacr2_4s() -> BansalFourStateOpsin:
         q=0.1,
         E=-69.5 * mV,
         name="GtACR2",
-        action_spectrum=[
+        spectrum=[
             (400, 0.40),
             (410, 0.49),
             (420, 0.56),
@@ -245,7 +249,5 @@ def gtacr2_4s() -> BansalFourStateOpsin:
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
 
-    plot_action_spectra(
-        chr2_4s(), chr2_b4s(), vfchrimson_4s(), chrimson_4s(), gtacr2_4s()
-    )
+    plot_spectra(chr2_4s(), chr2_b4s(), vfchrimson_4s(), chrimson_4s(), gtacr2_4s())
     plt.show()

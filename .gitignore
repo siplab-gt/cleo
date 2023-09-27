@@ -3,6 +3,8 @@
 # temp folders created with compiled C code from Brian running Cython
 tmp/*
 **/tmp/*
+# figures from notebooks not saved by default
+notebooks/img/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

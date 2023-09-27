@@ -1,0 +1,3 @@
+article img[src$=".png"] {
+    border-radius: 10px;
+}

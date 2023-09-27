@@ -9,5 +9,6 @@ Tutorials
     tutorials/on_off_ctrl
     tutorials/PI_ctrl
     tutorials/lqr_ctrl_ldsctrlest
+    tutorials/all_optical
     tutorials/video_visualization
     tutorials/neo

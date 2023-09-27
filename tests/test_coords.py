@@ -70,13 +70,13 @@ def test_cylinder_uniform():
 def test_arbitrary_coords():
     # single neuron
     ng = NeuronGroup(1, "v=0: volt")
-    assign_coords(ng, 4, 4, 4)
+    assign_xyz(ng, 4, 4, 4)
     # lists
     ng = NeuronGroup(3, "v=0: volt")
-    assign_coords(ng, [0, 1, 2], [3, 4, 5], [6, 7, 8])
+    assign_xyz(ng, [0, 1, 2], [3, 4, 5], [6, 7, 8])
     # nested lists
     ng = NeuronGroup(3, "v=0: volt")
-    assign_coords(ng, [[0, 1, 2]], [[3, 4, 5]], [[6, 7, 8]])
+    assign_xyz(ng, [[0, 1, 2]], [[3, 4, 5]], [[6, 7, 8]])
     # np arrays
     ng = NeuronGroup(3, "v=0: volt")
-    assign_coords(ng, np.array([0, 1, 2]), np.array([3, 4, 5]), np.array([6, 7, 8]))
+    assign_xyz(ng, np.array([0, 1, 2]), np.array([3, 4, 5]), np.array([6, 7, 8]))

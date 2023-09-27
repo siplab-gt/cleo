@@ -9,6 +9,8 @@ import cleo.recorders
 import cleo.ioproc
 import cleo.utilities
 import cleo.viz
+import cleo.imaging
+import cleo.registry
 
 from cleo.base import (
     CLSimulator,
@@ -16,4 +18,5 @@ from cleo.base import (
     Stimulator,
     InterfaceDevice,
     IOProcessor,
+    SynapseDevice,
 )

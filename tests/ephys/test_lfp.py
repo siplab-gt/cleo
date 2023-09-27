@@ -9,8 +9,8 @@ import quantities as pq
 
 from cleo import CLSimulator
 from cleo.ioproc import RecordOnlyProcessor
-from cleo.ephys import linear_shank_coords, concat_coords, TKLFPSignal, Probe
-from cleo.coords import assign_coords_rand_rect_prism, assign_coords
+from cleo.ephys import linear_shank_coords, TKLFPSignal, Probe
+from cleo.coords import assign_coords_rand_rect_prism, assign_xyz, concat_coords
 
 
 def _groups_types_ei(n_e, n_i):
@@ -61,7 +61,7 @@ def test_TKLFPSignal(groups_and_types, signal_positive, rand_seed):
     net = Network(*[gt[0] for gt in groups_and_types])
     sim = CLSimulator(net)
 
-    tklfp = TKLFPSignal(save_history=True)
+    tklfp = TKLFPSignal()
     # One probe in middle and another further out.
     # Here we put coords for two probes in one EG.
     # Alternatively you could create two separate EGs
@@ -72,7 +72,7 @@ def test_TKLFPSignal(groups_and_types, signal_positive, rand_seed):
         linear_shank_coords(1.2 * mm, 4, (0, 0, 0) * mm),
         linear_shank_coords(1.2 * mm, 4, (0.2, 0.2, 0) * mm),
     )
-    probe = Probe(contact_coords, signals=[tklfp])
+    probe = Probe(contact_coords, signals=[tklfp], save_history=True)
     for group, tklfp_type in groups_and_types:
         sim.inject(probe, group, tklfp_type=tklfp_type, sample_period_ms=1)
 
@@ -111,7 +111,7 @@ def test_TKLFPSignal_out_of_range():
     pgs = []
     for i in range(4):
         pg = PoissonGroup(n, 500 * Hz)
-        assign_coords(pg, 5 * i, 5 * i, 5 * i)  # ranging from close (origin) to far
+        assign_xyz(pg, 5 * i, 5 * i, 5 * i)  # ranging from close (origin) to far
         pgs.append(pg)
     net = Network(*pgs)
     sim = CLSimulator(net)
@@ -145,12 +145,12 @@ def test_TKLFP_orientation(seed, is_exc):
     t_spk = 40 * rng.random((n_spk,)) * ms
     sgg = SpikeGeneratorGroup(n_nrns, i_spk, t_spk)
     sgg._N = n_nrns  # hack for assign_coords to work
-    assign_coords(sgg, c_mm[:, 0], c_mm[:, 1], c_mm[:, 2])
+    assign_xyz(sgg, c_mm[:, 0], c_mm[:, 1], c_mm[:, 2])
 
     # cleo setup
     sim = CLSimulator(Network(sgg))
-    tklfp_signal = TKLFPSignal(save_history=True)
-    probe = Probe(elec_coords, [tklfp_signal])
+    tklfp_signal = TKLFPSignal()
+    probe = Probe(elec_coords, [tklfp_signal], save_history=True)
     samp_period = 10 * ms
     sim.set_io_processor(RecordOnlyProcessor(samp_period / ms))  # record every 10 ms
     sim.inject(

@@ -12,6 +12,7 @@ from brian2 import NeuronGroup, mm, Unit, Quantity, umeter, np
 import neo
 
 from cleo.base import Recorder, NeoExportable
+from cleo.coords import concat_coords
 from cleo.utilities import get_orth_vectors_for_V
 
 
@@ -236,23 +237,6 @@ class Probe(Recorder, NeoExportable):
                 continue
             group.add(sig.to_neo())
         return group
-
-
-def concat_coords(*coords: Quantity) -> Quantity:
-    """Combine multiple coordinate Quantity arrays into one
-
-    Parameters
-    ----------
-    *coords : Quantity
-        Multiple coordinate n x 3 Quantity arrays to combine
-
-    Returns
-    -------
-    Quantity
-        A single n x 3 combined Quantity array
-    """
-    out = np.vstack([c / mm for c in coords])
-    return out * mm
 
 
 def linear_shank_coords(

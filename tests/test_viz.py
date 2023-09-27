@@ -3,12 +3,9 @@ import pytest
 
 from cleo import CLSimulator
 from cleo.viz import VideoVisualizer
-from cleo.opto import (
-    Light,
-    chr2_4s,
-    fiber473nm,
-)
-from cleo.coords import assign_coords
+from cleo.light import Light, fiber473nm
+from cleo.opto import chr2_4s
+from cleo.coords import assign_xyz
 from cleo.ephys import Probe
 
 
@@ -22,7 +19,7 @@ def test_VideoVisualizer():
         threshold="v > 1 * volt",
         reset="v = 0 * volt",
     )
-    assign_coords(ng, 0, 0, 0)
+    assign_xyz(ng, 0, 0, 0)
     light = Light(light_model=fiber473nm(), max_Irr0_mW_per_mm2=20)
     # opsin = chr2_4s()
     probe = Probe([(0, 0, 0.1)] * mm)

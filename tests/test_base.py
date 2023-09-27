@@ -65,6 +65,16 @@ def test_stimulator(sim, neurons):
     with pytest.raises(Exception):  # neuron2 not in network
         sim.inject(my_stim, neurons2)
 
+    # ok to inject same device again
+    sim.inject(my_stim, neurons)
+    # but not another device with same name
+    my_stim2 = MyStim(name="my_stim")
+    with pytest.raises(ValueError):
+        sim.inject(my_stim2, neurons)
+    my_stim2.name = "my_stim2"
+    sim.inject(my_stim2, neurons)
+    assert my_stim2 in sim.stimulators.values()
+
 
 def test_recorder(sim, neurons):
     my_rec = MyRec(name="my_rec")
@@ -76,6 +86,16 @@ def test_recorder(sim, neurons):
 
     assert my_rec.get_state() == -1
     assert sim.get_state() == {"my_rec": -1}
+
+    # ok to inject same device again
+    sim.inject(my_rec, neurons)
+    # but not another device with same name
+    my_rec2 = MyRec(name="my_rec")
+    with pytest.raises(ValueError):
+        sim.inject(my_rec2, neurons)
+    my_rec2.name = "my_rec2"
+    sim.inject(my_rec2, neurons)
+    assert my_rec2 in sim.recorders.values()
 
 
 class MyProcLoop(IOProcessor):
@@ -143,3 +163,7 @@ def test_stim_to_neo():
     stim2_neo = stim2.to_neo()
     assert stim2_neo.name == stim2.name
     assert type(stim2_neo) == neo.core.IrregularlySampledSignal
+
+
+if __name__ == "__main__":
+    pytest.main(["-s", __file__])

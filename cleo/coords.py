@@ -3,7 +3,7 @@
 from __future__ import annotations
 from typing import Tuple
 
-from brian2 import mm, meter, Unit
+from brian2 import Quantity, mm, meter, Unit, np
 from brian2.groups.group import Group
 from brian2.groups.neurongroup import NeuronGroup
 from brian2.units.fundamentalunits import get_dimensions
@@ -59,7 +59,7 @@ def assign_coords_grid_rect_prism(
     z = np.linspace(zlim[0], zlim[1], shape[2])
 
     x, y, z = np.meshgrid(x, y, z, indexing="ij")
-    assign_coords(neuron_group, x, y, z)
+    assign_xyz(neuron_group, x, y, z)
 
 
 def assign_coords_rand_rect_prism(
@@ -87,7 +87,7 @@ def assign_coords_rand_rect_prism(
     x = (xlim[1] - xlim[0]) * np.random.random(len(neuron_group)) + xlim[0]
     y = (ylim[1] - ylim[0]) * np.random.random(len(neuron_group)) + ylim[0]
     z = (zlim[1] - zlim[0]) * np.random.random(len(neuron_group)) + zlim[0]
-    assign_coords(neuron_group, x, y, z)
+    assign_xyz(neuron_group, x, y, z, unit)
 
 
 def assign_coords_rand_cylinder(
@@ -122,7 +122,7 @@ def assign_coords_rand_cylinder(
 
     xs, ys, zs = xyz_from_rθz(rs, thetas, z_cyls, xyz_start, xyz_end)
 
-    assign_coords(neuron_group, xs, ys, zs, unit)
+    assign_xyz(neuron_group, xs, ys, zs, unit)
 
 
 def assign_coords_uniform_cylinder(
@@ -154,10 +154,10 @@ def assign_coords_uniform_cylinder(
     rs, thetas, z_cyls = uniform_cylinder_rθz(len(neuron_group), radius, cyl_length)
     xs, ys, zs = xyz_from_rθz(rs, thetas, z_cyls, xyz_start, xyz_end)
 
-    assign_coords(neuron_group, xs, ys, zs, unit)
+    assign_xyz(neuron_group, xs, ys, zs, unit)
 
 
-def assign_coords(
+def assign_xyz(
     neuron_group: NeuronGroup,
     x: np.ndarray,
     y: np.ndarray,
@@ -185,16 +185,20 @@ def assign_coords(
     neuron_group.z = np.reshape(z, (-1,)) * unit
 
 
+def assign_coords(neuron_group: NeuronGroup, coords: Quantity):
+    x, y, z = coords.T / mm
+    assign_xyz(neuron_group, x, y, z, mm)
+
+
 def coords_from_xyz(x: Quantity, y: Quantity, z: Quantity) -> Quantity:
     """Get ...x3 coordinate array from x, y, z arrays (with units)."""
     # have to add unit back on since it's stripped by vstack
-    n = x.shape[-1]
     return (
         np.concatenate(
             [
-                np.reshape(x, (-1, n, 1)),
-                np.reshape(y, (-1, n, 1)),
-                np.reshape(z, (-1, n, 1)),
+                np.reshape(x, (*x.shape, 1)),
+                np.reshape(y, (*y.shape, 1)),
+                np.reshape(z, (*z.shape, 1)),
             ],
             axis=-1,
         )
@@ -227,3 +231,20 @@ def _init_variables(group: Group):
                 raise NotImplementedError(
                     "Coordinate assignment only implemented for brian2.Group objects"
                 )
+
+
+def concat_coords(*coords: Quantity) -> Quantity:
+    """Combine multiple coordinate Quantity arrays into one
+
+    Parameters
+    ----------
+    *coords : Quantity
+        Multiple coordinate n x 3 Quantity arrays to combine
+
+    Returns
+    -------
+    Quantity
+        A single n x 3 combined Quantity array
+    """
+    out = np.vstack([c / mm for c in coords])
+    return out * mm
