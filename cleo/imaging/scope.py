@@ -59,6 +59,13 @@ def target_neurons_in_plane(
 
 @define(eq=False)
 class Scope(Recorder):
+    """Scope
+
+    Injection kwargs
+    ----------------
+    rho_rel_generator : callable, takes n, outputs float array
+    """
+
     sensor: Sensor = field()
     img_width: Quantity = field()
     focus_depth: Quantity = None
@@ -87,10 +94,32 @@ class Scope(Recorder):
     focus_coords_per_injct: list[NDArray[(Any,), float]] = field(
         factory=list, repr=False, init=False
     )
+    rho_rel_per_injct: list[NDArray[(Any,), float]] = field(
+        factory=list, repr=False, init=False
+    )
 
     @property
     def n(self):
         return np.sum(len(i_t) for i_t in self.i_targets_per_injct)
+
+    @property
+    def sigma_noise(self):
+        """gets noise for all targets, in order injected."""
+        return np.concatenate(self.sigma_per_injct)
+
+    @property
+    def dFF_1AP(self):
+        """gets dFF_1AP for all targets, in order injected. Varies with expression levels."""
+        rho_rel = np.array([])
+        n_prev_targets_for_ng = {}
+        for ng, i_targets in zip(self.neuron_groups, self.i_targets_per_injct):
+            syn = self.sensor.synapses[ng.name]
+            subset_start = n_prev_targets_for_ng.get(ng, 0)
+            subset_for_injct = slice(subset_start, subset_start + len(i_targets))
+            rho_rel = np.concatenate([rho_rel, syn.rho_rel[subset_for_injct]])
+            n_prev_targets_for_ng[ng] = subset_start + len(i_targets)
+        assert rho_rel.shape == (self.n,)
+        return rho_rel * self.sensor.dFF_1AP
 
     def _init_saved_vars(self):
         if self.save_history:
@@ -124,7 +153,6 @@ class Scope(Recorder):
         )
 
     def get_state(self) -> NDArray[(Any,), float]:
-        sigma_noise = np.concatenate(self.sigma_per_injct)
         signal = []
         signal_per_ng = self.sensor.get_state()
         # sensor has just one signal for neuron group, not storing
@@ -136,8 +164,8 @@ class Scope(Recorder):
             signal.append(signal_per_ng[ng.name][subset_for_injct])
             n_prev_targets_for_ng[ng] = subset_start + len(i_targets)
         signal = np.concatenate(signal)
-        noise = rng.normal(0, sigma_noise, len(signal))
-        assert self.n == len(signal) == len(noise) == len(sigma_noise)
+        noise = rng.normal(0, self.sigma_noise, len(signal))
+        assert self.n == len(signal) == len(noise) == len(self.sigma_noise)
 
         state = signal + noise
         now_ms = self.sim.network.t / ms
@@ -160,11 +188,14 @@ class Scope(Recorder):
             ) = self.target_neurons_in_plane(neuron_group, focus_depth, soma_radius)
             base_sigma = kwparams.get("base_sigma", self.sensor.sigma_noise)
             sigma_noise = noise_focus_factor * base_sigma
-            if self.sensor.dFF_1AP:
-                snr = self.sensor.dFF_1AP / sigma_noise
+            rho_rel_generator = kwparams.get("rho_rel_generator", lambda n: np.ones(n))
+            rho_rel = rho_rel_generator(len(i_targets))
+            if self.sensor.dFF_1AP is not None:
+                snr = rho_rel * self.sensor.dFF_1AP / sigma_noise
                 i_targets = i_targets[snr > self.snr_cutoff]
                 sigma_noise = sigma_noise[snr > self.snr_cutoff]
                 focus_coords = focus_coords[snr > self.snr_cutoff]
+                rho_rel = rho_rel[snr > self.snr_cutoff]
             else:
                 warnings.warn(
                     f"SNR cutoff not used, since {self.sensor.name} does not have dFF_1AP defined."
@@ -172,14 +203,17 @@ class Scope(Recorder):
         else:
             i_targets = kwparams.pop("i_targets", neuron_group.i_)
             sigma_noise = kwparams.get("sigma_noise", self.sensor.sigma_noise)
-            _, sigma_noise = np.broadcast_arrays(i_targets, sigma_noise)
+            _, sigma_noise, rho_rel = np.broadcast_arrays(
+                i_targets, sigma_noise, rho_rel
+            )
             focus_coords = coords_from_ng(neuron_group)[i_targets]
-        assert len(i_targets) == len(sigma_noise) == len(focus_coords)
+        assert len(i_targets) == len(sigma_noise) == len(focus_coords) == len(rho_rel)
 
         self.neuron_groups.append(neuron_group)
         self.i_targets_per_injct.append(i_targets)
         self.sigma_per_injct.append(sigma_noise)
         self.focus_coords_per_injct.append(focus_coords)
+        self.rho_rel_per_injct.append(rho_rel)
 
     def i_targets_for_neuron_group(self, neuron_group):
         """can handle multiple injections into same ng"""
@@ -191,8 +225,24 @@ class Scope(Recorder):
 
     def inject_sensor_for_targets(self, **kwparams) -> None:
         for ng in set(self.neuron_groups):
-            i_all_targets = self.i_targets_for_neuron_group(ng)
-            self.sim.inject(self.sensor, ng, i_targets=i_all_targets, **kwparams)
+            i_targets_for_ng = []
+            rho_rel_for_ng = []
+            for ng_, i_targets, rho_rel in zip(
+                self.neuron_groups, self.i_targets_per_injct, self.rho_rel_per_injct
+            ):
+                if ng_ is not ng:
+                    continue
+
+                i_targets_for_ng.extend(i_targets)
+                rho_rel_for_ng.extend(rho_rel)
+
+            self.sim.inject(
+                self.sensor,
+                ng,
+                i_targets=i_targets_for_ng,
+                rho_rel=rho_rel_for_ng,
+                **kwparams,
+            )
 
     def add_self_to_plot(
         self, ax: Axes3D, axis_scale_unit: Unit, **kwargs

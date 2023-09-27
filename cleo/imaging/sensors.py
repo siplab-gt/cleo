@@ -25,6 +25,11 @@ class Sensor(SynapseDevice):
                 f"indicator location must be 'cytoplasm' or 'membrane', not {value}"
             )
 
+    @property
+    def snr(self) -> float:
+        """Signal-to-noise ratio for 1 AP"""
+        return self.dFF_1AP / self.sigma_noise
+
     def get_state(self) -> dict[NeuronGroup, np.ndarray]:
         """Returns a list of arrays in the order neuron groups/targets were received.
 
@@ -247,11 +252,6 @@ class GECI(Sensor):
             to_add.pop("model")
             params.update(to_add)
         return params
-
-    @property
-    def snr(self) -> float:
-        """Signal-to-noise ratio for 1 AP"""
-        return self.dFF_1AP / self.sigma_noise
 
 
 class LightDependentGECI(GECI, LightDependent):
