@@ -273,8 +273,8 @@ class Scope(Recorder):
             color=color,
             lw=5,
             label=self.name,
-            pivot="tip",
-            length=100 * um / axis_scale_unit,
+            pivot="tail",
+            length=self.focus_depth / axis_scale_unit,
             normalize=True,
         )
 
