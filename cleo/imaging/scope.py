@@ -175,6 +175,7 @@ class Scope(Recorder):
     def connect_to_neuron_group(self, neuron_group: NeuronGroup, **kwparams) -> None:
         focus_depth = kwparams.get("focus_depth", self.focus_depth)
         soma_radius = kwparams.get("soma_radius", self.soma_radius)
+        rho_rel_generator = kwparams.get("rho_rel_generator", lambda n: np.ones(n))
         if focus_depth:
             if "i_targets" in kwparams or "sigma_noise" in kwparams:
                 raise ValueError(
@@ -188,7 +189,6 @@ class Scope(Recorder):
             ) = self.target_neurons_in_plane(neuron_group, focus_depth, soma_radius)
             base_sigma = kwparams.get("base_sigma", self.sensor.sigma_noise)
             sigma_noise = noise_focus_factor * base_sigma
-            rho_rel_generator = kwparams.get("rho_rel_generator", lambda n: np.ones(n))
             rho_rel = rho_rel_generator(len(i_targets))
             if self.sensor.dFF_1AP is not None:
                 snr = rho_rel * self.sensor.dFF_1AP / sigma_noise
@@ -203,6 +203,7 @@ class Scope(Recorder):
         else:
             i_targets = kwparams.pop("i_targets", neuron_group.i_)
             sigma_noise = kwparams.get("sigma_noise", self.sensor.sigma_noise)
+            rho_rel = rho_rel_generator(len(i_targets))
             _, sigma_noise, rho_rel = np.broadcast_arrays(
                 i_targets, sigma_noise, rho_rel
             )
