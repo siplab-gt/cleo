@@ -83,7 +83,7 @@ class DynamicCalcium(CalciumModel):
     B_T: Quantity = field(kw_only=True)
     """total indicator (buffer) concentration (molar)"""
     kappa_S: float = field(kw_only=True)
-    """Ca2+ binding ratio"""
+    """Ca2+ binding ratio of the endogenous buffer"""
     dCa_T: Quantity = field(kw_only=True)
     """total Ca2+ concentration increase per spike (molar)"""
 
