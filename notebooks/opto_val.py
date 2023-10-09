@@ -11,6 +11,7 @@ from brian2 import (
 )
 from cleo import CLSimulator
 from cleo.opto import *
+from cleo.light import *
 from cleo.coords import assign_coords_rand_rect_prism
 
 
@@ -87,21 +88,13 @@ def get_Irr0_thres(
     sim = CLSimulator(net)
 
     if simple_opto:
-        opto = Light(
-            opsin_model=ProportionalCurrentOpsin(
-                # use 240*(thresh-E_L) factor from tutorial
-                I_per_Irr=Iopto_gain_from_factor(gain_factor)
-            ),
-            light_model_params=fiber473nm,
-            location=(0, 0, 0) * mm,
-        )
+        opsin = ProportionalCurrentOpsin(I_per_Irr=Iopto_gain_from_factor(gain_factor))
     else:
-        opto = Light(
-            opsin_model=ChR2_4S(),
-            light_model_params=fiber473nm,
-            location=(0, 0, 0) * mm,
-        )
-    sim.inject(opto, ng)
+        opsin = chr2_4s()
+    sim.inject(opsin, ng)
+
+    fiber = Light(light_model=fiber473nm())
+    sim.inject(fiber, ng)
 
     sim.network.store()
     Irr0_thres = []
@@ -112,9 +105,9 @@ def get_Irr0_thres(
         ):  # get down to {precision} mW/mm2 margin
             sim.network.restore()
             Irr0_curr = (search_min + search_max) / 2
-            opto.update(Irr0_curr)
+            fiber.update(Irr0_curr)
             sim.run(pw * ms)
-            opto.update(0)
+            fiber.update(0)
             sim.run(10 * ms)  # wait 10 ms to make sure only 1 spike
             if mon.count > 0:  # spiked
                 search_max = Irr0_curr

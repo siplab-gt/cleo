@@ -122,13 +122,6 @@ class OpticFiber(LightModel):
     ntis: Quantity = 1.36
     """tissue index of refraction (wavelength/tissue dependent)"""
 
-    model = """
-            Irr = Irr0*T : watt/meter**2
-            Irr0 : watt/meter**2 
-            T : 1
-            phi = Irr / Ephoton : 1/second/meter**2
-            """
-
     def transmittance(
         self,
         source_coords: Quantity,
@@ -486,7 +479,10 @@ class Light(Stimulator):
         alpha_brightest = alpha_max * intensity
         c_brightest = (*c, alpha_brightest)
         return colors.LinearSegmentedColormap.from_list(
-            "incr_alpha", [(0, c_dimmest), (1, c_brightest)]
+            # breaks on newer matplotlib. leave 0 and 1 implicit
+            # "incr_alpha", [(0, c_dimmest), (1, c_brightest)]
+            "incr_alpha",
+            [c_dimmest, c_brightest],
         )
 
     def to_neo(self):
