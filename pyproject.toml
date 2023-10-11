@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "cleosim"
-version = "0.10.0"
+version = "0.11.0"
 description = "Cleo: the Closed-Loop, Electrophysiology, and Optogenetics experiment simulation testbed"
 authors = [
     "Kyle Johnsen <kyle@kjohnsen.org>",
@@ -46,6 +46,7 @@ furo = "^2022.6.21"
 nbdev = "^2.3.12"
 elephant = "^0.13.0"
 seaborn = "^0.13.0"
+jupytext = "^1.15.2"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

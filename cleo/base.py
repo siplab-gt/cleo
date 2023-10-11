@@ -235,11 +235,16 @@ class Stimulator(InterfaceDevice, NeoExportable):
 
     def __attrs_post_init__(self):
         self.value = self.default_value
+        self._init_saved_vars()
 
     def _init_saved_vars(self):
         if self.save_history:
-            self.t_ms = []
-            self.values = []
+            if self.sim:
+                t0 = self.sim.network.t / ms
+            else:
+                t0 = 0
+            self.t_ms = [t0]
+            self.values = [self.value]
 
     def update(self, ctrl_signal) -> None:
         """Set the stimulator value.

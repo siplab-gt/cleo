@@ -52,14 +52,14 @@ def test_stimulator(sim, neurons):
     assert my_stim.value == 42
     my_stim.update(43)
     assert my_stim.value == 43
-    assert len(my_stim.values) == len(my_stim.t_ms) == 1  # from update
+    assert len(my_stim.values) == len(my_stim.t_ms) == 2  # from update
 
     sim.update_stimulators({"my_stim": 42})
     assert my_stim.value == 42
-    assert len(my_stim.values) == len(my_stim.t_ms) == 2  # from 2 updates
+    assert len(my_stim.values) == len(my_stim.t_ms) == 3  # from 2 updates
 
     my_stim.reset()
-    assert len(my_stim.values) == len(my_stim.t_ms) == 0  # init
+    assert len(my_stim.values) == len(my_stim.t_ms) == 1  # init
 
     neurons2 = NeuronGroup(1, "v = -70*mV : volt")
     with pytest.raises(Exception):  # neuron2 not in network

@@ -60,8 +60,8 @@ intersphinx_mapping = {
 
 autosectionlabel_prefix_document = True
 
-jupyter_execute_notebooks = "off"
-execution_excludepatterns = ["*ldsctrlest*"]
+jupyter_execute_notebooks = "cache"
+execution_excludepatterns = ["tutorials/*"]
 
 # napoleon_custom_sections = "Visualization Keyword Arguments"
 napoleon_custom_sections = [("Visualization kwargs", "params_style")]

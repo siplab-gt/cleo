@@ -62,11 +62,11 @@ class MyLIOP(LatencyIOProcessor):
 
 
 def _test_LatencyIOProcessor(myLIOP, t, sampling, inputs, outputs):
+    expected_out = [None if out is None else {"out": out} for out in outputs]
     for i in range(len(t)):
         assert myLIOP.is_sampling_now(t[i]) == sampling[i]
         if myLIOP.is_sampling_now(t[i]):
             myLIOP.put_state({"in": inputs[i]}, t[i])
-        expected_out = [out if out is None else {"out": out} for out in outputs]
         assert myLIOP.get_ctrl_signal(t[i]) == expected_out[i]
 
 
