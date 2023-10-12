@@ -46,7 +46,6 @@ furo = "^2022.6.21"
 nbdev = "^2.3.12"
 elephant = "^0.13.0"
 seaborn = "^0.13.0"
-jupytext = "^1.15.2"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
@@ -62,4 +61,4 @@ addopts = [
     # "--ignore=docs/tutorials/video_visualization.ipynb"
 ]
 markers = ["slow: marks tests as slow (deselect with '-m \"not slow\"')"]
-testpaths = ["tests", "docs/tutorials"]
+testpaths = ["tests", "docs/tutorials", "docs/overview.md"]
