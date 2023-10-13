@@ -1,4 +1,6 @@
-###### Cleo: the Closed-Loop, Electrophysiology, and Optophysiology experiment simulation testbed
+<h1 style="font-size: 1em;">Cleo: the Closed-Loop, Electrophysiology, and Optophysiology experiment simulation testbed
+</h1>
+
 [![Tests](https://github.com/kjohnsen/cleosim/actions/workflows/test.yml/badge.svg)](https://github.com/kjohnsen/cleosim/actions/workflows/test.yml)
 [![Documentation Status](https://readthedocs.org/projects/cleosim/badge/?version=latest)](https://cleosim.readthedocs.io/en/latest/?badge=latest)
 
@@ -46,7 +48,8 @@ Both a four-state Markov state model of opsin kinetics is available, as well as 
 Cleo also accounts for opsin action spectra to model the effects of multi-light/wavelength/opsin crosstalk and heterogeneous expression.
 Parameters are for multiple opsins, and blue optic fiber (1P) and infrared spot (for 2P) illumination.
 
-## <img align="bottom" src="https://github.com/siplab-gt/cleo/assets/19983357/08b473bf-7e19-4dfb-9a21-1f9772f7ed50" alt="🔬" > 2P imaging
+## <img src="https://github.com/siplab-gt/cleo/assets/19983357/08b473bf-7e19-4dfb-9a21-1f9772f7ed50" alt="🔬" > 2P imaging
+
 Users can also inject a microscope into their model, selecting neurons on the specified plane of imaging or elsewhere, with signal and noise strength determined by indicator expression levels and position with respect to the focal plane.
 The calcium indicator model of [Song et al., 2021](https://www.sciencedirect.com/science/article/pii/S0165027021001084) is implemented, with parameters included for GCaMP6 variants.
 
