@@ -14,8 +14,8 @@ Documentation contents
    :maxdepth: 2
 
    overview
-   tutorials
-   reference
+   tutorials/index
+   reference/index
 
 
 Indices and tables
