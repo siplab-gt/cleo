@@ -186,12 +186,13 @@ def assign_xyz(
 
 
 def assign_coords(neuron_group: NeuronGroup, coords: Quantity):
+    """Assigns x, y, and z coordinates for neuron group from (n, 3) array"""
     x, y, z = coords.T / mm
     assign_xyz(neuron_group, x, y, z, mm)
 
 
 def coords_from_xyz(x: Quantity, y: Quantity, z: Quantity) -> Quantity:
-    """Get ...x3 coordinate array from x, y, z arrays (with units)."""
+    """Create (..., 3) coordinate array from x, y, z arrays (with units)."""
     # have to add unit back on since it's stripped by vstack
     return (
         np.concatenate(
@@ -207,7 +208,7 @@ def coords_from_xyz(x: Quantity, y: Quantity, z: Quantity) -> Quantity:
 
 
 def coords_from_ng(ng: NeuronGroup) -> Quantity:
-    """Get nx3 coordinate array from NeuronGroup."""
+    """Get (n, 3) coordinate array from NeuronGroup."""
     return coords_from_xyz(ng.x, ng.y, ng.z)
 
 

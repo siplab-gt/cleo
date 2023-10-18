@@ -8,7 +8,6 @@ Reference
    coords
    ephys
    imaging
-   light
    ioproc
    light
    opto

@@ -64,7 +64,10 @@ jupyter_execute_notebooks = "cache"
 execution_excludepatterns = ["tutorials/*"]
 
 # napoleon_custom_sections = "Visualization Keyword Arguments"
-napoleon_custom_sections = [("Visualization kwargs", "params_style")]
+napoleon_custom_sections = [
+    ("Visualization kwargs", "params_style"),
+    ("Injection kwargs", "params_style"),
+]
 
 # -- Options for HTML output -------------------------------------------------
 

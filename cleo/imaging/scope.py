@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Any
+from typing import Any, Callable
 import warnings
 
 from attrs import define, field
@@ -17,15 +17,43 @@ from cleo.utilities import normalize_coords, rng
 
 
 def target_neurons_in_plane(
-    ng,
-    scope_focus_depth,
-    scope_img_width,
-    scope_location=(0, 0, 0) * mm,
-    scope_direction=(0, 0, 1),
-    soma_radius=10 * um,
-    sensor_location="cytoplasm",
-):
-    """Returns a tuple of (i_targets, noise_focus_factor, coords_on_plane)"""
+    ng: NeuronGroup,
+    scope_focus_depth: Quantity,
+    scope_img_width: Quantity,
+    scope_location: Quantity = (0, 0, 0) * mm,
+    scope_direction: tuple = (0, 0, 1),
+    soma_radius: Quantity = 10 * um,
+    sensor_location: str = "cytoplasm",
+) -> tuple[NDArray[(Any,), int], NDArray[(Any,), float], NDArray[(Any, 3), float]]:
+    """
+    Returns a tuple of (i_targets, noise_focus_factor, coords_on_plane)
+
+    Parameters
+    ----------
+    ng : NeuronGroup
+        The neuron group to target.
+    scope_focus_depth : Quantity
+        The depth of the focal plane of the microscope.
+    scope_img_width : Quantity
+        The width of the image captured by the microscope.
+    scope_location : Quantity, optional
+        The location of the microscope, by default (0, 0, 0) * mm.
+    scope_direction : tuple, optional
+        The direction of the microscope, by default (0, 0, 1).
+    soma_radius : Quantity, optional
+        The radius of the soma of the neuron, by default 10 * um.
+        Used to compute noise focus factor, since smaller ROIs will have
+        a noisier distribution of fluorescence, averaged over fewer pixels.
+    sensor_location : str, optional
+        The location of the sensor, by default "cytoplasm".
+
+    Returns
+    -------
+    Tuple[NDArray[(Any,), int], NDArray[(Any,), float], NDArray[(Any, 3), float]]
+        A tuple of (i_targets, noise_focus_factor, coords_on_plane)
+    """
+    assert sensor_location in ("cytoplasm", "membrane")
+
     ng_coords = coords_from_ng(ng)
     # Compute the normal vector and the center of the plane
     plane_normal = scope_direction
@@ -41,7 +69,6 @@ def target_neurons_in_plane(
     if sensor_location == "cytoplasm":
         relative_num_pixels = (r_soma_visible / soma_radius) ** 2
     else:
-        assert sensor_location == "membrane"
         relative_num_pixels = r_soma_visible / soma_radius
     with np.errstate(divide="ignore"):
         noise_focus_factor /= np.sqrt(relative_num_pixels)
@@ -59,23 +86,40 @@ def target_neurons_in_plane(
 
 @define(eq=False)
 class Scope(Recorder):
-    """Scope
+    """Two-photon microscope.
 
     Injection kwargs
     ----------------
-    rho_rel_generator : callable, takes n, outputs float array
+    rho_rel_generator : Callable[[int], NDArray[(Any,), float]], optional
+        A function assigning expression levels. Takes n as an arg, outputs float array.
+        ``lambda n: np.ones(n)`` by default.
+    focus_depth : Quantity, optional
+        The depth of the focal plane, by default that of the scope.
+    soma_radius : Quantity, optional
+        The radius of the soma of the neuron, by default that of the scope.
+        Used to compute noise focus factor, since smaller ROIs will have
+        a noisier distribution of fluorescence, averaged over fewer pixels.
     """
 
     sensor: Sensor = field()
     img_width: Quantity = field()
+    """The width (diameter) of the (circular) image captured by the microscope.
+    Specified in distance units."""
     focus_depth: Quantity = None
+    """The depth of the focal plane, with distance units"""
     location: Quantity = [0, 0, 0] * mm
+    """Location of the objective lens."""
     direction: NDArray[(3,), float] = field(
         default=(0, 0, 1), converter=normalize_coords
     )
+    """Direction in which the microscope is pointing.
+    By default straight down (`+z` direction)"""
     soma_radius: Quantity = field(default=10 * um)
+    """Assumed radius of neurons, used to compute noise focus factor.
+    Smaller neurons have noisier signals."""
     snr_cutoff: float = field(default=1)
-    """applied only when not focus_depth is not None"""
+    """SNR below which neurons are discarded.
+    Applied only when not focus_depth is not None"""
     rand_seed: int = field(default=None, repr=False)
     dFF: list[NDArray[(Any,), float]] = field(factory=list, init=False, repr=False)
     """ΔF/F from every call to :meth:`get_state`.
@@ -85,31 +129,37 @@ class Scope(Recorder):
     :attr:`~cleo.InterfaceDevice.save_history`"""
 
     neuron_groups: list[NeuronGroup] = field(factory=list, repr=False, init=False)
+    """neuron groups the scope has been injected into, in order of injection"""
     i_targets_per_injct: list[NDArray[(Any,), int]] = field(
         factory=list, repr=False, init=False
     )
+    """targets of neurons selected from each injection"""
     sigma_per_injct: list[NDArray[(Any,), float]] = field(
         factory=list, repr=False, init=False
     )
+    """`sigma_noise` of neurons selected from each injection"""
     focus_coords_per_injct: list[NDArray[(Any,), float]] = field(
         factory=list, repr=False, init=False
     )
+    """coordinates on the focal plane of neurons selected from each injection"""
     rho_rel_per_injct: list[NDArray[(Any,), float]] = field(
         factory=list, repr=False, init=False
     )
+    """relative expression levels of neurons selected from each injection"""
 
     @property
-    def n(self):
+    def n(self) -> int:
+        """Number of imaged ROIs"""
         return np.sum(len(i_t) for i_t in self.i_targets_per_injct)
 
     @property
-    def sigma_noise(self):
-        """gets noise for all targets, in order injected."""
+    def sigma_noise(self) -> NDArray[(Any,), float]:
+        """noise std dev (in terms of ΔF/F) for all targets, in order injected."""
         return np.concatenate(self.sigma_per_injct)
 
     @property
-    def dFF_1AP(self):
-        """gets dFF_1AP for all targets, in order injected. Varies with expression levels."""
+    def dFF_1AP(self) -> NDArray[(Any,), float]:
+        """dFF_1AP for all targets, in order injected. Varies with expression levels."""
         rho_rel = np.array([])
         n_prev_targets_for_ng = {}
         for ng, i_targets in zip(self.neuron_groups, self.i_targets_per_injct):
@@ -139,7 +189,26 @@ class Scope(Recorder):
 
     def target_neurons_in_plane(
         self, ng, focus_depth: Quantity = None, soma_radius: Quantity = None
-    ) -> tuple[NDArray[(Any,), int], NDArray[(Any,), float]]:
+    ) -> tuple[NDArray[(Any,), int], NDArray[(Any,), float], NDArray[(Any, 3), float]]:
+        """calls :func:`target_neurons_in_plane` with scope parameter defaults.
+        `focus_depth` and `soma_radius` can be overridden here.
+
+        Parameters
+        ----------
+        ng : NeuronGroup
+            The neuron group to target.
+        focus_depth : Quantity
+            The depth of the focal plane, by default that of the microscope.
+        soma_radius : Quantity, optional
+            The radius of the soma of the neuron, by default that of the microscope.
+            Used to compute noise focus factor, since smaller ROIs will have
+            a noisier distribution of fluorescence, averaged over fewer pixels.
+
+        Returns
+        -------
+        Tuple[NDArray[(Any,), int], NDArray[(Any,), float], NDArray[(Any, 3), float]]
+            A tuple of (i_targets, noise_focus_factor, coords_on_plane)
+        """
         focus_depth = focus_depth or self.focus_depth
         soma_radius = soma_radius or self.soma_radius
         return target_neurons_in_plane(
@@ -153,6 +222,13 @@ class Scope(Recorder):
         )
 
     def get_state(self) -> NDArray[(Any,), float]:
+        """Returns a 1D array of ΔF/F values for all targets, in order injected.
+
+        Returns
+        -------
+        NDArray[(Any,), float]
+            Fluorescence values for all targets
+        """
         signal = []
         signal_per_ng = self.sensor.get_state()
         # sensor has just one signal for neuron group, not storing

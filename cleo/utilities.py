@@ -16,6 +16,7 @@ import quantities as pq
 
 
 rng = np.random.default_rng()
+"""supposed to be the central random number generator, but not yet used everywhere"""
 
 
 def times_are_regular(times):
@@ -43,7 +44,9 @@ def analog_signal(t_ms, values_no_unit, units) -> neo.core.basesignal.BaseSignal
 def add_to_neo_segment(
     segment: neo.core.Segment, *objects: neo.core.dataobject.DataObject
 ):
-    """Taken from neo.core.group.Group."""
+    """Conveniently adds multiple objects to a segment.
+
+    Taken from :class:`neo.core.group.Group`."""
     container_lookup = {
         cls_name: getattr(segment, container_name)
         for cls_name, container_name in zip(
@@ -111,8 +114,10 @@ def xyz_from_rθz(rs, thetas, zs, xyz_start, xyz_end):
 
 
 def uniform_cylinder_rθz(n, rmax, zmax):
-    # generate Fibonacci spiral cylinder by rotating around axis
-    # and up and down cylinder simultaneously, using different angles
+    """uniformly fills a cylinder with radius rmax and height zmax with n points.
+
+    Does so by generating a Fibonacci spiral cylinder by rotating around axis
+    and up and down cylinder simultaneously, using different angle steps."""
     indices = np.arange(0, n) + 0.5
     rs = rmax * np.sqrt(indices / n)
     golden_angle = np.pi * (1 + np.sqrt(5))

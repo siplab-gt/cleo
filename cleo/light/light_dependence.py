@@ -2,37 +2,9 @@ from __future__ import annotations
 from typing import Callable, Tuple
 import warnings
 
-from attrs import define, field, asdict, fields_dict
-from brian2 import (
-    np,
-    Synapses,
-    Function,
-    NeuronGroup,
-    Unit,
-    BrianObjectException,
-    get_unit,
-    Equations,
-    implementation,
-    check_units,
-)
+from attrs import define, field
+from brian2 import np, NeuronGroup, mm
 from nptyping import NDArray
-from brian2.units import (
-    mm,
-    mm2,
-    nmeter,
-    Quantity,
-    second,
-    ms,
-    second,
-    psiemens,
-    nsiemens,
-    mV,
-    volt,
-    amp,
-    mM,
-)
-from brian2.units.allunits import radian
-import numpy as np
 from scipy.interpolate import CubicSpline
 
 from cleo.base import InterfaceDevice, SynapseDevice
@@ -52,7 +24,9 @@ def cubic_interpolator(lambdas_nm, epsilons, lambda_new_nm):
 # and must be placed *before* SynapseDevice to work right
 @define(eq=False, slots=False)
 class LightDependent:
-    """Mix-in class for opsin and indicator. TODO
+    """Mix-in class for opsin and light-dependent indicator.
+    Light-dependent devices are connected to light sources (and vice-versa)
+    on injection via the registry.
 
     We approximate dynamics under multiple wavelengths using a weighted sum
     of photon fluxes, where the ε factor indicates the activation
@@ -98,7 +72,7 @@ class LightDependent:
         return light_agg_ng, list(range(len(i_targets)))
 
     def epsilon(self, lambda_new) -> float:
-        """Returns the epsilon value for a given lambda (in nm)
+        """Returns the :math:`\\varepsilon`` value for a given lambda (in nm)
         representing the relative sensitivity of the opsin to that wavelength."""
         action_spectrum = np.array(self.spectrum)
         lambdas = action_spectrum[:, 0]
@@ -128,7 +102,8 @@ def equal_photon_flux_spectrum(
     return list(zip(lambdas, eps_Irr))
 
 
-def plot_spectra(*ldds: LightDependent):
+def plot_spectra(*ldds: LightDependent) -> tuple[plt.Figure, plt.Axes]:
+    """Plots the action/excitation spectra for multiple light-dependent devices."""
     import matplotlib.pyplot as plt
 
     fig, ax = plt.subplots()

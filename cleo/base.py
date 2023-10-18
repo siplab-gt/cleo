@@ -34,7 +34,7 @@ class NeoExportable(ABC):
 
     @abstractmethod
     def to_neo(self) -> neo.core.BaseNeo:
-        """Return a neo.core.AnalogSignal object with the device's data
+        """Return a Neo signal object with the device's data
 
         Returns
         -------
@@ -57,10 +57,11 @@ class InterfaceDevice(ABC):
     sim: CLSimulator = field(init=False, default=None)
     """The simulator the device is injected into """
     name: str = field(kw_only=True)
-    """Unique identifier for device, used in sampling, plotting, etc.
-    Name of the class by default."""
+    """Identifier for device, used in sampling, plotting, etc.
+    Name of the class by default. Must be unique among recorders and stimulators"""
     save_history: bool = field(default=True, kw_only=True)
     """Determines whether times and inputs/outputs are recorded.
+    True by default.
     
     For stimulators, this is when :meth:`~Stimulator.update` is called.
     For recorders, it is when :meth:`~Recorder.get_state` is called."""
@@ -70,7 +71,7 @@ class InterfaceDevice(ABC):
         return self.__class__.__name__
 
     def init_for_simulator(self, simulator: CLSimulator) -> None:
-        """Initialize device for simulator on initial injection
+        """Initialize device for simulator on initial injection.
 
         This function is called only the first time a device is
         injected into a simulator and performs any operations
@@ -94,13 +95,13 @@ class InterfaceDevice(ABC):
 
         If your device introduces any objects which Brian must
         keep track of, such as a NeuronGroup, Synapses, or Monitor,
-        make sure to add these to `self.brian_objects`.
+        make sure to add these to :attr:`~cleo.InterfaceDevice.brian_objects`.
 
         Parameters
         ----------
         neuron_group : NeuronGroup
-        **kwparams : optional, passed from `inject` or
-            `inject`
+        **kwparams : optional
+            Passed from `inject`
         """
         pass
 
@@ -175,7 +176,7 @@ class IOProcessor(ABC):
         pass
 
     @abstractmethod
-    def put_state(self, state_dict: dict, time) -> None:
+    def put_state(self, state_dict: dict, sample_time_ms: float) -> None:
         """Deliver network state to the :class:`IOProcessor`.
 
         Parameters
@@ -183,20 +184,20 @@ class IOProcessor(ABC):
         state_dict : dict
             A dictionary of recorder measurements, as returned by
             :func:`~cleo.CLSimulator.get_state()`
-        time : brian2 temporal Unit
+        sample_time_ms: float
             The current simulation timestep. Essential for simulating
             control latency and for time-varying control.
         """
         pass
 
     @abstractmethod
-    def get_ctrl_signal(self, time) -> dict:
+    def get_ctrl_signal(self, query_time_ms: float) -> dict:
         """Get per-stimulator control signal from the :class:`~cleo.IOProcessor`.
 
         Parameters
         ----------
-        time : Brian 2 temporal Unit
-            Current timestep
+        query_time_ms : float
+            Current simulation time.
 
         Returns
         -------
@@ -228,10 +229,10 @@ class Stimulator(InterfaceDevice, NeoExportable):
     default_value: Any = 0
     """The default value of the device---used on initialization and on :meth:`~reset`"""
     t_ms: list[float] = field(factory=list, init=False, repr=False)
-    """Times stimulator was updated, stored if :attr:`save_history`"""
+    """Times stimulator was updated, stored if :attr:`~cleo.InterfaceDevice.save_history`"""
     values: list[Any] = field(factory=list, init=False, repr=False)
     """Values taken by the stimulator at each :meth:`~update` call, 
-    stored if :attr:`save_history`"""
+    stored if :attr:`~cleo.InterfaceDevice.save_history`"""
 
     def __attrs_post_init__(self):
         self.value = self.default_value
@@ -249,10 +250,10 @@ class Stimulator(InterfaceDevice, NeoExportable):
     def update(self, ctrl_signal) -> None:
         """Set the stimulator value.
 
-        By default this simply sets `value` to `ctrl_signal`.
-        You will want to implement this method if your
-        stimulator requires additional logic. Use super.update(self, value)
-        to preserve the self.value attribute logic
+        By default this sets :attr:`value` to ``ctrl_signal`` and updates saved
+        times and values. You will want to implement this method if your stimulator
+        requires additional logic. Use ``super.update(self, value)``
+        to preserve the ``self.value`` and ``save_history`` logic
 
         Parameters
         ----------
@@ -449,7 +450,7 @@ class CLSimulator(NeoExportable):
 
         Restores the Brian Network to where it was when the
         CLSimulator was last modified (last injection, IOProcessor change).
-        Calls reset() on devices and IOProcessor.
+        Calls reset() on :attr:`devices` and :attr:`io_processor`.
         """
         # kwargs passed to stimulators, recorders, and io_processor reset
         self.network.restore(self._net_store_name)
@@ -459,6 +460,13 @@ class CLSimulator(NeoExportable):
             self.io_processor.reset(**kwargs)
 
     def to_neo(self) -> neo.core.Block:
+        """Exports simulator data to a Neo Block
+
+        Returns
+        -------
+        neo.core.Block
+            Neo Block containing signals representing each device's data
+        """
         block = neo.Block(
             description="Exported from Cleo simulation",
         )
@@ -493,12 +501,12 @@ class SynapseDevice(InterfaceDevice):
     :meth:`modify_model_and_params_for_ng`."""
 
     on_pre: str = field(init=False, default="")
-    """Model string for Synapses reacting to spikes."""
+    """Model string for :class:`brian2.synapses.synapses.Synapses` reacting to spikes."""
 
     synapses: dict[str, Synapses] = field(factory=dict, init=False, repr=False)
     """Stores the synapse objects implementing the model, connecting from source
     (light aggregator neurons or the target group itself) to target neuron groups,
-    with :class:`NeuronGroup` name keys and :class:`Synapses` values."""
+    of form ``{target_ng.name: synapses}``."""
 
     source_ngs: dict[str, NeuronGroup] = field(factory=dict, init=False, repr=False)
     """``{target_ng.name: source_ng}`` dict of source neuron groups.
@@ -725,7 +733,7 @@ class SynapseDevice(InterfaceDevice):
     def init_syn_vars(self, syn: Synapses) -> None:
         """Initializes appropriate variables in Synapses implementing the model
 
-        Can also be used to reset the variables.
+        Also called on :meth:`reset`.
 
         Parameters
         ----------

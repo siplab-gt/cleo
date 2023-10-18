@@ -1,3 +1,4 @@
+"""Contains core classes and functions for the Cleo package."""
 from __future__ import annotations
 
 # auto-import submodules

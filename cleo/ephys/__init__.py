@@ -1,4 +1,5 @@
-"""Contains probes, coordinate convenience functions, signals, spiking, and LFP"""
+"""Contains probes, convenience functions for generating electrode array coordinates,
+signals, spiking, and LFP"""
 from cleo.ephys.lfp import TKLFPSignal
 from cleo.ephys.spiking import MultiUnitSpiking, SortedSpiking, Spiking
 from cleo.ephys.probes import (

@@ -194,7 +194,7 @@ class Spiking(Signal, NeoExportable):
 
 @define(eq=False)
 class MultiUnitSpiking(Spiking):
-    """Detects spikes per channel, that is, unsorted."""
+    """Detects (unsorted) spikes per channel."""
 
     def connect_to_neuron_group(self, neuron_group: NeuronGroup, **kwparams) -> None:
         """Configure signal to record from specified neuron group

@@ -174,7 +174,7 @@ class LatencyIOProcessor(IOProcessor):
         if self.processing not in ["serial", "parallel"]:
             raise ValueError("Invalid processing scheme:", self.processing)
 
-    def put_state(self, state_dict: dict, sample_time_ms):
+    def put_state(self, state_dict: dict, sample_time_ms: float):
         self.t_samp_ms.append(sample_time_ms)
         out, t_out_ms = self.process(state_dict, sample_time_ms)
         if self.processing == "serial" and len(self.out_buffer) > 0:

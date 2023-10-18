@@ -1,16 +1,14 @@
-from typing import Any, Tuple
+from typing import Any
 
-import matplotlib
 import numpy as np
-from attrs import define, field
-from brian2 import NeuronGroup, Quantity
-from brian2.units import meter, um, mm, nmeter
+from attrs import define
+from brian2 import Quantity
+from brian2.units import um, nmeter
 from nptyping import NDArray
-from scipy.spatial.distance import cdist
 
 from cleo.coords import concat_coords, coords_from_ng, coords_from_xyz
 from cleo.light import LightModel, Light
-from cleo.utilities import normalize_coords, uniform_cylinder_rθz, xyz_from_rθz
+from cleo.utilities import uniform_cylinder_rθz, xyz_from_rθz
 
 
 @define(eq=False)
@@ -96,7 +94,17 @@ class GaussianEllipsoid(LightModel):
         return r_thresh, zc_thresh
 
 
-def tp_light_from_scope(scope, wavelength=1060 * nmeter, **kwargs):
+def tp_light_from_scope(scope, wavelength=1060 * nmeter, **kwargs) -> Light:
+    """Creates a light object from a scope object with 2P focused laser points
+    at each target.
+
+    Parameters
+    ----------
+    scope : Scope
+        The scope object containing the laser spots.
+    wavelength : Quantity, optional
+        The wavelength of the laser, by default 1060 * nmeter.
+    """
     coords = []
     for ng, i_targets in zip(scope.neuron_groups, scope.i_targets_per_injct):
         coords.append(coords_from_ng(ng)[i_targets])

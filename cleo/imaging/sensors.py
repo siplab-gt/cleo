@@ -16,7 +16,7 @@ class Sensor(SynapseDevice):
     dFF_1AP: float = field(kw_only=True)
     """ΔF/F for 1 AP, only used for scope SNR cutoff"""
     location: str = field(kw_only=True)
-    """cytoplasm or membrane"""
+    """where sensor is expressed: cytoplasm or membrane"""
 
     @location.validator
     def _check_location(self, attribute, value):
@@ -31,10 +31,7 @@ class Sensor(SynapseDevice):
         return self.dFF_1AP / self.sigma_noise
 
     def get_state(self) -> dict[NeuronGroup, np.ndarray]:
-        """Returns a list of arrays in the order neuron groups/targets were received.
-
-        Signals should be normalized to baseline of 0 and 1 corresponding
-        to an action potential peak."""
+        """Returns a {neuron_group: fluorescence} dict of dFF values."""
         pass
 
     @property
@@ -62,7 +59,8 @@ class PreexistingCalcium(CalciumModel):
 
 @define(eq=False)
 class DynamicCalcium(CalciumModel):
-    """Pieced together from Lütke et al., 2013; Helmchen and Tank, 2015;
+    """Simulates intracellular calcium dynamics from spikes.
+    Pieced together from Lütke et al., 2013; Helmchen and Tank, 2015;
     and Song et al., 2021. (`code <https://bitbucket.org/adamshch/naomi_sim/src/25908cf432cd487fffe1f6442548d0fc8f4e8add/code/TimeTraceCode/calcium_dynamics.m?at=master#calcium_dynamics.m>`_)
     """
 
@@ -112,11 +110,11 @@ class DoubExpCalBindingActivation(CalBindingActivationModel):
     Convolution is implemented via ODEs; see ``notebooks/double_exp_conv_as_ode.ipynb``
     for derivation.
 
-    A, tau_on, and tau_off are the versions with proper scale and units of NAOMi's
-    ca_amp, t_on, and t_off.
+    :attr:`A`, :attr:`tau_on`, and :attr:`tau_off` are the versions with proper scale and units of NAOMi's
+    ``ca_amp``, ``t_on``, and ``t_off``.
 
     Some parameters found `here <https://bitbucket.org/adamshch/naomi_sim/src/25908cf432cd487fffe1f6442548d0fc8f4e8add/code/TimeTraceCode/check_cal_params.m?at=master#lines-90>`_.
-    Parameters fit `here <https://bitbucket.org/adamshch/naomi_sim/src/25908cf432cd487fffe1f6442548d0fc8f4e8add/code/MiscCode/fit_NAOMi_calcium.m?at=master#fit_NAOMi_calcium.m>`_.
+    Fitting code `here <https://bitbucket.org/adamshch/naomi_sim/src/25908cf432cd487fffe1f6442548d0fc8f4e8add/code/MiscCode/fit_NAOMi_calcium.m?at=master#fit_NAOMi_calcium.m>`_.
     """
 
     model: str = field(
@@ -143,20 +141,7 @@ class DoubExpCalBindingActivation(CalBindingActivationModel):
     Ca_rest: Quantity = field(kw_only=True)
     """Resting Ca2+ concentration (molar)."""
 
-    @property
-    def _kap(self):
-        return 1 / self.t_off
-
-    @property
-    def _lam(self):
-        return 1 / self.t_on + 1 / self.t_off
-
     def init_syn_vars(self, syn: Synapses) -> None:
-        # solve for resting state values
-        # dCaB/dt = beta = 0
-        # Ca = Ca_rest
-        # dbeta/dt = 0 = 0 - 0 - kap * lam * Ca_cov
-        # Ca_conv = 0
         syn.b = 0
         syn.beta = 0
 
@@ -170,11 +155,15 @@ class ExcitationModel:
 
 @define(eq=False)
 class NullExcitation(ExcitationModel):
+    """Models excitation as a constant factor"""
+
     model: str = field(default="exc_factor = 1 : 1", init=False)
 
 
 @define(eq=False)
 class LightExcitation(ExcitationModel):
+    """Models light-dependent excitation (not implemented yet)"""
+
     model: str = field(default="exc_factor = some_function(Irr_pre) : 1", init=False)
 
 
@@ -237,7 +226,7 @@ class GECI(Sensor):
 
     @property
     def params(self) -> dict:
-        """Returns a dictionary of parameters for the model"""
+        """Returns a dictionary of all parameters from model/submodels"""
         params = asdict(self, recurse=False)
         # remove generic fields that are not parameters
         for field in fields_dict(Sensor):
@@ -255,10 +244,32 @@ class GECI(Sensor):
 
 
 class LightDependentGECI(GECI, LightDependent):
+    """Light-dependent calcium indicator (not yet implemented)"""
+
     pass
 
 
-def geci(light_dependent, doub_exp_conv, pre_existing_cal, **kwparams):
+def geci(
+    light_dependent: bool, doub_exp_conv: bool, pre_existing_cal: bool, **kwparams
+) -> GECI:
+    """Initializes a :class:`GECI` model with given parameters.
+
+    Parameters
+    ----------
+    light_dependent : bool
+        Whether the indicator is light-dependent.
+    doub_exp_conv : bool
+        Whether to use double exponential convolution for binding/activation.
+    pre_existing_cal : bool
+        Whether to use calcium concentrations already simulated in the neuron model.
+    **kwparams
+        Keyword parameters for :class:`GECI` and sub-models.
+
+    Returns
+    -------
+    GECI
+        A (LightDependent)GECI model specified submodels and parameters.
+    """
     ExcModel = LightExcitation if light_dependent else NullExcitation
     CalModel = PreexistingCalcium if pre_existing_cal else DynamicCalcium
     BAModel = DoubExpCalBindingActivation if doub_exp_conv else NullBindingActivation
@@ -297,8 +308,6 @@ def _create_geci_fn(
     """convenience function for creating GECI model functions.
 
     K_d is in nM.
-    TODO: ca_amp is actually 1/sec, to cancel out time in convolution.
-    t_on, t_off are in 1/100 sec, as in NAOMi's code.
 
     dFF_1AP and sigma_noise are relative to GCaMP6s, since noise values obtained indirectly
     from Zhang et al., 2023, supp table 1, which is all relative to GCaMP6s.
@@ -338,13 +347,18 @@ def _create_geci_fn(
         dCa_T=7.6 * umolar,  # Lütke et al., 2013 and NAOMi code
         name=name,
         **kwparams,
-    ):
-        """Returns a GECI model with parameters given in
+    ) -> GECI:
+        """Returns a (light-dependent) GECI model with specified submodel choices.
+        Default parameters are taken from
         `NAOMi's code <https://bitbucket.org/adamshch/naomi_sim/src/25908cf432cd487fffe1f6442548d0fc8f4e8add/code/TimeTraceCode/calcium_dynamics.m?at=master#calcium_dynamics.m>`_
         (Song et al., 2021) as well as Dana et al., 2019 and Zhang et al., 2023.
 
         Only those parameters used in chosen model components apply.
         If the default is ``None``, then we don't have it fit yet.
+
+        ``ca_amp``, ``t_on``, and ``t_off`` are given as in NAOMi, but are converted to
+        the proper scale and units for the double exponential convolution model.
+        Namely, ``A = ca_amp / (second / 100)`` and ``tau_[on|off] = second / t_[on|off]``.
         """
         # dt implicit in NAOMi's code, always s/100
         A = ca_amp / (second / 100) if ca_amp else None
@@ -389,10 +403,31 @@ _create_geci_fn(
 
 # from NAOMi, but
 # don't have double exponential convolution parameters for these:
-_create_geci_fn("ogb1", 250, 1, 14, 1, extra_doc="*Don't know sigma_noise*")
-_create_geci_fn("gcamp6rs09", 520, 3.2, 25, 1, extra_doc="*Don't know sigma_noise*")
-_create_geci_fn("gcamp6rs06", 320, 3, 15, 1, extra_doc="*Don't know sigma_noise*")
-_create_geci_fn("jgcamp7f", 174, 2.3, 30.2, 0.72)
-_create_geci_fn("jgcamp7s", 68, 2.49, 40.4, 0.33)
-_create_geci_fn("jgcamp7b", 82, 3.06, 22.1, 0.25)
-_create_geci_fn("jgcamp7c", 298, 2.44, 145.6, 0.39)
+_create_geci_fn(
+    "ogb1",
+    250,
+    1,
+    14,
+    1,
+    extra_doc="*Don't know sigma_noise. Default is the GCaMP6s value.*",
+)
+_create_geci_fn(
+    "gcamp6rs09",
+    520,
+    3.2,
+    25,
+    1,
+    extra_doc="*Don't know sigma_noise. Default is the GCaMP6s value.*",
+)
+_create_geci_fn(
+    "gcamp6rs06",
+    320,
+    3,
+    15,
+    1,
+    extra_doc="*Don't know sigma_noise. Default is the GCaMP6s value.*",
+)
+_create_geci_fn("jgcamp7f", 174, 2.3, 30.2, 0.72, 1.71)
+_create_geci_fn("jgcamp7s", 68, 2.49, 40.4, 0.33, 4.96)
+_create_geci_fn("jgcamp7b", 82, 3.06, 22.1, 0.25, 4.64)
+_create_geci_fn("jgcamp7c", 298, 2.44, 145.6, 0.39, 1.85)

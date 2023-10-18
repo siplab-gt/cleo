@@ -28,7 +28,7 @@ from matplotlib.collections import PathCollection
 import neo
 import quantities as pq
 
-from cleo.base import InterfaceDevice
+from cleo.base import CLSimulator
 from cleo.registry import registry_for_sim
 from cleo.utilities import (
     uniform_cylinder_rθz,
@@ -43,6 +43,8 @@ from cleo.stimulators import Stimulator
 
 @define
 class LightModel(ABC):
+    """Defines how light propagates given a source location and direction."""
+
     @abstractmethod
     def transmittance(
         self,
@@ -50,7 +52,7 @@ class LightModel(ABC):
         source_direction: NDArray[(Any, 3), Any],
         target_coords: Quantity,
     ) -> NDArray[(Any, Any), float]:
-        """Output must be between 0 and shape (n_sources, n_targets)."""
+        """Output must be between 0 and 1 with shape (n_sources, n_targets)."""
         pass
 
     @abstractmethod
@@ -61,8 +63,12 @@ class LightModel(ABC):
         T_threshold: float,
         n_points_per_source: int = None,
         **kwargs,
-    ) -> Quantity:
-        """Outputs (m x n_points_per_source x 3 viz_points array, markersize_um, intensity_scale)"""
+    ) -> tuple[NDArray[(Any, Any, 3), Any], float, float]:
+        """Returns info needed for visualization.
+        Output is ((m, n_points_per_source, 3) viz_points array, markersize_um, intensity_scale).
+
+        For best-looking results, implementations should scale `markersize_um` and `intensity_scale`.
+        """
         pass
 
     def _get_rz_for_xyz(self, source_coords, source_direction, target_coords):
@@ -78,7 +84,6 @@ class LightModel(ABC):
         # relative to light source(s)
         rel_coords = target_coords - source_coords.reshape((m, 1, 3))
         assert rel_coords.shape == (m, n, 3)
-        # now m x n x 3 array, where m is number of sources, n is number of targets
         # must use brian2's dot function for matrix multiply to preserve
         # units correctly.
         # zc = usf.dot(rel_coords, source_direction)  # mxn distance along cylinder axis
@@ -113,13 +118,13 @@ class OpticFiber(LightModel):
 
     R0: Quantity = 0.1 * mm
     """optical fiber radius"""
-    NAfib: Quantity = 0.37
+    NAfib: float = 0.37
     """optical fiber numerical aperture"""
     K: Quantity = 0.125 / mm
     """absorbance coefficient (wavelength/tissue dependent)"""
     S: Quantity = 7.37 / mm
     """scattering coefficient (wavelength/tissue dependent)"""
-    ntis: Quantity = 1.36
+    ntis: float = 1.36
     """tissue index of refraction (wavelength/tissue dependent)"""
 
     def transmittance(
@@ -214,9 +219,9 @@ def fiber473nm(
     S=7.37 / mm,  # scattering coefficient
     ntis=1.36,  # tissue index of refraction
 ) -> OpticFiber:
-    """Light parameters for 473 nm wavelength delivered via an optic fiber.
+    """Returns an :class:`OpticFiber` model with parameters for 473 nm light.
 
-    From Foutz et al., 2012. See :class:`OpticFiber` for parameter descriptions."""
+    Parameters from Foutz et al., 2012."""
     return OpticFiber(
         R0=R0,
         NAfib=NAfib,
@@ -228,30 +233,17 @@ def fiber473nm(
 
 @define(eq=False)
 class Light(Stimulator):
-    """Delivers photostimulation of the network.
-
-    Essentially "transfects" neurons and provides a light source.
-    Under the hood, it delivers current via a Brian :class:`~brian2.synapses.synapses.Synapses`
-    object.
+    """Delivers light to the network for photostimulation and (when implemented) imaging.
 
     Requires neurons to have 3D spatial coordinates already assigned.
-    Also requires that the neuron model has a current term
-    (by default Iopto) which is assumed to be positive (unlike the
-    convention in many opsin modeling papers, where the current is
-    described as negative).
-
-    See :meth:`connect_to_neuron_group` for optional keyword parameters
-    that can be specified when calling
-    :meth:`cleo.CLSimulator.inject`.
 
     Visualization kwargs
     --------------------
     n_points_per_source : int, optional
         The number of points per light source used to represent light intensity in
-        space. Default varies by ``light_model``. Alias ``n_points``.
+        space. Default varies by :attr:`light_model`. Alias ``n_points``.
     T_threshold : float, optional
-        The transmittance below which no points are plotted. By default
-        1e-3.
+        The transmittance below which no points are plotted. By default 1e-3.
     intensity : float, optional
         How bright the light appears, should be between 0 and 1. By default 0.5.
     rasterized : bool, optional
@@ -260,8 +252,7 @@ class Light(Stimulator):
     """
 
     light_model: LightModel = field(kw_only=True)
-    """LightModel object defining how light is emitted. See
-    :class:`OpticFiber` for an example."""
+    """Defines how light is emitted. See :class:`OpticFiber` for an example."""
 
     coords: Quantity = field(
         default=(0, 0, 0) * mm, converter=lambda x: np.reshape(x, (-1, 3)), repr=False
@@ -309,6 +300,7 @@ class Light(Stimulator):
         return np.zeros(self.n)
 
     def transmittance(self, target_coords) -> np.ndarray:
+        """Returns :attr:`light_model` transmittance given light's coords and direction."""
         return self.light_model.transmittance(
             self.coords, self.direction, target_coords
         )
@@ -336,6 +328,7 @@ class Light(Stimulator):
 
     @property
     def source(self) -> Subgroup:
+        """Returns the "neuron(s)" representing the light source(s)."""
         registry = registry_for_sim(self.sim)
         return registry.source_for_light(self)
 

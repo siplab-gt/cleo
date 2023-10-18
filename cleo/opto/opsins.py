@@ -38,6 +38,11 @@ from cleo.light import LightDependent
 class Opsin(LightDependent, SynapseDevice):
     """Base class for opsin model.
 
+    Requires that the neuron model has a current term
+    (by default Iopto) which is assumed to be positive (unlike the
+    convention in many opsin modeling papers, where the current is
+    described as negative).
+
     We approximate dynamics under multiple wavelengths using a weighted sum
     of photon fluxes, where the ε factor indicates the activation
     relative to the peak-sensitivy wavelength for an equivalent number of photons
