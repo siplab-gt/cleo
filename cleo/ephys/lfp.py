@@ -55,10 +55,8 @@ class TKLFPSignal(Signal, NeoExportable):
     _t_ms_buffers: list[list[np.ndarray]] = field(init=False, factory=list, repr=False)
     _buffer_positions: list[int] = field(init=False, factory=list, repr=False)
 
-    def init_for_probe(self, probe: Probe):
-        # inherit docstring
-        super().init_for_probe(probe)
-        self._elec_coords_mm = probe.coords / mm
+    def _post_init_for_probe(self):
+        self._elec_coords_mm = self.probe.coords / mm
         # need to invert z coords since cleo uses an inverted z axis and
         # tklfp does not
         self._elec_coords_mm[:, 2] *= -1

@@ -57,6 +57,10 @@ class Signal(ABC):
                 f"and cannot be used with another."
             )
         self.probe = probe
+        self._post_init_for_probe()
+
+    def _post_init_for_probe(self):
+        pass
 
     @abstractmethod
     def connect_to_neuron_group(self, neuron_group: NeuronGroup, **kwparams):
