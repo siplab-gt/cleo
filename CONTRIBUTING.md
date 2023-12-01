@@ -50,8 +50,8 @@ my_function(a, b='B'):
 ```
 
 ## Style
-We will use Black formatting. The easiest way is to enable Black as the formatter in 
-your IDE with auto-formatting on save.
+We will use Black-style formatting, as implemented (faster) by Ruff.
+The easiest way is to enable Ruff as the formatter in your IDE with auto-formatting on save.
 
 ## Linting
 I was going to lint using flake8 but then I realized, this is a small research code package! We don't need super pretty, consistent code. Just try to follow Python conventions and use Black.

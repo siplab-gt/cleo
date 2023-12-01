@@ -3,6 +3,7 @@
 
 [![Tests](https://github.com/kjohnsen/cleosim/actions/workflows/test.yml/badge.svg)](https://github.com/kjohnsen/cleosim/actions/workflows/test.yml)
 [![Documentation Status](https://readthedocs.org/projects/cleosim/badge/?version=latest)](https://cleosim.readthedocs.io/en/latest/?badge=latest)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
 
 <h1>
@@ -80,9 +81,7 @@ The `ldsCtrlEst` library implements adaptive linear dynamical system-based contr
 </p>
 
 ### 📃 Publications
-[**Cleo: A testbed for bridging model and experiment by
-simulating closed-loop stimulation, electrode recording,
-and optophysiology**](https://www.biorxiv.org/content/10.1101/2023.01.27.525963)<br>
+[**Cleo: A testbed for bridging model and experiment by simulating closed-loop stimulation, electrode recording, and optophysiology**](https://www.biorxiv.org/content/10.1101/2023.01.27.525963)<br>
 K.A. Johnsen, N.A. Cruzado, Z.C. Menard, A.A. Willats, A.S. Charles, and C.J. Rozell. *bioRxiv*, 2023.
 
 [**CLOC Tools: A Library of Tools for Closed-Loop Neuroscience**](https://github.com/cloctools/tools-for-neuro-control-manuscript)<br>

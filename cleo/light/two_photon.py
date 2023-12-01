@@ -3,11 +3,11 @@ from typing import Any
 import numpy as np
 from attrs import define
 from brian2 import Quantity
-from brian2.units import um, nmeter
+from brian2.units import nmeter, um
 from nptyping import NDArray
 
 from cleo.coords import concat_coords, coords_from_ng, coords_from_xyz
-from cleo.light import LightModel, Light
+from cleo.light import Light, LightModel
 from cleo.utilities import uniform_cylinder_rθz, xyz_from_rθz
 
 
@@ -59,9 +59,7 @@ class GaussianEllipsoid(LightModel):
         # m x n x 3
         density_factor = 3
         cyl_vol = np.pi * r_thresh**2 * zc_thresh
-        markersize_um = ((cyl_vol / n_points_per_source * density_factor)) ** (
-            1 / 3
-        ) / um
+        markersize_um = (cyl_vol / n_points_per_source * density_factor) ** (1 / 3) / um
         intensity_scale = (1000 / n_points_per_source) ** (1 / 3)
         return coords_from_xyz(x, y, z), markersize_um, intensity_scale
 

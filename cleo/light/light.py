@@ -186,9 +186,7 @@ class OpticFiber(LightModel):
         x, y, z = xyz_from_rθz(r, theta, zc, coords, end)
         density_factor = 3
         cyl_vol = np.pi * r_thresh**2 * zc_thresh
-        markersize_um = ((cyl_vol / n_points_per_source * density_factor)) ** (
-            1 / 3
-        ) / um
+        markersize_um = (cyl_vol / n_points_per_source * density_factor) ** (1 / 3) / um
         intensity_scale = (1e3 / n_points_per_source) ** (1 / 3)
         return coords_from_xyz(x, y, z), markersize_um, intensity_scale
 

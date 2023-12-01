@@ -1,19 +1,18 @@
 """Assorted utilities for developers."""
+import warnings
 from collections.abc import MutableMapping
 
-from matplotlib import pyplot as plt
-
-from brian2 import np, second, Quantity
-from brian2.groups.group import get_dtype
-from brian2.equations.equations import (
-    Equations,
-    DIFFERENTIAL_EQUATION,
-    SUBEXPRESSION,
-    PARAMETER,
-)
 import neo
 import quantities as pq
-
+from brian2 import Quantity, np, second
+from brian2.equations.equations import (
+    DIFFERENTIAL_EQUATION,
+    PARAMETER,
+    SUBEXPRESSION,
+    Equations,
+)
+from brian2.groups.group import get_dtype
+from matplotlib import pyplot as plt
 
 rng = np.random.default_rng()
 """supposed to be the central random number generator, but not yet used everywhere"""
