@@ -123,7 +123,7 @@ class TKLFPSignal(Signal, NeoExportable):
         return out
 
     def reset(self, **kwargs) -> None:
-        super().reset(**kwargs)
+        super(TKLFPSignal, self).reset(**kwargs)
         for i_mon in range(len(self._monitors)):
             self._reset_buffer(i_mon)
         self._init_saved_vars()

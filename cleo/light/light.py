@@ -1,44 +1,45 @@
 """Contains Light device and propagation models"""
 from __future__ import annotations
-from abc import ABC, abstractmethod
-from typing import Tuple, Any, Union
-import warnings
-import datetime
 
-from attrs import define, field, asdict
+import datetime
+import warnings
+from abc import ABC, abstractmethod
+from typing import Any, Tuple, Union
+
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+import neo
+import quantities as pq
+from attrs import asdict, define, field
 from brian2 import (
-    np,
     NeuronGroup,
     Subgroup,
+    np,
 )
-from nptyping import NDArray
 from brian2.units import (
-    um,
+    Quantity,
     mm,
     mm2,
-    nmeter,
-    Quantity,
     mwatt,
+    nmeter,
+    um,
 )
-import matplotlib.pyplot as plt
-import matplotlib as mpl
 from matplotlib import colors
 from matplotlib.artist import Artist
 from matplotlib.collections import PathCollection
-import neo
-import quantities as pq
+from nptyping import NDArray
 
 from cleo.base import CLSimulator
+from cleo.coords import coords_from_ng, coords_from_xyz
 from cleo.registry import registry_for_sim
+from cleo.stimulators import Stimulator
 from cleo.utilities import (
+    analog_signal,
+    normalize_coords,
     uniform_cylinder_rθz,
     wavelength_to_rgb,
     xyz_from_rθz,
-    normalize_coords,
-    analog_signal,
 )
-from cleo.coords import coords_from_ng, coords_from_xyz
-from cleo.stimulators import Stimulator
 
 
 @define
@@ -460,7 +461,7 @@ class Light(Stimulator):
             Irr0_mW_per_mm2[
                 Irr0_mW_per_mm2 > self.max_Irr0_mW_per_mm2
             ] = self.max_Irr0_mW_per_mm2
-        super().update(Irr0_mW_per_mm2)
+        super(Light, self).update(Irr0_mW_per_mm2)
         self.source.Irr0 = Irr0_mW_per_mm2 * mwatt / mm2
 
     def _alpha_cmap_for_wavelength(self, intensity):

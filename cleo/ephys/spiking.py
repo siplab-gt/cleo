@@ -1,15 +1,16 @@
 """Contains multi-unit and sorted spiking signals"""
 from __future__ import annotations
-from abc import abstractmethod
-from typing import Any, Tuple
-from datetime import datetime
 
+from abc import abstractmethod
+from datetime import datetime
+from typing import Any, Tuple
+
+import neo
+import numpy as np
+import quantities as pq
 from attrs import define, field, fields
 from bidict import bidict
-from brian2 import NeuronGroup, Quantity, SpikeMonitor, meter, ms, mm
-import numpy as np
-import neo
-import quantities as pq
+from brian2 import NeuronGroup, Quantity, SpikeMonitor, meter, mm, ms
 from nptyping import NDArray
 
 from cleo.base import NeoExportable
@@ -82,7 +83,7 @@ class Spiking(Signal, NeoExportable):
             num_neurons_to_consider x num_channels array of spike
             detection probabilities, for use in subclasses
         """
-        super().connect_to_neuron_group(neuron_group, **kwparams)
+        super(Spiking, self).connect_to_neuron_group(neuron_group, **kwparams)
         # could support separate detection probabilities per group using kwparams
         # n_neurons X n_channels X 3
         dist2 = np.zeros((len(neuron_group), self.probe.n))
@@ -204,9 +205,9 @@ class MultiUnitSpiking(Spiking):
         neuron_group : NeuronGroup
             group to record from
         """
-        neuron_channel_dtct_probs = super().connect_to_neuron_group(
-            neuron_group, **kwparams
-        )
+        neuron_channel_dtct_probs = super(
+            MultiUnitSpiking, self
+        ).connect_to_neuron_group(neuron_group, **kwparams)
         if self._dtct_prob_array is None:
             self._dtct_prob_array = neuron_channel_dtct_probs
         else:
@@ -236,7 +237,7 @@ class MultiUnitSpiking(Spiking):
         return i_c_detected, t_detected, y
 
     def to_neo(self) -> neo.Group:
-        group = super().to_neo()
+        group = super(MultiUnitSpiking, self).to_neo()
         for st in group.spiketrains:
             i = int(st.annotations["i"])
             st.annotate(
@@ -265,7 +266,7 @@ class SortedSpiking(Spiking):
         neuron_group : NeuronGroup
             group to record from
         """
-        neuron_channel_dtct_probs = super().connect_to_neuron_group(
+        neuron_channel_dtct_probs = super(SortedSpiking, self).connect_to_neuron_group(
             neuron_group, **kwparams
         )
         neuron_multi_channel_probs = self._combine_channel_probs(
