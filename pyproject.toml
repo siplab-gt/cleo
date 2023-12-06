@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "cleosim"
-version = "0.12.3"
+version = "0.12.4"
 description = "Cleo: the Closed-Loop, Electrophysiology, and Optogenetics experiment simulation testbed"
 authors = [
     "Kyle Johnsen <kyle@kjohnsen.org>",
