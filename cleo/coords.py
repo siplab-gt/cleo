@@ -47,7 +47,7 @@ def assign_coords_grid_rect_prism(
     ValueError
         When the shape is incompatible with the number of neurons in the group
     """
-    num_grid_elements = np.product(shape)
+    num_grid_elements = np.prod(shape)
     if num_grid_elements != len(neuron_group):
         raise ValueError(
             f"Number of elements specified in shape ({num_grid_elements}) "
