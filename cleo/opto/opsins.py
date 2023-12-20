@@ -1,12 +1,10 @@
 """Contains opsin models and default parameters"""
 from __future__ import annotations
 
-import warnings
-from typing import Any, Callable, Tuple
+from typing import Any, Tuple
 
-from attrs import asdict, define, field, fields_dict
+from attrs import define, field
 from brian2 import (
-    NeuronGroup,
     Synapses,
     Unit,
     check_units,
@@ -19,12 +17,10 @@ from brian2.units import (
     amp,
     cm2,
     mM,
-    mm,
     mm2,
     ms,
     msiemens,
     mV,
-    nmeter,
     nsiemens,
     pcoulomb,
     psiemens,
@@ -33,7 +29,6 @@ from brian2.units import (
     volt,
 )
 from brian2.units.allunits import radian
-from nptyping import NDArray
 
 from cleo.base import SynapseDevice
 from cleo.light import LightDependent

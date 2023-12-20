@@ -1,32 +1,32 @@
 """Contains definitions for essential, base classes."""
 
 from __future__ import annotations
-from abc import ABC, abstractmethod
-from typing import Any, Tuple, Iterable
-import datetime
 
-from attrs import define, field, asdict, fields_dict
+import datetime
+from abc import ABC, abstractmethod
+from typing import Any, Tuple
+
+import neo
+from attrs import asdict, define, field, fields_dict
 from brian2 import (
-    np,
-    NeuronGroup,
+    BrianObjectException,
     Equations,
-    Synapses,
-    Subgroup,
     Network,
     NetworkOperation,
+    NeuronGroup,
+    Quantity,
+    Subgroup,
+    Synapses,
+    Unit,
     defaultclock,
     ms,
-    Unit,
-    Quantity,
-    BrianObjectException,
+    np,
 )
-from matplotlib import pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 from matplotlib.artist import Artist
-import neo
-from cleo.registry import registry_for_sim
+from mpl_toolkits.mplot3d import Axes3D
 
 import cleo.utilities
+from cleo.registry import registry_for_sim
 
 
 class NeoExportable(ABC):

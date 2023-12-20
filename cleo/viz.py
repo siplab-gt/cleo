@@ -1,24 +1,24 @@
 """Tools for visualizing models and simulations"""
 from __future__ import annotations
-from typing import Tuple, Any, Union
-from collections.abc import Iterable
 
-from attrs import define, field
-from matplotlib.artist import Artist
-import numpy as np
-import matplotlib.pyplot as plt
+from collections.abc import Iterable
+from typing import Any, Tuple, Union
+
 import matplotlib.animation as anim
-from mpl_toolkits.mplot3d import Axes3D
+import matplotlib.pyplot as plt
+import numpy as np
+from attrs import define, field
 from brian2 import (
-    mm,
-    um,
-    Unit,
-    NeuronGroup,
-    ms,
     NetworkOperation,
+    NeuronGroup,
     Quantity,
     SpikeMonitor,
+    Unit,
+    ms,
+    um,
 )
+from matplotlib.artist import Artist
+from mpl_toolkits.mplot3d import Axes3D
 
 from cleo.base import CLSimulator, InterfaceDevice
 from cleo.registry import registry_for_sim

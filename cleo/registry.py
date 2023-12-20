@@ -3,11 +3,12 @@
 This should only be relevant for developers, not users, as this code is used
 under the hood when interacting devices are injected (e.g., light and opsin)."""
 from __future__ import annotations
+
 from typing import Tuple
 
 from attrs import define, field
-from brian2 import NeuronGroup, Synapses, Subgroup
-from brian2.units.allunits import meter2, nmeter, kgram, second, meter, joule
+from brian2 import NeuronGroup, Subgroup, Synapses
+from brian2.units.allunits import joule, kgram, meter, meter2, nmeter, second
 
 from cleo.coords import coords_from_ng
 

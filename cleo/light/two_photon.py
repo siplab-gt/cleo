@@ -1,8 +1,7 @@
 from typing import Any
 
-import numpy as np
 from attrs import define
-from brian2 import Quantity
+from brian2 import Quantity, np
 from brian2.units import nmeter, um
 from nptyping import NDArray
 

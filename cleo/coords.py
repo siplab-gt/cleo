@@ -1,16 +1,15 @@
 """Contains functions for assigning neuron coordinates and visualizing"""
 
 from __future__ import annotations
+
 from typing import Tuple
 
-from brian2 import Quantity, mm, meter, Unit, np
+from brian2 import Quantity, Unit, meter, mm, np
 from brian2.groups.group import Group
 from brian2.groups.neurongroup import NeuronGroup
 from brian2.units.fundamentalunits import get_dimensions
-import numpy as np
 
 from cleo.utilities import (
-    get_orth_vectors_for_V,
     modify_model_with_eqs,
     uniform_cylinder_rθz,
     xyz_from_rθz,

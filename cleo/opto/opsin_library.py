@@ -1,24 +1,14 @@
 """A bunch of fitted opsin models."""
-from typing import Callable
 
-from attrs import define, field
 from brian2.units import (
-    Quantity,
-    amp,
-    kgram,
-    meter,
     mM,
-    mm,
     mm2,
     ms,
     mV,
-    mwatt,
-    nmeter,
     nsiemens,
     pcoulomb,
     psiemens,
     second,
-    volt,
 )
 
 from cleo.light.light_dependence import equal_photon_flux_spectrum, plot_spectra

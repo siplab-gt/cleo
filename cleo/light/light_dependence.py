@@ -5,10 +5,8 @@ from typing import Callable, Tuple
 
 from attrs import define, field
 from brian2 import NeuronGroup, mm, np
-from nptyping import NDArray
 from scipy.interpolate import CubicSpline
 
-from cleo.base import InterfaceDevice, SynapseDevice
 from cleo.coords import assign_xyz
 from cleo.utilities import wavelength_to_rgb
 
@@ -38,7 +36,6 @@ class LightDependent:
     peak-non-peak wavelength relation; see ``notebooks/multi_wavelength_model.ipynb``
     for details."""
 
-    # spectrum: list[tuple[float, float]] = field(factory=lambda: [(-1e10, 1), (1e10, 1)])
     spectrum: list[tuple[float, float]] = field()
     """List of (wavelength, epsilon) tuples representing the action (opsin) or
     excitation (indicator) spectrum."""

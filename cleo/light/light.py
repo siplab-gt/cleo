@@ -4,13 +4,11 @@ from __future__ import annotations
 import datetime
 import warnings
 from abc import ABC, abstractmethod
-from typing import Any, Tuple, Union
+from typing import Any, Union
 
 import matplotlib as mpl
-import matplotlib.pyplot as plt
-import neo
 import quantities as pq
-from attrs import asdict, define, field
+from attrs import define, field
 from brian2 import (
     NeuronGroup,
     Subgroup,
@@ -27,11 +25,10 @@ from brian2.units import (
 from matplotlib import colors
 from matplotlib.artist import Artist
 from matplotlib.collections import PathCollection
-from matplotlib.colors import Normalize
 from nptyping import NDArray
 
 from cleo.base import CLSimulator
-from cleo.coords import coords_from_ng, coords_from_xyz
+from cleo.coords import coords_from_xyz
 from cleo.registry import registry_for_sim
 from cleo.stimulators import Stimulator
 from cleo.utilities import (
