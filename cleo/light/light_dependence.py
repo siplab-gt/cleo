@@ -1,9 +1,10 @@
 from __future__ import annotations
-from typing import Callable, Tuple
+
 import warnings
+from typing import Callable, Tuple
 
 from attrs import define, field
-from brian2 import np, NeuronGroup, mm
+from brian2 import NeuronGroup, mm, np
 from nptyping import NDArray
 from scipy.interpolate import CubicSpline
 
@@ -37,9 +38,18 @@ class LightDependent:
     peak-non-peak wavelength relation; see ``notebooks/multi_wavelength_model.ipynb``
     for details."""
 
-    spectrum: list[tuple[float, float]] = field(factory=lambda: [(-1e10, 1), (1e10, 1)])
+    # spectrum: list[tuple[float, float]] = field(factory=lambda: [(-1e10, 1), (1e10, 1)])
+    spectrum: list[tuple[float, float]] = field()
     """List of (wavelength, epsilon) tuples representing the action (opsin) or
     excitation (indicator) spectrum."""
+
+    @spectrum.default
+    def _default_spectrum(self):
+        warnings.warn(
+            f"No spectrum provided for light-dependent device {self.name}."
+            " Assuming ε = 1 for all λ."
+        )
+        return [(-1e10, 1), (1e10, 1)]
 
     spectrum_interpolator: Callable = field(default=cubic_interpolator, repr=False)
     """Function of signature (lambdas_nm, epsilons, lambda_new_nm) that interpolates
@@ -91,7 +101,7 @@ class LightDependent:
 
 
 def equal_photon_flux_spectrum(
-    spectrum: list[tuple[float, float]]
+    spectrum: list[tuple[float, float]],
 ) -> list[tuple[float, float]]:
     """Converts an equival photon flux spectrum to an equal power density spectrum."""
     spectrum = np.array(spectrum)
