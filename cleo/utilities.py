@@ -267,6 +267,16 @@ def wavelength_to_rgb(wavelength_nm, gamma=0.8):
     return (R, G, B)
 
 
+def brian_safe_name(name: str) -> str:
+    return (
+        name.replace(" ", "_")
+        .replace("-", "_")
+        .replace(".", "_")
+        .replace("(", "_")
+        .replace(")", "_")
+    )
+
+
 def style_plots_for_docs(dark=True):
     # some hacky workaround for params not being updated until after first plot
     f = plt.figure()

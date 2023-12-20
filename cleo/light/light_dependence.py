@@ -8,7 +8,7 @@ from brian2 import NeuronGroup, mm, np
 from scipy.interpolate import CubicSpline
 
 from cleo.coords import assign_xyz
-from cleo.utilities import wavelength_to_rgb
+from cleo.utilities import brian_safe_name, wavelength_to_rgb
 
 
 def linear_interpolator(lambdas_nm, epsilons, lambda_new_nm):
@@ -67,7 +67,7 @@ class LightDependent:
             phi : 1/second/meter**2
             Irr : watt/meter**2
             """,
-            name=f"light_agg_{self.name}_{target_ng.name}",
+            name=f"light_agg_{brian_safe_name(self.name)}_{target_ng.name}",
         )
         assign_xyz(
             light_agg_ng,

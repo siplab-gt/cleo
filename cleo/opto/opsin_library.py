@@ -144,7 +144,7 @@ def chr2_h134r_4s() -> BansalFourStateOpsin:
 
 
 def vfchrimson_4s() -> BansalFourStateOpsin:
-    """Returns a 4-state Vf-Chrimson model.
+    """Returns a 4-state vf-Chrimson model.
 
     Params given in Bansal et al., 2020.
     Action spectrum from `Mager et al., 2018, Supp. Fig. 1a
@@ -169,7 +169,7 @@ def vfchrimson_4s() -> BansalFourStateOpsin:
         p=1,
         q=1,
         E=0 * mV,
-        name="VfChrimson",
+        name="vf-Chrimson",
         spectrum=equal_photon_flux_spectrum(
             [
                 (470, 0.34),
@@ -297,7 +297,7 @@ def enphr3_3s():
         g0=22.34 * nsiemens,
         a=0.02e-2 * mM / pcoulomb,
         b=12,
-        name="eNpHR3",
+        name="eNpHR3.0",
         spectrum=[
             (390, 0.162),
             (405, 0.239),

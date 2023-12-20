@@ -11,6 +11,7 @@ from brian2 import NeuronGroup, Subgroup, Synapses
 from brian2.units.allunits import joule, kgram, meter, meter2, nmeter, second
 
 from cleo.coords import coords_from_ng
+from cleo.utilities import brian_safe_name
 
 
 @define(repr=False)
@@ -131,7 +132,7 @@ class DeviceInteractionRegistry:
                 self.light_source_ng,
                 light_agg_ng,
                 model=self.light_prop_model,
-                name=f"light_prop_{ldd.name}_{ng.name}",
+                name=f"light_prop_{brian_safe_name(ldd.name)}_{ng.name}",
             )
             light_prop_syn.connect()
             # non-zero initialization to avoid nans from /0

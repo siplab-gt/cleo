@@ -25,7 +25,7 @@ from brian2 import (
 from matplotlib.artist import Artist
 from mpl_toolkits.mplot3d import Axes3D
 
-import cleo.utilities
+from cleo.utilities import analog_signal, add_to_neo_segment, brian_safe_name
 from cleo.registry import registry_for_sim
 
 
@@ -271,7 +271,7 @@ class Stimulator(InterfaceDevice, NeoExportable):
         self._init_saved_vars()
 
     def to_neo(self):
-        signal = cleo.utilities.analog_signal(self.t_ms, self.values, "dimensionless")
+        signal = analog_signal(self.t_ms, self.values, "dimensionless")
         signal.name = self.name
         signal.description = "Exported from Cleo stimulator device"
         signal.annotate(export_datetime=datetime.datetime.now())
@@ -482,7 +482,7 @@ class CLSimulator(NeoExportable):
                 block.groups.append(dev_neo)
             elif isinstance(dev_neo, neo.core.dataobject.DataObject):
                 data_objects = [dev_neo]
-            cleo.utilities.add_to_neo_segment(seg, *data_objects)
+            add_to_neo_segment(seg, *data_objects)
         return block
 
 
@@ -611,7 +611,7 @@ class SynapseDevice(InterfaceDevice):
             model=mod_syn_model,
             on_pre=self.on_pre,
             namespace=mod_syn_params,
-            name=f"syn_{self.name}_{neuron_group.name}",
+            name=f"syn_{brian_safe_name(self.name)}_{neuron_group.name}",
         )
         syn.namespace.update(self.extra_namespace)
         syn.connect(i=i_sources, j=i_targets)
