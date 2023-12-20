@@ -54,7 +54,7 @@ class InterfaceDevice(ABC):
     other functions so that those objects can be automatically added
     to the network when the device is injected.
     """
-    sim: CLSimulator = field(init=False, default=None)
+    sim: CLSimulator = field(init=False, default=None, repr=False)
     """The simulator the device is injected into """
     name: str = field(kw_only=True)
     """Identifier for device, used in sampling, plotting, etc.
