@@ -1,22 +1,22 @@
 import pytest
 from brian2 import (
-    NeuronGroup,
     Network,
-    mV,
-    pamp,
-    ms,
+    NeuronGroup,
     meter,
-    second,
-    np,
-    seed,
-    namp,
+    ms,
+    mV,
     mwatt,
+    namp,
+    np,
+    pamp,
+    second,
+    seed,
 )
 from brian2.core.base import BrianObjectException
 
-from cleo import CLSimulator
-from cleo.opto import chr2_4s, Opsin, ProportionalCurrentOpsin
+from cleo import CLSimulator, opto
 from cleo.coords import assign_coords_grid_rect_prism
+from cleo.opto import Opsin, ProportionalCurrentOpsin, chr2_4s
 
 model = """
     dv/dt = (-(v - -70*mV) + 100*Mohm*Iopto) / (10*ms) : volt
@@ -121,36 +121,62 @@ def test_v_and_Iopto_in_model(opsin, opsin2):
 
 
 @pytest.mark.slow
-def test_markov_opsin_model(opsin, neurons):
+@pytest.mark.parametrize(
+    "opsin, is_exc, stim_gain, rest_state, active_states",
+    [
+        (chr2_4s(), True, 0.5, "C1", ("O1", "O2", "C2")),
+        (opto.chr2_b4s(), True, 1, "C1", ("O1", "O2", "C2")),
+        (opto.chrimson_4s(), True, 8, "C1", ("O1", "O2", "C2")),
+        (opto.vfchrimson_4s(), True, 0.7, "C1", ("O1", "O2", "C2")),
+        (opto.gtacr2_4s(), True, 8, "C1", ("O1", "O2", "C2")),
+        (opto.enphr3_3s(), False, 0.5, "P0", ("P4", "P6")),
+    ],
+)
+def test_markov_opsin_model(
+    opsin, neurons, is_exc, stim_gain, rest_state, active_states
+):
+    """stim_gain is a multiplier for the stimulation strength, i.e.,
+    to accelerate slower opsins.
+
+    GtACR2 is listed as excitatory in this test since its reversal potential is
+    -69.5, slightly above the resting potential of -70 mV."""
     sim = CLSimulator(Network(neurons))
     sim.inject(opsin, neurons)
     opsyn = opsin.synapses[neurons.name]
     light_agg = opsin.light_agg_ngs[neurons.name]
     assert all(neurons.Iopto) == 0
     assert all(neurons.v == -70 * mV)
-    assert all(opsyn.C1 == 1)
-    assert all(opsyn.O1 == 0)
-    assert all(opsyn.C2 == 0)
-    assert all(opsyn.O2 == 0)
+    assert all(getattr(opsyn, rest_state) == 1)
+    for active_state in active_states:
+        assert all(getattr(opsyn, active_state) == 0)
+
     # light on
-    light_agg.phi = 1e10 / second / meter**2
+    light_agg.phi = stim_gain * 1e10 / second / meter**2
+    # sim.run(stim_gain * 1 * ms)
     sim.run(1 * ms)
     # current flowing, channels opened
-    assert all(neurons.Iopto > 0)
-    assert all(neurons.v > -70 * mV)  # depolarized
-    assert all(opsyn.C1 < 1)
-    assert all(opsyn.O1 > 0)
-    assert all(opsyn.C2 > 0)
-    assert all(opsyn.O2 > 0)
+    if is_exc:
+        assert all(neurons.Iopto > 0)
+        assert all(neurons.v > -70 * mV)  # depolarized
+    else:
+        assert all(neurons.Iopto < 0)
+        assert all(neurons.v < -70 * mV)  # hyperpolarized
+    assert all(getattr(opsyn, rest_state) < 1)
+    for active_state in active_states:
+        assert all(getattr(opsyn, active_state) > 0)
+
     # light off: should go back to (close to) resting state
     light_agg.phi = 0
+    # sim.run(stim_gain * 49 * ms)
     sim.run(49 * ms)
-    assert all(neurons.Iopto > -100 * pamp)
-    assert np.allclose(neurons.v, -70 * mV, atol=2 * mV)  # within 2 mV of -70
-    assert all(opsyn.C1 > 0.99)
-    assert all(opsyn.O1 < 0.01)
-    assert all(opsyn.C2 < 0.01)
-    assert all(opsyn.O2 < 0.01)
+    if is_exc:
+        assert all(neurons.Iopto > -100 * pamp)
+    else:
+        assert all(neurons.Iopto < 100 * pamp)
+    assert np.allclose(neurons.v, -70 * mV, atol=2 * mV)
+    assert all(getattr(opsyn, rest_state) > 0.99)
+    for active_state in active_states:
+        assert all(getattr(opsyn, active_state) < 0.01)
 
 
 @pytest.mark.slow
