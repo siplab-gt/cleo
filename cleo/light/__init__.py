@@ -3,6 +3,7 @@ from cleo.light.light import (
     fiber473nm,
     OpticFiber,
     LightModel,
+    Koehler,
 )
 from cleo.light.light_dependence import (
     LightDependent,

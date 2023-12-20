@@ -27,6 +27,7 @@ from brian2.units import (
 from matplotlib import colors
 from matplotlib.artist import Artist
 from matplotlib.collections import PathCollection
+from matplotlib.colors import Normalize
 from nptyping import NDArray
 
 from cleo.base import CLSimulator
@@ -188,7 +189,7 @@ class OpticFiber(LightModel):
         density_factor = 3
         cyl_vol = np.pi * r_thresh**2 * zc_thresh
         markersize_um = (cyl_vol / n_points_per_source * density_factor) ** (1 / 3) / um
-        intensity_scale = (1e3 / n_points_per_source) ** (1 / 3)
+        intensity_scale = 1.5 * (4e3 / n_points_per_source) ** (1 / 3)
         return coords_from_xyz(x, y, z), markersize_um, intensity_scale
 
     def _find_rz_thresholds(self, thresh):
@@ -228,6 +229,38 @@ def fiber473nm(
         S=S,
         ntis=ntis,
     )
+
+
+@define
+class Koehler(LightModel):
+    """Even illumination over a circular area, with no scattering."""
+
+    radius: Quantity
+    """The radius of the Köhler beam"""
+    zmax: Quantity = 500 * um
+    """The maximum extent of the Köhler beam, 500 μm by default
+    (i.e., no thicker than necessary to go through a slice or culture)."""
+
+    def transmittance(self, source_coords, source_dir_uvec, target_coords):
+        r, z = self._get_rz_for_xyz(source_coords, source_dir_uvec, target_coords)
+        T = np.ones_like(r)
+        T[r > self.radius] = 0
+        T[z > self.zmax] = 0
+        T[z < 0] = 0
+        return T
+
+    def viz_params(
+        self, coords, direction, T_threshold, n_points_per_source=4000, **kwargs
+    ):
+        r, theta, zc = uniform_cylinder_rθz(n_points_per_source, self.radius, self.zmax)
+
+        end = coords + self.zmax * direction
+        x, y, z = xyz_from_rθz(r, theta, zc, coords, end)
+        density_factor = 2
+        cyl_vol = np.pi * self.radius**2 * self.zmax
+        markersize_um = (cyl_vol / n_points_per_source * density_factor) ** (1 / 3) / um
+        intensity_scale = (1 / n_points_per_source) ** (1 / 3)
+        return coords_from_xyz(x, y, z), markersize_um, intensity_scale
 
 
 @define(eq=False)
@@ -342,7 +375,10 @@ class Light(Stimulator):
         T_threshold = kwargs.pop("T_threshold", 1e-3)
 
         viz_points, markersize_um, intensity_scale = self.light_model.viz_params(
-            self.coords, self.direction, T_threshold, **kwargs
+            self.coords,
+            self.direction,
+            T_threshold,
+            **kwargs,
         )
         assert viz_points.shape[0] == self.n
         assert viz_points.shape[2] == 3
@@ -381,6 +417,8 @@ class Light(Stimulator):
                 viz_points[i, idx_to_plot, 2] / axis_scale_unit,
                 c=T[i, idx_to_plot],
                 cmap=self._alpha_cmap_for_wavelength(intensity),
+                vmin=0,
+                vmax=1,
                 marker="o",
                 edgecolors="none",
                 label=self.name,

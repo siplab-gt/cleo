@@ -89,7 +89,13 @@ def xyz_from_rθz(rs, thetas, zs, xyz_start, xyz_end):
     cyl_length = np.sqrt(np.sum((xyz_end - xyz_start) ** 2, axis=-1, keepdims=True))
     assert cyl_length.shape in [(m, 1), (1,)]
     c = (xyz_end - xyz_start) / cyl_length  # unit vector in direction of cylinder
+    # in case cyl_length is 0, producing nans
     assert c.shape in [(m, 3), (3,)]
+    if c.shape == (m, 3):
+        assert cyl_length.shape == (m, 1)
+        c[cyl_length.ravel() == 0] = [0, 0, 1]
+    elif c.shape == (3,):
+        c[:] = [0, 0, 1]
 
     r1, r2 = get_orth_vectors_for_V(c)
 
