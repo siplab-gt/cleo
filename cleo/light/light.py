@@ -328,6 +328,11 @@ class Light(Stimulator):
     def _default_default(self):
         return np.zeros(self.n)
 
+    @property
+    def color(self):
+        """Color of light"""
+        return wavelength_to_rgb(self.wavelength / nmeter)
+
     def transmittance(self, target_coords) -> np.ndarray:
         """Returns :attr:`light_model` transmittance given light's coords and direction."""
         return self.light_model.transmittance(

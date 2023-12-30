@@ -219,7 +219,7 @@ def modify_model_with_eqs(neuron_group, eqs_to_add):
                         )
 
 
-def wavelength_to_rgb(wavelength_nm, gamma=0.8):
+def wavelength_to_rgb(wavelength_nm, gamma=0.8) -> tuple[float, float, float]:
     """taken from http://www.noah.org/wiki/Wavelength_to_RGB_in_Python
     This converts a given wavelength of light to an
     approximate RGB color value. The wavelength must be given
