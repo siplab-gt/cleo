@@ -25,8 +25,8 @@ from brian2 import (
 from matplotlib.artist import Artist
 from mpl_toolkits.mplot3d import Axes3D
 
-from cleo.utilities import analog_signal, add_to_neo_segment, brian_safe_name
 from cleo.registry import registry_for_sim
+from cleo.utilities import add_to_neo_segment, analog_signal, brian_safe_name
 
 
 class NeoExportable(ABC):
@@ -149,6 +149,7 @@ class InterfaceDevice(ABC):
         return []
 
 
+@define
 class IOProcessor(ABC):
     """Abstract class for implementing sampling, signal processing and control
 
@@ -157,8 +158,11 @@ class IOProcessor(ABC):
     class more useful, since delay handling is already defined.
     """
 
-    sample_period_ms: float
+    sample_period_ms: float = 1
     """Determines how frequently the processor takes samples"""
+
+    latest_ctrl_signal: dict = field(factory=dict, init=False, repr=False)
+    """The most recent control signal returned by :meth:`get_ctrl_signals`"""
 
     @abstractmethod
     def is_sampling_now(self, time) -> bool:
@@ -191,8 +195,43 @@ class IOProcessor(ABC):
         pass
 
     @abstractmethod
-    def get_ctrl_signal(self, query_time_ms: float) -> dict:
+    def get_ctrl_signals(self, query_time_ms: float) -> dict:
         """Get per-stimulator control signal from the :class:`~cleo.IOProcessor`.
+
+        Parameters
+        ----------
+        query_time_ms : float
+            Current simulation time.
+
+        Returns
+        -------
+        dict
+            A {'stimulator_name': ctrl_signal} dictionary for updating stimulators.
+        """
+        pass
+
+    def get_stim_values(self, query_time_ms: float) -> dict:
+        ctrl_signals = self.get_ctrl_signals(query_time_ms)
+        self.latest_ctrl_signal.update(ctrl_signals)
+        stim_value_conversions = self.preprocess_ctrl_signals(
+            self.latest_ctrl_signal, query_time_ms
+        )
+        return ctrl_signals | stim_value_conversions
+
+    def preprocess_ctrl_signals(
+        self, latest_ctrl_signals: dict, query_time_ms: float
+    ) -> dict:
+        """Preprocess control signals as needed to control stimulator waveforms between samples.
+
+        I.e., if a control signal defines the frequency of a periodic light stimulus, this
+        function computes the current intensity given the latest frequency and the current
+        time. This is called immediately after :meth:`get_ctrl_signals` and on every timestep
+        to update the stimulator waveform between samples.
+
+        This only needs to be implemented when a stimulus that varies between samples is desired.
+        Otherwise, the control signal returned by :meth:`get_ctrl_signals` is used directly.
+        If not all stimulators need this functionality, only return a dict for those that do.
+        The original, unprocessed control signal is used for the others.
 
         Parameters
         ----------
@@ -204,7 +243,13 @@ class IOProcessor(ABC):
         dict
             A {'stimulator_name': value} dictionary for updating stimulators.
         """
-        pass
+        return {}
+
+    def get_intersample_ctrl_signal(self, query_time_ms: float) -> dict:
+        """Get per-stimulator control signal between samples. I.e., for implementing
+        a time-varying waveform based on parameters from the last sample.
+        Such parameters will need to be stored in the :class:`~cleo.IOProcessor`."""
+        return {}
 
     def reset(self, **kwargs) -> None:
         pass
@@ -375,21 +420,21 @@ class CLSimulator(NeoExportable):
             state[name] = recorder.get_state()
         return state
 
-    def update_stimulators(self, ctrl_signals) -> None:
+    def update_stimulators(self, stim_values: dict[str, Any]) -> None:
         """Update stimulators with output from the :class:`IOProcessor`
 
         Parameters
         ----------
-        ctrl_signals : dict
-            {`stimulator_name`: `ctrl_signal`} dictionary with values
+        stim_values : dict
+            {`stimulator_name`: `stim_value`} dictionary with values
             to update each stimulator.
         """
-        if ctrl_signals is None:
-            return
-        for name, signal in ctrl_signals.items():
-            self.stimulators[name].update(signal)
+        for name, value in stim_values.items():
+            self.stimulators[name].update(value)
 
-    def set_io_processor(self, io_processor, communication_period=None) -> CLSimulator:
+    def set_io_processor(
+        self, io_processor: IOProcessor, communication_period=None
+    ) -> CLSimulator:
         """Set simulator IO processor
 
         Will replace any previous IOProcessor so there is only one at a time.
@@ -417,8 +462,8 @@ class CLSimulator(NeoExportable):
         def communicate_with_io_proc(t):
             if io_processor.is_sampling_now(t / ms):
                 io_processor.put_state(self.get_state(), t / ms)
-            ctrl_signal = io_processor.get_ctrl_signal(t / ms)
-            self.update_stimulators(ctrl_signal)
+            stim_values = io_processor.get_stim_values(t / ms)
+            self.update_stimulators(stim_values)
 
         # communication should be at every timestep. The IOProcessor
         # decides when to sample and deliver results.

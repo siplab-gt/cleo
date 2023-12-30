@@ -1,10 +1,10 @@
 """Tests for cleo/processing/__init__.py"""
 from typing import Any, Tuple
 
-from brian2 import Network, PoissonGroup, ms, Hz
+from brian2 import Hz, Network, PoissonGroup, ms, np
 
 from cleo import CLSimulator
-from cleo.ioproc import LatencyIOProcessor, ProcessingBlock, ConstantDelay
+from cleo.ioproc import ConstantDelay, LatencyIOProcessor, ProcessingBlock
 
 
 class MyProcessingBlock(ProcessingBlock):
@@ -62,12 +62,12 @@ class MyLIOP(LatencyIOProcessor):
 
 
 def _test_LatencyIOProcessor(myLIOP, t, sampling, inputs, outputs):
-    expected_out = [None if out is None else {"out": out} for out in outputs]
+    expected_out = [{} if out is None else {"out": out} for out in outputs]
     for i in range(len(t)):
         assert myLIOP.is_sampling_now(t[i]) == sampling[i]
         if myLIOP.is_sampling_now(t[i]):
             myLIOP.put_state({"in": inputs[i]}, t[i])
-        assert myLIOP.get_ctrl_signal(t[i]) == expected_out[i]
+        assert myLIOP.get_stim_values(t[i]) == expected_out[i]
 
 
 def test_LatencyIOProcessor_fixed_serial():
@@ -130,3 +130,48 @@ def test_no_skip_sampling():
     sim.set_io_processor(sc)
     sim.run(150 * ms)
     assert sc.count == 150
+
+
+class WaveformController(LatencyIOProcessor):
+    def process(self, state_dict, t_ms):
+        return {"steady": t_ms, "time-varying": t_ms + 1}, t_ms + 3
+
+    def preprocess_ctrl_signals(
+        self, latest_ctrl_signals: dict, query_time_ms: float
+    ) -> dict:
+        out = {}
+        # (sample_time_ms+1) * whether query time is even
+        out["time-varying"] = latest_ctrl_signals.get("time-varying", 0) * int(
+            query_time_ms % 2 == 0
+        )
+        return out
+
+
+def test_intersample_waveform():
+    ctrlr = WaveformController(sample_period_ms=2)
+    trange = np.arange(0, 10)
+    exp_outs = [
+        {"time-varying": 0},  # t=0
+        {"time-varying": 0},
+        {"time-varying": 0},
+        # t_query=3, t_sample=0
+        {"steady": 0, "time-varying": 0},
+        # t_query=4, t_sample=0
+        {"time-varying": 1},
+        # t_query=5, t_sample=2
+        {"steady": 2, "time-varying": 0},
+        # t_query=6, t_sample=2
+        {"time-varying": 3},
+        # t_query=7, t_sample=4
+        {"steady": 4, "time-varying": 0},
+        # t_query=8, t_sample=4
+        {"time-varying": 5},
+        # t_query=9, t_sample=6
+        {"steady": 6, "time-varying": 0},
+        # t_query=10, t_sample=6
+        {"time-varying": 7},
+    ]
+    for t, exp_out in zip(trange, exp_outs):
+        if ctrlr.is_sampling_now(t):
+            ctrlr.put_state({}, t)
+        assert ctrlr.get_stim_values(t) == exp_out
