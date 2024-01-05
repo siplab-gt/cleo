@@ -227,7 +227,9 @@ class BansalThreeStatePump(MarkovOpsin):
     b: float = 12
     vartheta_max: Quantity = 5 * mM / second
     kd: Quantity = 16 * mM
-    g_Cl: Quantity = 2.3 * msiemens / cm2 * (30090 * umeter**2)  # surface area
+    # Sukhdev Roy said they used 2.3 nS for the 'photocurrent simulation' and 2.3 mS/cm² for the 'neuronal simulation', whatever that means
+    # g_Cl: Quantity = 2.3 * msiemens / cm2 * (30090 * umeter**2)  # surface area
+    g_Cl: Quantity = 2.3 * nsiemens
     Cl_out: Quantity = 124 * mM
     Psi0: Quantity = 4.4286 * mM / second
     E_Cl0: Quantity = -70 * mV
