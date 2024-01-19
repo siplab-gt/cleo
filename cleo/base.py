@@ -228,7 +228,7 @@ class Stimulator(InterfaceDevice, NeoExportable):
     """The current value of the stimulator device"""
     default_value: Any = 0
     """The default value of the device---used on initialization and on :meth:`~reset`"""
-    t_ms: list[float] = field(factory=list, init=False, repr=False)
+    t: list[float] = field(factory=list, init=False, repr=False)
     """Times stimulator was updated, stored if :attr:`~cleo.InterfaceDevice.save_history`"""
     values: list[Any] = field(factory=list, init=False, repr=False)
     """Values taken by the stimulator at each :meth:`~update` call, 
@@ -241,10 +241,10 @@ class Stimulator(InterfaceDevice, NeoExportable):
     def _init_saved_vars(self):
         if self.save_history:
             if self.sim:
-                t0 = self.sim.network.t / ms
+                t0 = self.sim.network.t
             else:
-                t0 = 0
-            self.t_ms = [t0]
+                t0 = 0*ms
+            self.t = [t0]
             self.values = [self.value]
 
     def update(self, ctrl_signal) -> None:
@@ -262,7 +262,7 @@ class Stimulator(InterfaceDevice, NeoExportable):
         """
         self.value = ctrl_signal
         if self.save_history:
-            self.t_ms.append(self.sim.network.t / ms)
+            self.t.append(self.sim.network.t)
             self.values.append(self.value)
 
     def reset(self, **kwargs) -> None:
@@ -271,7 +271,7 @@ class Stimulator(InterfaceDevice, NeoExportable):
         self._init_saved_vars()
 
     def to_neo(self):
-        signal = cleo.utilities.analog_signal(self.t_ms, self.values, "dimensionless")
+        signal = cleo.utilities.analog_signal(self.t, self.values, "dimensionless")
         signal.name = self.name
         signal.description = "Exported from Cleo stimulator device"
         signal.annotate(export_datetime=datetime.datetime.now())

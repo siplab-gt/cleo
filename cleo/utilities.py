@@ -4,7 +4,7 @@ from collections.abc import MutableMapping
 
 import neo
 import quantities as pq
-from brian2 import Quantity, np, second
+from brian2 import Quantity, np, second, ms
 from brian2.equations.equations import (
     DIFFERENTIAL_EQUATION,
     PARAMETER,
@@ -24,17 +24,17 @@ def times_are_regular(times):
     return np.allclose(np.diff(times), times[1] - times[0])
 
 
-def analog_signal(t_ms, values_no_unit, units) -> neo.core.basesignal.BaseSignal:
-    if times_are_regular(t_ms):
+def analog_signal(t, values_no_unit, units) -> neo.core.basesignal.BaseSignal:
+    if times_are_regular(t):
         return neo.AnalogSignal(
             values_no_unit,
-            t_start=t_ms[0] * pq.ms,
+            t_start=t[0]/ms * pq.ms,
             units=units,
-            sampling_period=(t_ms[1] - t_ms[0]) * pq.ms,
+            sampling_period=(t[1]/ms - t[0]/ms) * pq.ms,
         )
     else:
         return neo.IrregularlySampledSignal(
-            t_ms * pq.ms,
+            t /ms * pq.ms,
             values_no_unit,
             units=units,
         )
