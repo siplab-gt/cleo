@@ -151,14 +151,14 @@ def test_sim_to_neo():
 
 def test_stim_to_neo():
     stim1 = MyStim(name="stim1")
-    stim1.t = [0, 1, 2]
+    stim1.t = [0, 1, 2]*ms
     stim1.values = [1, 2, 3]
     stim1_neo = stim1.to_neo()
     assert stim1_neo.name == stim1.name
     assert type(stim1_neo) == neo.core.AnalogSignal
 
     stim2 = MyStim(name="stim2")
-    stim2.t = [0, 1, 4]
+    stim2.t = [0, 1, 4]*ms
     stim2.values = [1, 2, 3]
     stim2_neo = stim2.to_neo()
     assert stim2_neo.name == stim2.name
