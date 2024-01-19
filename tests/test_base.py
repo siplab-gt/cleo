@@ -52,14 +52,14 @@ def test_stimulator(sim, neurons):
     assert my_stim.value == 42
     my_stim.update(43)
     assert my_stim.value == 43
-    assert len(my_stim.values) == len(my_stim.t_ms) == 2  # from update
+    assert len(my_stim.values) == len(my_stim.t/ms) == 2  # from update
 
     sim.update_stimulators({"my_stim": 42})
     assert my_stim.value == 42
-    assert len(my_stim.values) == len(my_stim.t_ms) == 3  # from 2 updates
+    assert len(my_stim.values) == len(my_stim.t/ms) == 3  # from 2 updates
 
     my_stim.reset()
-    assert len(my_stim.values) == len(my_stim.t_ms) == 1  # init
+    assert len(my_stim.values) == len(my_stim.t/ms) == 1  # init
 
     neurons2 = NeuronGroup(1, "v = -70*mV : volt")
     with pytest.raises(Exception):  # neuron2 not in network
@@ -151,14 +151,14 @@ def test_sim_to_neo():
 
 def test_stim_to_neo():
     stim1 = MyStim(name="stim1")
-    stim1.t_ms = [0, 1, 2]
+    stim1.t = [0, 1, 2]
     stim1.values = [1, 2, 3]
     stim1_neo = stim1.to_neo()
     assert stim1_neo.name == stim1.name
     assert type(stim1_neo) == neo.core.AnalogSignal
 
     stim2 = MyStim(name="stim2")
-    stim2.t_ms = [0, 1, 4]
+    stim2.t = [0, 1, 4]
     stim2.values = [1, 2, 3]
     stim2_neo = stim2.to_neo()
     assert stim2_neo.name == stim2.name

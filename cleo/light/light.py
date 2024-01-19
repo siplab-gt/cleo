@@ -478,7 +478,7 @@ class Light(Stimulator):
         )
 
     def to_neo(self):
-        signal = analog_signal(self.t_ms, self.values, "mW/mm**2")
+        signal = analog_signal(self.t, self.values, "mW/mm**2")
         signal.name = self.name
         signal.description = "Exported from Cleo Light device"
         signal.annotate(export_datetime=datetime.datetime.now())
