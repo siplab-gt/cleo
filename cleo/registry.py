@@ -3,13 +3,15 @@
 This should only be relevant for developers, not users, as this code is used
 under the hood when interacting devices are injected (e.g., light and opsin)."""
 from __future__ import annotations
+
 from typing import Tuple
 
 from attrs import define, field
-from brian2 import NeuronGroup, Synapses, Subgroup
-from brian2.units.allunits import meter2, nmeter, kgram, second, meter, joule
+from brian2 import NeuronGroup, Subgroup, Synapses
+from brian2.units.allunits import joule, kgram, meter, meter2, nmeter, second
 
 from cleo.coords import coords_from_ng
+from cleo.utilities import brian_safe_name
 
 
 @define(repr=False)
@@ -52,6 +54,9 @@ class DeviceInteractionRegistry:
         phi_post = Irr_post / Ephoton : 1/second/meter**2 (summed)
     """
     """Model used in light propagation synapses"""
+
+    brian_objects: set = field(factory=set, init=False)
+    """Stores all Brian objects created (and injected into the network) by this registry"""
 
     def register(self, device: "InterfaceDevice", ng: NeuronGroup) -> None:
         """Registers a device injection with the registry.
@@ -109,6 +114,14 @@ class DeviceInteractionRegistry:
         # fmt: on
         self.connections.add((light, ldd, ng))
 
+    def _add_brian_object(self, obj):
+        self.brian_objects.add(obj)
+        self.sim.network.add(obj)
+
+    def _remove_brian_object(self, obj):
+        self.brian_objects.remove(obj)
+        self.sim.network.remove(obj)
+
     def _get_or_create_light_prop_syn(
         self, ldd: "LightDependent", ng: NeuronGroup
     ) -> Synapses:
@@ -119,12 +132,12 @@ class DeviceInteractionRegistry:
                 self.light_source_ng,
                 light_agg_ng,
                 model=self.light_prop_model,
-                name=f"light_prop_{ldd.name}_{ng.name}",
+                name=f"light_prop_{brian_safe_name(ldd.name)}_{ng.name}",
             )
             light_prop_syn.connect()
             # non-zero initialization to avoid nans from /0
             light_prop_syn.Ephoton = 1 * joule
-            self.sim.network.add(light_prop_syn)
+            self._add_brian_object(light_prop_syn)
             self.light_prop_syns[(ldd, ng)] = light_prop_syn
 
         return self.light_prop_syns[(ldd, ng)]
@@ -144,7 +157,7 @@ class DeviceInteractionRegistry:
             Irr0_prev = self.light_source_ng.Irr0
             n_prev = self.light_source_ng.N
             # need to remove the old light source from the network
-            self.sim.network.remove(self.light_source_ng)
+            self._remove_brian_object(self.light_source_ng)
         else:
             Irr0_prev = []
             n_prev = 0
@@ -155,12 +168,12 @@ class DeviceInteractionRegistry:
         )
         if n_prev > 0:
             self.light_source_ng[:n_prev].Irr0 = Irr0_prev
-        self.sim.network.add(self.light_source_ng)
+        self._add_brian_object(self.light_source_ng)
         self.subgroup_idx_for_light[light] = slice(n_prev, n_prev + light.n)
 
         # remove and replace light_prop_syns for previous connections
         for light_prop_syn in self.light_prop_syns.values():
-            self.sim.network.remove(light_prop_syn)
+            self._remove_brian_object(light_prop_syn)
         prev_cxns = self.connections.copy()
         self.connections.clear()
         self.light_prop_syns.clear()

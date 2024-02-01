@@ -1,17 +1,16 @@
 """Contains Probe and Signal classes and electrode coordinate functions"""
 from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from collections.abc import Iterable
-from operator import concat
 from typing import Any, Tuple
 
-from attrs import field, define
-from mpl_toolkits.mplot3d.axes3d import Axes3D
-from matplotlib.artist import Artist
-from brian2 import NeuronGroup, mm, Unit, Quantity, umeter, np
 import neo
+from attrs import define, field
+from brian2 import NeuronGroup, Quantity, Unit, mm, np, umeter
+from matplotlib.artist import Artist
+from mpl_toolkits.mplot3d.axes3d import Axes3D
 
-from cleo.base import Recorder, NeoExportable
+from cleo.base import NeoExportable, Recorder
 from cleo.coords import concat_coords
 from cleo.utilities import get_orth_vectors_for_V
 

@@ -3680,16 +3680,17 @@ test = ["flake8", "isort", "pytest"]
 
 [[package]]
 name = "tklfp"
-version = "0.2.0"
+version = "0.2.1"
 description = "A minimal package for computing the kernel LFP approximation from Telenczuk et al., 2020"
 optional = false
-python-versions = ">=3.6"
+python-versions = ">=3.9"
 files = [
-    {file = "tklfp-0.2.0-py3-none-any.whl", hash = "sha256:6e81624225cc4fecfbf5e42cb82e8aa800b91b84365e63c66e0e974f06f9c09e"},
-    {file = "tklfp-0.2.0.tar.gz", hash = "sha256:d8bbfe1b9778df67ea87d9937820f4177fa1604f12cda02ddad1e6ea5e2526fc"},
+    {file = "tklfp-0.2.1-py3-none-any.whl", hash = "sha256:0238f2840b9129bbb83c7cd2e33442f5aae1bc641a68eb659ae235bf5ccf4781"},
+    {file = "tklfp-0.2.1.tar.gz", hash = "sha256:2a3a8de3fb7dd9aed60c3d14accf262b9fc625114f532532f75137ea1f48d0c9"},
 ]
 
 [package.dependencies]
+importlib-resources = "*"
 numpy = "*"
 scipy = "*"
 

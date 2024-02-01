@@ -1,16 +1,15 @@
 """Contains functions for assigning neuron coordinates and visualizing"""
 
 from __future__ import annotations
+
 from typing import Tuple
 
-from brian2 import Quantity, mm, meter, Unit, np
+from brian2 import Quantity, Unit, meter, mm, np
 from brian2.groups.group import Group
 from brian2.groups.neurongroup import NeuronGroup
 from brian2.units.fundamentalunits import get_dimensions
-import numpy as np
 
 from cleo.utilities import (
-    get_orth_vectors_for_V,
     modify_model_with_eqs,
     uniform_cylinder_rθz,
     xyz_from_rθz,
@@ -47,7 +46,7 @@ def assign_coords_grid_rect_prism(
     ValueError
         When the shape is incompatible with the number of neurons in the group
     """
-    num_grid_elements = np.product(shape)
+    num_grid_elements = np.prod(shape)
     if num_grid_elements != len(neuron_group):
         raise ValueError(
             f"Number of elements specified in shape ({num_grid_elements}) "

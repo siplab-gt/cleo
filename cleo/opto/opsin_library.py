@@ -1,29 +1,21 @@
 """A bunch of fitted opsin models."""
-from typing import Callable
 
-from attrs import field, define
 from brian2.units import (
-    nsiemens,
-    mm,
+    mM,
     mm2,
-    nmeter,
-    meter,
-    kgram,
-    Quantity,
-    second,
     ms,
-    second,
-    psiemens,
     mV,
-    volt,
-    amp,
-    mwatt,
+    nsiemens,
+    pcoulomb,
+    psiemens,
+    second,
 )
-from cleo.light.light_dependence import plot_spectra, equal_photon_flux_spectrum
 
+from cleo.light.light_dependence import equal_photon_flux_spectrum, plot_spectra
 from cleo.opto.opsins import (
-    FourStateOpsin,
     BansalFourStateOpsin,
+    BansalThreeStatePump,
+    FourStateOpsin,
 )
 
 
@@ -71,7 +63,7 @@ def chr2_4s() -> FourStateOpsin:
 
 
 def chr2_b4s() -> BansalFourStateOpsin:
-    """Returns a 4-state Vf-Chrimson model.
+    """Returns a 4-state ChR2 model.
 
     Params given in Bansal et al., 2020.
     Action spectrum from `Nagel et al., 2003, Fig. 4a
@@ -111,8 +103,48 @@ def chr2_b4s() -> BansalFourStateOpsin:
     )
 
 
+def chr2_h134r_4s() -> BansalFourStateOpsin:
+    """Returns a 4-state ChR2(H134R) model.
+
+    Params given in Bansal et al., 2020.
+    Action spectrum is same as for :func:`~chr2_4s`, but blue-shifted 20 nm
+    (I cannot find it directly in the literature).
+
+    Parameters can be changed after initialization but *before injection*.
+    """
+
+    return BansalFourStateOpsin(
+        Gd1=0.045 / ms,
+        Gd2=0.01 / ms,
+        Gr0=1e-4 / ms,
+        g0=37.2 * nsiemens,
+        phim=1e16 / mm2 / second,  # *photon, not in Brian2
+        k1=0.3 / ms,
+        k2=0.12 / ms,
+        Gf0=0.014 / ms,
+        Gb0=0.01 / ms,
+        kf=0.01 / ms,
+        kb=0.01 / ms,
+        gamma=0.05,
+        p=1,
+        q=1,
+        E=0 * mV,
+        name="ChR2(H134R)",
+        spectrum=[
+            (380, 0.34),
+            (402, 0.65),
+            (440, 0.96),
+            (450, 1),
+            (480, 0.57),
+            (500, 0.22),
+            (520, 0.06),
+            (540, 0.01),
+        ],
+    )
+
+
 def vfchrimson_4s() -> BansalFourStateOpsin:
-    """Returns a 4-state Vf-Chrimson model.
+    """Returns a 4-state vf-Chrimson model.
 
     Params given in Bansal et al., 2020.
     Action spectrum from `Mager et al., 2018, Supp. Fig. 1a
@@ -137,7 +169,7 @@ def vfchrimson_4s() -> BansalFourStateOpsin:
         p=1,
         q=1,
         E=0 * mV,
-        name="VfChrimson",
+        name="vf-Chrimson",
         spectrum=equal_photon_flux_spectrum(
             [
                 (470, 0.34),
@@ -246,8 +278,51 @@ def gtacr2_4s() -> BansalFourStateOpsin:
     )
 
 
+def enphr3_3s():
+    """Returns a 3-state model of eNpHR3, a chloride pump.
+
+    Params given in Bansal et al., 2020.
+    Action spectrum from `Gradinaru et al., 2010 <https://doi.org/10.1016/j.cell.2010.02.037>`_,
+    Figure 3F,
+    extracted using `Plot Digitizer <https://plotdigitizer.com/>`_.
+    """
+    return BansalThreeStatePump(
+        Gd=0.025 / ms,
+        Gr=0.05 / ms,
+        ka=1 / ms,
+        p=0.7,
+        q=0.1,
+        phim=1.2e18 / mm2 / second,
+        E=-400 * mV,
+        g0=22.34 * nsiemens,
+        a=0.02e-2 * mM / pcoulomb,
+        b=12,
+        name="eNpHR3.0",
+        spectrum=[
+            (390, 0.162),
+            (405, 0.239),
+            (430, 0.255),
+            (445, 0.255),
+            (470, 0.371),
+            (495, 0.554),
+            (520, 0.716),
+            (542.5, 0.840),
+            (560, 0.930),
+            (590, 1),
+            (630, 0.385),
+        ],
+    )
+
+
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
 
-    plot_spectra(chr2_4s(), chr2_b4s(), vfchrimson_4s(), chrimson_4s(), gtacr2_4s())
+    plot_spectra(
+        chr2_4s(),
+        chr2_h134r_4s(),
+        vfchrimson_4s(),
+        chrimson_4s(),
+        gtacr2_4s(),
+        enphr3_3s(),
+    )
     plt.show()

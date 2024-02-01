@@ -1,26 +1,27 @@
 """Tools for visualizing models and simulations"""
 from __future__ import annotations
-from typing import Tuple, Any, Union
-from collections.abc import Iterable
 
-from attrs import define, field
-from matplotlib.artist import Artist
-import numpy as np
-import matplotlib.pyplot as plt
+from collections.abc import Iterable
+from typing import Any, Tuple, Union
+
 import matplotlib.animation as anim
-from mpl_toolkits.mplot3d import Axes3D
+import matplotlib.pyplot as plt
+import numpy as np
+from attrs import define, field
 from brian2 import (
-    mm,
-    um,
-    Unit,
-    NeuronGroup,
-    ms,
     NetworkOperation,
+    NeuronGroup,
     Quantity,
     SpikeMonitor,
+    Unit,
+    ms,
+    um,
 )
+from matplotlib.artist import Artist
+from mpl_toolkits.mplot3d import Axes3D
 
 from cleo.base import CLSimulator, InterfaceDevice
+from cleo.registry import registry_for_sim
 
 _neuron_alpha = 0.2
 
@@ -287,10 +288,18 @@ def plot(
     ax = fig.add_subplot(111, projection="3d")
     if sim is not None:
         if len(neuron_groups) == 0:
+            neuron_groups = set()
             for obj in sim.network.objects:
-                neuron_groups = []
                 if type(obj) == NeuronGroup:
-                    neuron_groups.append(obj)
+                    neuron_groups.add(obj)
+            # remove fake "neuron groups" added by devices
+            for dev in sim.devices:
+                for obj in dev.brian_objects:
+                    neuron_groups.discard(obj)
+            registry = registry_for_sim(sim)
+            for obj in registry.brian_objects:
+                neuron_groups.discard(obj)
+            neuron_groups = list(neuron_groups)
         if len(devices) == 0:
             devices = sim.devices
 

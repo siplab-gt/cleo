@@ -89,7 +89,13 @@ def xyz_from_rθz(rs, thetas, zs, xyz_start, xyz_end):
     cyl_length = np.sqrt(np.sum((xyz_end - xyz_start) ** 2, axis=-1, keepdims=True))
     assert cyl_length.shape in [(m, 1), (1,)]
     c = (xyz_end - xyz_start) / cyl_length  # unit vector in direction of cylinder
+    # in case cyl_length is 0, producing nans
     assert c.shape in [(m, 3), (3,)]
+    if c.shape == (m, 3):
+        assert cyl_length.shape == (m, 1)
+        c[cyl_length.ravel() == 0] = [0, 0, 1]
+    elif c.shape == (3,):
+        c[:] = [0, 0, 1]
 
     r1, r2 = get_orth_vectors_for_V(c)
 
@@ -213,7 +219,7 @@ def modify_model_with_eqs(neuron_group, eqs_to_add):
                         )
 
 
-def wavelength_to_rgb(wavelength_nm, gamma=0.8):
+def wavelength_to_rgb(wavelength_nm, gamma=0.8) -> tuple[float, float, float]:
     """taken from http://www.noah.org/wiki/Wavelength_to_RGB_in_Python
     This converts a given wavelength of light to an
     approximate RGB color value. The wavelength must be given
@@ -259,6 +265,16 @@ def wavelength_to_rgb(wavelength_nm, gamma=0.8):
         G = 0.0
         B = 0.0
     return (R, G, B)
+
+
+def brian_safe_name(name: str) -> str:
+    return (
+        name.replace(" ", "_")
+        .replace("-", "_")
+        .replace(".", "_")
+        .replace("(", "_")
+        .replace(")", "_")
+    )
 
 
 def style_plots_for_docs(dark=True):
