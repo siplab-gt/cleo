@@ -17,7 +17,7 @@ def test_overview_notebook_execution():
         nb = read_myst_markdown_notebook(file.read())
 
     with create_client(
-        nb, notebook_path, NbParserConfig(), getLogger(), None
+        nb, notebook_path, NbParserConfig(execution_timeout=60), getLogger(), None
     ) as nb_client:
         pass  # executes notebook
     exec_result = nb_client.exec_metadata
