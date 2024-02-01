@@ -375,7 +375,7 @@ class Scope(Recorder):
             y / axis_scale_unit,
             z / axis_scale_unit,
             color=color,
-            alpha=0.3,
+            alpha=0.2,
         )
 
         target_markers = ax.scatter(
@@ -384,15 +384,17 @@ class Scope(Recorder):
             coords[:, 2] / axis_scale_unit,
             marker="^",
             c=color,
-            label=self.sensor.name,
+            label=f"{self.sensor.name} ROIs",
             **kwargs,
         )
         color_rgba = target_markers.get_facecolor()
         color_rgba[:, :3] = 0.3 * color_rgba[:, :3]
         target_markers.set(color=color_rgba)
-        handles = ax.get_legend().legendHandles
 
+        handles = ax.get_legend().legendHandles
+        handles.append(target_markers)
         patch = mpl.patches.Patch(color=color, label=self.name)
         handles.append(patch)
         ax.legend(handles=handles)
+
         return [scope_marker, target_markers, plane]
