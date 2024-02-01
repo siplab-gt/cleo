@@ -1,22 +1,29 @@
-import os
+from logging import getLogger
+from pathlib import Path
 
-from myst_nb.converter import myst_to_notebook
-from myst_parser.main import MdParserConfig
-from nbconvert.preprocessors import ExecutePreprocessor
 import pytest
+from myst_nb.core.config import NbParserConfig
+from myst_nb.core.execute import create_client
+from myst_nb.core.read import read_myst_markdown_notebook
 
 
 @pytest.mark.slow
 def test_overview_notebook_execution():
-    notebook_path = os.path.join(os.getcwd(), "docs", "overview.md")
-    with open(notebook_path, "r") as file:
-        text = file.read()
-    config = MdParserConfig()
-    nb = myst_to_notebook(text, config)
-    ep = ExecutePreprocessor(timeout=600, kernel_name="python3")
+    current_dir = Path(__file__).resolve().parent
+    project_root = current_dir.parent
+    notebook_path = project_root / "docs" / "overview.md"
 
-    # Execute the notebook
-    ep.preprocess(nb)
+    with open(notebook_path, "r") as file:
+        nb = read_myst_markdown_notebook(file.read())
+
+    with create_client(
+        nb, notebook_path, NbParserConfig(), getLogger(), None
+    ) as nb_client:
+        pass  # executes notebook
+    exec_result = nb_client.exec_metadata
+    assert exec_result["succeeded"]
+    assert exec_result["runtime"] > 0
+
     for cell in nb["cells"]:
         if cell["cell_type"] == "code":
             last_code_cell = cell
