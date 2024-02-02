@@ -191,9 +191,9 @@ def test_tklfp_signal_to_neo(n_channels, t, regular_samples):
     sig = TKLFPSignal()
     probe = Probe(np.random.rand(n_channels, 3) * mm, [sig])
     if regular_samples:
-        sig.t_ms = np.arange(t)
+        sig.t = np.arange(t)*ms
     else:
-        sig.t_ms = np.sort(np.random.rand(t) * t)
+        sig.t = np.sort(np.random.rand(t) * t)*ms
     sig.lfp_uV = np.random.rand(t, n_channels)
     neo_sig = sig.to_neo()
 

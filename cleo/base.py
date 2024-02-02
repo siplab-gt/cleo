@@ -157,7 +157,7 @@ class IOProcessor(ABC):
     class more useful, since delay handling is already defined.
     """
 
-    sample_period_ms: float
+    sample_period: float
     """Determines how frequently the processor takes samples"""
 
     @abstractmethod
