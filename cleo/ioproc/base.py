@@ -6,6 +6,8 @@ from collections import deque
 from brian2 import ms
 import numpy as np
 from attrs import define, field
+from typing import Any, Tuple
+
 
 from cleo.base import IOProcessor
 from cleo.ioproc.delays import Delay
@@ -128,23 +130,11 @@ class LatencyIOProcessor(IOProcessor):
     """Sampling scheme: "fixed" or "when idle".
     
     "fixed" sampling means samples are taken on a fixed schedule,
-    with no exceptions."""
-    def __init__(self, sample_period: float, **kwargs):
+    with no exceptions.
+    
         
-        """Parameters
-        ----------"""
-        sample_period : float
-            """Determines how frequently samples are taken from the network."""
 
-        """Keyword args
-        ------------"""
-        sampling : str
-            """"fixed" or "when idle"; "fixed" by default
-
-            "fixed" sampling means samples are taken on a fixed schedule,
-            with no exceptions."""
-
-    """ "when idle" sampling means no samples are taken before the previous
+    "when idle" sampling means no samples are taken before the previous
     sample's output has been delivered. A sample is taken ASAP
     after an over-period computation: otherwise remains on schedule.
     """
@@ -179,8 +169,8 @@ class LatencyIOProcessor(IOProcessor):
         if value not in ["serial", "parallel"]:
             raise ValueError("Invalid processing scheme:", value)
 
-        out_buffer: deque[Tuple[dict, float]] = field(factory=deque, init=False, repr=False)
-        """
+    out_buffer: deque[Tuple[dict, float]] = field(factory=deque, init=False, repr=False)
+    """
         "serial" computes the output time by adding the delay for a sample
         onto the output time of the previous sample, rather than the sampling
         time. Note this may be of limited
@@ -201,15 +191,7 @@ class LatencyIOProcessor(IOProcessor):
         ValueError
             For invalid `sampling` or `processing` kwargs 
         """
-        self.t_samp_ms = []
-        self.out_buffer = deque([])
-        self.sample_period = sample_period
-        self.sampling = kwargs.get("sampling", "fixed")
-        if self.sampling not in ["fixed", "when idle"]:
-            raise ValueError("Invalid sampling scheme:", self.sampling)
-        self.processing = kwargs.get("processing", "parallel")
-        if self.processing not in ["serial", "parallel"]:
-            raise ValueError("Invalid processing scheme:", self.processing)
+    
 
     def put_state(self, state_dict: dict, sample_time_ms: float):
         self.t_samp_ms.append(sample_time_ms)
