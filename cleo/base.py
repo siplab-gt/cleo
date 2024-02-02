@@ -27,7 +27,7 @@ from mpl_toolkits.mplot3d import Axes3D
 
 from cleo.registry import registry_for_sim
 from cleo.utilities import add_to_neo_segment, analog_signal, brian_safe_name
-
+import cleo
 
 class NeoExportable(ABC):
     """Mixin class for classes that can be exported to Neo objects"""
