@@ -1,20 +1,23 @@
 """Contains LFP signals"""
 from __future__ import annotations
-from typing import Any
-from datetime import datetime
 
+from datetime import datetime
+from typing import Any
+
+import numpy as np
+import quantities as pq
 from attrs import define, field
 from brian2 import NeuronGroup, mm, ms
 from brian2.monitors.spikemonitor import SpikeMonitor
-import numpy as np
 from nptyping import NDArray
 from tklfp import TKLFP
-import quantities as pq
 
+import cleo.utilities
 from cleo.base import NeoExportable
 from cleo.ephys.probes import Signal, Probe
 import cleo.utilities
 import neo
+from cleo.ephys.probes import Signal
 
 
 @define(eq=False)

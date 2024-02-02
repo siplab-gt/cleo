@@ -1,10 +1,11 @@
 """Basic processor and processing block definitions"""
 from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from typing import Tuple, Any
 from collections import deque
 from brian2 import ms
 import numpy as np
+from attrs import define, field
 
 from cleo.base import IOProcessor
 from cleo.ioproc.delays import Delay
@@ -44,7 +45,7 @@ class ProcessingBlock(ABC):
             When `delay` is not a `Delay` object.
         """
         self.delay = kwargs.get("delay", None)
-        if not isinstance(self.delay, Delay):
+        if self.delay and not isinstance(self.delay, Delay):
             raise TypeError("delay must be of the Delay class")
         self.save_history = kwargs.get("save_history", False)
         if self.save_history is True:
@@ -109,49 +110,85 @@ class ProcessingBlock(ABC):
         pass
 
 
+@define
 class LatencyIOProcessor(IOProcessor):
-    """IOProcessor capable of delivering stimulation some time after measurement."""
+    """IOProcessor capable of delivering stimulation some time after measurement.
 
-    t_samp_ms: list[float]
+    Note
+    ----
+    It doesn't make much sense to combine parallel computation
+    with "when idle" sampling, because "when idle" sampling only produces
+    one sample at a time to process.
+    """
+
+    t_samp_ms: list[float] = field(factory=list, init=False, repr=False)
     """Record of sampling times---each time :meth:`~put_state` is called."""
 
+    sampling: str = field(default="fixed")
+    """Sampling scheme: "fixed" or "when idle".
+    
+    "fixed" sampling means samples are taken on a fixed schedule,
+    with no exceptions."""
     def __init__(self, sample_period: float, **kwargs):
-        """
-        Parameters
-        ----------
+        
+        """Parameters
+        ----------"""
         sample_period : float
-            Determines how frequently samples are taken from the network.
+            """Determines how frequently samples are taken from the network."""
 
-        Keyword args
-        ------------
+        """Keyword args
+        ------------"""
         sampling : str
-            "fixed" or "when idle"; "fixed" by default
+            """"fixed" or "when idle"; "fixed" by default
 
             "fixed" sampling means samples are taken on a fixed schedule,
-            with no exceptions.
+            with no exceptions."""
 
-            "when idle" sampling means no samples are taken before the previous
-            sample's output has been delivered. A sample is taken ASAP
-            after an over-period computation: otherwise remains on schedule.
+    """ "when idle" sampling means no samples are taken before the previous
+    sample's output has been delivered. A sample is taken ASAP
+    after an over-period computation: otherwise remains on schedule.
+    """
 
-        processing : str
-            "parallel" or "serial"; "parallel" by default
+    @sampling.validator
+    def _validate_sampling(self, attribute, value):
+        if value not in ["fixed", "when idle"]:
+            raise ValueError("Invalid sampling scheme:", value)
 
-            "parallel" computes the output time by adding the delay for a sample
-            onto the sample time, so if the delay is 2 ms, for example, while the
-            sample period is only 1 ms, some of the processing is happening in
-            parallel. Output order matches input order even if the computed
-            output time for a sample is sooner than that for a previous
-            sample.
+    processing: str = field(default="parallel")
+    """Processing scheme: "serial" or "parallel".
 
-            "serial" computes the output time by adding the delay for a sample
-            onto the output time of the previous sample, rather than the sampling
-            time. Note this may be of limited
-            utility because it essentially means the *entire* round trip
-            cannot be in parallel at all. More realistic is that simply
-            each block or phase of computation must be serial. If anyone
-            cares enough about this, it will have to be implemented in the
-            future.
+    "parallel" computes the output time by adding the delay for a sample
+    onto the sample time, so if the delay is 2 ms, for example, while the
+    sample period is only 1 ms, some of the processing is happening in
+    parallel. Output order matches input order even if the computed
+    output time for a sample is sooner than that for a previous
+    sample.
+
+    "serial" computes the output time by adding the delay for a sample
+    onto the output time of the previous sample, rather than the sampling
+    time. Note this may be of limited
+    utility because it essentially means the *entire* round trip
+    cannot be in parallel at all. More realistic is that simply
+    each block or phase of computation must be serial. If anyone
+    cares enough about this, it will have to be implemented in the
+    future.
+    """
+
+    @processing.validator
+    def _validate_processing(self, attribute, value):
+        if value not in ["serial", "parallel"]:
+            raise ValueError("Invalid processing scheme:", value)
+
+        out_buffer: deque[Tuple[dict, float]] = field(factory=deque, init=False, repr=False)
+        """
+        "serial" computes the output time by adding the delay for a sample
+        onto the output time of the previous sample, rather than the sampling
+        time. Note this may be of limited
+        utility because it essentially means the *entire* round trip
+        cannot be in parallel at all. More realistic is that simply
+        each block or phase of computation must be serial. If anyone
+        cares enough about this, it will have to be implemented in the
+        future.
 
         Note
         ----
@@ -162,7 +199,7 @@ class LatencyIOProcessor(IOProcessor):
         Raises
         ------
         ValueError
-            For invalid `sampling` or `processing` kwargs
+            For invalid `sampling` or `processing` kwargs 
         """
         self.t_samp_ms = []
         self.out_buffer = deque([])
@@ -184,15 +221,15 @@ class LatencyIOProcessor(IOProcessor):
         self.out_buffer.append((out, t_out_ms))
         self._needs_off_schedule_sample = False
 
-    def get_ctrl_signal(self, query_time_ms):
+    def get_ctrl_signals(self, query_time_ms):
         if len(self.out_buffer) == 0:
-            return None
+            return {}
         next_out_signal, next_t_out_ms = self.out_buffer[0]
         if query_time_ms >= next_t_out_ms:
             self.out_buffer.popleft()
             return next_out_signal
         else:
-            return None
+            return {}
 
     def _is_currently_idle(self, query_time_ms):
         return len(self.out_buffer) == 0 or self.out_buffer[0][1] <= query_time_ms

@@ -1,9 +1,11 @@
 import pytest
 from brian2 import mm, np, asarray, mwatt, mm2, nmeter, um, ms
 import neo
+import pytest
 import quantities as pq
+from brian2 import asarray, mm, mm2, mwatt, nmeter, np, um
 
-from cleo.light import Light, fiber473nm, LightModel, GaussianEllipsoid
+from cleo.light import GaussianEllipsoid, Koehler, Light, LightModel, fiber473nm
 from cleo.utilities import normalize_coords
 
 
@@ -111,7 +113,9 @@ def test_coords():
     assert light.coords.shape == (2, 3)
 
 
-@pytest.mark.parametrize("light_model", [fiber473nm(), GaussianEllipsoid()])
+@pytest.mark.parametrize(
+    "light_model", [fiber473nm(), GaussianEllipsoid(), Koehler(1 * mm)]
+)
 @pytest.mark.parametrize(
     "m, squeeze_coords, squeeze_dir",
     [
@@ -122,7 +126,7 @@ def test_coords():
         (4, False, False),
     ],
 )
-@pytest.mark.parametrize("n_points_per_source", [1, 100, 10000])
+@pytest.mark.parametrize("n_points_per_source", [None, 1, 100, 10000])
 def test_viz_params(
     light_model: LightModel,
     m,
@@ -135,25 +139,25 @@ def test_viz_params(
     light_coords = rand_coords(m, squeeze_coords)
     light_direction = rand_coords(m, squeeze_dir, False)
 
+    if n_points_per_source is None:
+        kwargs = {}
+    else:
+        kwargs = {"n_points_per_source": n_points_per_source}
+
     def check_viz_points(coords):
-        assert coords.shape[0] <= m * n_points_per_source
+        if n_points_per_source:
+            assert coords.shape[0] <= m * n_points_per_source
         assert coords.shape[-1] == 3
 
     viz_points, _, _ = light_model.viz_params(
-        light_coords,
-        light_direction,
-        0.5,
-        n_points_per_source,
+        light_coords, light_direction, 0.5, **kwargs
     )
     check_viz_points(viz_points)
     n_to_plot = len(viz_points)
 
     for T_threshold in [1e-1, 1e-3, 0]:
         viz_points, _, _ = light_model.viz_params(
-            light_coords,
-            light_direction,
-            T_threshold,
-            n_points_per_source,
+            light_coords, light_direction, T_threshold, **kwargs
         )
         check_viz_points(viz_points)
         assert len(viz_points) >= n_to_plot

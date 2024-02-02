@@ -1,31 +1,32 @@
 """Contains opsin models and default parameters"""
 from __future__ import annotations
-from typing import Callable, Tuple
-import warnings
 
-from attrs import define, field, asdict, fields_dict
+from typing import Any, Tuple
+
+from attrs import define, field
 from brian2 import (
-    NeuronGroup,
     Synapses,
     Unit,
+    check_units,
     get_unit,
     implementation,
-    check_units,
+    np,
 )
-from nptyping import NDArray
 from brian2.units import (
-    mm,
-    mm2,
-    nmeter,
     Quantity,
-    second,
-    ms,
-    psiemens,
-    nsiemens,
-    mV,
-    volt,
     amp,
+    cm2,
     mM,
+    mm2,
+    ms,
+    msiemens,
+    mV,
+    nsiemens,
+    pcoulomb,
+    psiemens,
+    second,
+    umeter,
+    volt,
 )
 from brian2.units.allunits import radian
 
@@ -203,63 +204,69 @@ class BansalFourStateOpsin(MarkovOpsin):
             setattr(opto_syn, varname, value)
 
 
-# TODO: not quite done
-# @define(eq=False)
-# class BansalThreeStatePump(MarkovOpsin):
-#     """3-state model from `Bansal et al. 2020 <10.1016/j.neuroscience.2020.09.022>`_.
+@define(eq=False)
+class BansalThreeStatePump(MarkovOpsin):
+    """3-state model from `Bansal et al. 2020 <https://iopscience.iop.org/article/10.1088/2057-1976/ab90a1>`_.
+    Defaults are for eNpHR3.0.
 
-#     rho_rel is channel density relative to standard model fit;
-#     modifying it post-injection allows for heterogeneous opsin expression.
+    rho_rel is channel density relative to standard model fit;
+    modifying it post-injection allows for heterogeneous opsin expression.
 
-#     IOPTO_VAR_NAME and V_VAR_NAME are substituted on injection.
-#     """
+    IOPTO_VAR_NAME and V_VAR_NAME are substituted on injection.
+    """
 
-#     Gd: Quantity = 0
-#     Gr: Quantity = 0
-#     ka: Quantity = 0
-#     p: Quantity = 0
-#     q: Quantity = 0
-#     phim: Quantity = 0
-#     E: Quantity = 0
-#     a: Quantity = 0
-#     b: Quantity = 0
-#     vartheta_max = 5 * mM
-#     kd = 16 * mM
-#     model: str = field(
-#         init=False,
-#         default="""
-#         dP0/dt = Gr*P6 - Ga*P0 : 1 (clock-driven)
-#         dP4/dt = Ga*P0 - Gd*P4 : 1 (clock-driven)
-#         P6 = 1 - P0 - P4 : 1
+    Gd: Quantity = 0.25 / ms
+    Gr: Quantity = 0.05 / ms
+    ka: Quantity = 1 / ms
+    p: Quantity = 0.7
+    q: Quantity = 0.1
+    phim: Quantity = 1.2e18 / mm2 / second  # photons
+    E: Quantity = -400 * mV
+    g0: Quantity = 22.34 * nsiemens
+    a: Quantity = 0.02e-2 * mM / pcoulomb
+    b: float = 12
+    vartheta_max: Quantity = 5 * mM / second
+    kd: Quantity = 16 * mM
+    # Sukhdev Roy said they used 2.3 nS for the 'photocurrent simulation' and 2.3 mS/cm² for the 'neuronal simulation', whatever that means
+    # g_Cl: Quantity = 2.3 * msiemens / cm2 * (30090 * umeter**2)  # surface area
+    g_Cl: Quantity = 2.3 * nsiemens
+    Cl_out: Quantity = 124 * mM
+    Psi0: Quantity = 4.4286 * mM / second
+    E_Cl0: Quantity = -70 * mV
+    vmin: Quantity = -400 * mV
+    """Needed to avoid jumps in [Cl_in] for EIF neurons"""
+    vmax: Quantity = 50 * mV
+    """Needed to avoid jumps in [Cl_in] for EIF neurons"""
+    model: str = field(
+        init=False,
+        default="""
+        dP0/dt = Gr*P6 - Ga*P0 : 1 (clock-driven)
+        dP4/dt = Ga*P0 - Gd*P4 : 1 (clock-driven)
+        P6 = 1 - P0 - P4 : 1
 
-#         Theta = int(phi_pre > 0*phi_pre) : 1
-#         Hp = Theta * phi_pre**p/(phi_pre**p + phim**p) : 1
-#         Ga = ka*Hp : hertz
+        Theta = int(phi_pre > 0*phi_pre) : 1
+        Hp = Theta * phi_pre**p/(phi_pre**p + phim**p) : 1
+        Ga = ka*Hp : hertz
 
-#         fphi = P4 : 1
-#         dCl_in/dt = a*(I_i + b*I_Cl_leak) : molar
-#         Cl_out : molar
-#         E_Cl = -26.67*mV * log(Cl_out/Cl_in) : volt
-#         I_Cl_leak = g_Cl * (E_Cl0 - E_Cl)
+        fphi = P4 : 1
+        dCl_in/dt = a*(I_i + b*I_Cl_leak) : mmolar (clock-driven)
+        E_Cl = -26.67*mV * log(Cl_out/Cl_in) : volt
+        I_Cl_leak = g_Cl * (E_Cl0 - E_Cl) : ampere
 
-#         Psi = vartheta_max*Cl_out / (kd + Cl_out) / 4.43 : 1
-#         I_i = fphi*(V_VAR_NAME_post-E)*Psi*rho_rel
+        Psi = vartheta_max*Cl_out / (kd + Cl_out) / Psi0 : 1
+        I_i = g0*fphi*Psi*rho_rel * (clip(V_VAR_NAME_post, vmin, vmax)-E) : ampere
 
-#         IOPTO_VAR_NAME_post = -(I_i + I_Cl_leak) : ampere (summed)
-#         rho_rel : 1""",
-#     )
+        IOPTO_VAR_NAME_post = -(I_i + I_Cl_leak) : ampere (summed)
+        rho_rel : 1""",
+    )
 
-#     extra_namespace: dict[str, Any] = field(
-#         init=False, factory=lambda: {"E_Cl0": -70 * mV, "g_Cl": 2.3 * msiemens / cm2}
-#     )
-
-#     def init_opto_syn_vars(self, opto_syn: Synapses) -> None:
-#         raise NotImplementedError("Still need to figure out [Cl-_out]")
-#         opto_syn.P0 = 1
-#         opto_syn.P4 = 0
-#         opto_syn.P6 = 0
-#         opto_syn.Cl_out = 124 * mM
-#         opto_syn.Cl_in = np.exp(np.log(124) - 70 / 26.67) * mM
+    def init_syn_vars(self, opto_syn: Synapses) -> None:
+        opto_syn.P0 = 1
+        opto_syn.P4 = 0
+        # P6 automatically set since it's 1 - P0 - P4
+        RToverF = 26.67 * mV
+        # need to remove and add back on units for log/exp to work
+        opto_syn.Cl_in = np.exp(self.E_Cl0 / RToverF + np.log(self.Cl_out / mM)) * mM
 
 
 @define(eq=False)

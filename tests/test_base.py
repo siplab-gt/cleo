@@ -1,15 +1,15 @@
 """Tests for base module"""
 
+import neo
 import pytest
 from brian2 import (
-    NeuronGroup,
-    Network,
-    Synapses,
-    PopulationRateMonitor,
-    ms,
     BrianObjectException,
+    Network,
+    NeuronGroup,
+    PopulationRateMonitor,
+    Synapses,
+    ms,
 )
-import neo
 
 from cleo import CLSimulator, IOProcessor, Recorder, Stimulator
 
@@ -103,7 +103,7 @@ class MyProcLoop(IOProcessor):
         mock_processing = {-1: "expected"}
         self.my_stim_out = mock_processing[state_dict["my_rec"]]
 
-    def get_ctrl_signal(self, time) -> dict:
+    def get_ctrl_signals(self, time) -> dict:
         return {"my_stim": self.my_stim_out}
 
     def is_sampling_now(self, time) -> bool:
