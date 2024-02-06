@@ -18,7 +18,8 @@
 </h1>
 
 
-Hello there! Cleo has the goal of bridging theory and experiment for mesoscale neuroscience, facilitating electrode recording, optogenetic stimulation, and closed-loop experiments (e.g., real-time input and output processing) with the [Brian 2](https://brian2.readthedocs.io/en/stable/) spiking neural network simulator.
+Hello there!
+Cleo has the goal of bridging theory and experiment for mesoscale neuroscience, facilitating electrode recording, optogenetic stimulation, and closed-loop experiments (e.g., real-time input and output processing) with the [Brian 2](https://brian2.readthedocs.io/en/stable/) spiking neural network simulator.
 We hope users will find these components useful for prototyping experiments, innovating methods, and testing observations about a hypotheses *in silico*, incorporating into spiking neural network models laboratory techniques ranging from passive observation to complex model-based feedback control.
 Cleo also serves as an extensible, modular base for developing additional recording and stimulation modules for Brian simulations.
 
@@ -30,7 +31,7 @@ See the preprint [here](https://www.biorxiv.org/content/10.1101/2023.01.27.52596
       style="display: block; 
              width: 90%;"
       src="https://raw.githubusercontent.com/siplab-gt/cleo/master/docs/_static/cleo-overview-table.png" 
-      alt="logo">
+      alt="Overview table of Cleo's closed-loop control, ephys, and ophys features">
   </img>
 </p>
 

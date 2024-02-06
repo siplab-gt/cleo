@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "cleosim"
-version = "0.13.1"
+version = "0.13.2"
 description = "Cleo: the Closed-Loop, Electrophysiology, and Optogenetics experiment simulation testbed"
 authors = [
     "Kyle Johnsen <kyle@kjohnsen.org>",
@@ -33,7 +33,7 @@ neo = "^0.12.0"
 pytest = "^7.0.0"
 nbmake = "^1.2"
 sphinx = "^7.0"
-sphinx-copybutton = "^0.4.0"
+sphinx-copybutton = "^0.5.2"
 myst-nb = "^1.0"
 sphinx-favicon = "^0.2"
 furo = "^2024.01.29"
