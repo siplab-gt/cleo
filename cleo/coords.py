@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Tuple
 
-from brian2 import Quantity, Unit, meter, mm, np
+from brian2 import Quantity, Subgroup, Unit, meter, mm, np
 from brian2.groups.group import Group
 from brian2.groups.neurongroup import NeuronGroup
 from brian2.units.fundamentalunits import get_dimensions
@@ -218,6 +218,15 @@ def _init_variables(group: Group):
         else:
             if type(group) == NeuronGroup:
                 modify_model_with_eqs(group, f"{dim_name}: meter")
+
+            elif isinstance(group, Subgroup):
+                if not hasattr(group.source, dim_name):
+                    modify_model_with_eqs(group.source, f"{dim_name}: meter")
+                group.variables.add_references(
+                    group.source, list(group.source.variables.keys())
+                )
+                assert dim_name in group.variables
+
             elif issubclass(type(group), Group):
                 group.variables.add_array(
                     dim_name,
