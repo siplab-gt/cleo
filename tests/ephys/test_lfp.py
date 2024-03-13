@@ -214,3 +214,8 @@ def test_tklfp_signal_to_neo(n_channels, t, regular_samples):
     assert np.all(neo_sig.array_annotations["i_channel"] == np.arange(probe.n))
     assert np.all(neo_sig.magnitude == sig.lfp_uV)
     assert neo_sig.name == f"{sig.probe.name}.{sig.name}"
+
+
+@pytest.mark.parametrize("pop_agg", [True, False])
+def test_RWSLFPSignalFromSpikes(pop_agg):
+    ...
