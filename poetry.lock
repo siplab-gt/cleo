@@ -3903,13 +3903,13 @@ notebook = ">=4.4.1"
 
 [[package]]
 name = "wslfp"
-version = "0.1.0"
+version = "0.2.0"
 description = "Weighted Sum Local Field Potentials - Implementation of the proxy method for point neurons from Mazzoni, Lindén et al., 2015"
 optional = false
 python-versions = ">=3.9,<4.0"
 files = [
-    {file = "wslfp-0.1.0-py3-none-any.whl", hash = "sha256:f4dcdc72bf0e41c442a602cdd884eea1aef36a899b2eb80afbbd8f1b414d9141"},
-    {file = "wslfp-0.1.0.tar.gz", hash = "sha256:d802d9f0a23b5431d6be802c72dff4afc0a5d6f40d19422b310e065bfaf894bf"},
+    {file = "wslfp-0.2.0-py3-none-any.whl", hash = "sha256:521cb4d0cce82669b016417030d1ee68120aae8500d0f2705dd917a0fc3f8acf"},
+    {file = "wslfp-0.2.0.tar.gz", hash = "sha256:89d8ae84f00a80e7a181da632ff00894d9e8d1d942a2202f5961a9f9f94bce3b"},
 ]
 
 [package.dependencies]
@@ -3936,4 +3936,4 @@ testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "p
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.9,<3.13"
-content-hash = "8c6ebc604a5539d09afcfe0ac3979a62b39e54d64c9ed2d5eace0a85de00eca2"
+content-hash = "bfe6d9ea1c31ced83534e40997bb95b4f9458c1c99d3afc29b3c5e3722eeaca5"

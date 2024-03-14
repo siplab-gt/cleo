@@ -208,9 +208,9 @@ def _plot(
             kwargs["color"] = colors[i]
         kwargs.update(scatterargs)
         neuron_artists.append(ax.scatter(*xyz, **kwargs))
-        ax.set_xlabel(f"x ({axis_scale_unit._dispname})")
-        ax.set_ylabel(f"y ({axis_scale_unit._dispname})")
-        ax.set_zlabel(f"z ({axis_scale_unit._dispname})")
+        ax.set_xlabel(f"x [{axis_scale_unit._dispname}]")
+        ax.set_ylabel(f"y [{axis_scale_unit._dispname}]")
+        ax.set_zlabel(f"z [{axis_scale_unit._dispname}]")
 
     xlim = ax.get_xlim() if xlim is None else xlim
     ylim = ax.get_ylim() if ylim is None else ylim

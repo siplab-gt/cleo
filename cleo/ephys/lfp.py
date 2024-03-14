@@ -9,8 +9,9 @@ import numpy as np
 import quantities as pq
 import wslfp
 from attrs import define, field
-from brian2 import NeuronGroup, Quantity, Subgroup, mm, ms, um
+from brian2 import NeuronGroup, Quantity, Subgroup, Synapses, mm, ms, um
 from brian2.monitors.spikemonitor import SpikeMonitor
+from brian2.synapses.synapses import SynapticSubgroup
 from nptyping import NDArray
 from scipy import sparse
 from tklfp import TKLFP
@@ -199,13 +200,6 @@ class TKLFPSignal(Signal, NeoExportable):
         return signal
 
 
-@define
-class SpikeToCurrentSource:
-    J: Union[np.ndarray, sparse.sparray]
-    mon: SpikeMonitor
-    biexp_kernel_params: dict[str, Any]
-
-
 @define(eq=False)
 class RWSLFPSignalBase(Signal, NeoExportable):
     """Records the weighted sum of synaptic current LFP proxy from spikes.
@@ -222,6 +216,7 @@ class RWSLFPSignalBase(Signal, NeoExportable):
     cortical surface and increasing z values represent increasing depth.
 
     RWSLFP is computed from spikes using the `wslfp package <https://github.com/siplab-gt/wslfp/>`_.
+    WSLFPCalculator params can be specified on injection with alpha, tau_ampa_ms, tau_gaba_ms.
     """
 
     # note these set defaults that can be overrriden on injection
@@ -253,10 +248,10 @@ class RWSLFPSignalBase(Signal, NeoExportable):
             self.t_ms = np.empty((0,))
             self.lfp = np.empty((0, self.probe.n))
 
-    def _update_saved_vars(self, t_ms, lfp_uV):
+    def _update_saved_vars(self, t_ms, lfp):
         if self.probe.save_history:
             self.t_ms = np.concatenate([self.t_ms, [t_ms]])
-            self.lfp = np.vstack([self.lfp, lfp_uV])
+            self.lfp = np.vstack([self.lfp, lfp])
 
     def _init_wslfp_calc(self, neuron_group: NeuronGroup, **kwparams):
         nrn_coords_um = coords_from_ng(neuron_group) / um
@@ -269,35 +264,48 @@ class RWSLFPSignalBase(Signal, NeoExportable):
             nrn_coords_um = np.mean(nrn_coords_um, axis=0)
             orientation = np.mean(orientation, axis=0)
 
+        wslfp_kwargs = {}
+        for key in [
+            "source_coords_are_somata",
+            "source_dendrite_length_um",
+            "amp_kwargs",
+            "alpha",
+            "tau_ampa_ms",
+            "tau_gaba_ms",
+            "strict_boundaries",
+        ]:
+            if key in kwparams:
+                wslfp_kwargs[key] = kwparams.pop(key)
+
         self._wslfps[neuron_group] = wslfp.from_xyz_coords(
             self._elec_coords_um,
             nrn_coords_um,
             amp_func=kwparams.pop("amp_func", self.amp_func),
             source_orientation=orientation,
-            **kwparams,
+            **wslfp_kwargs,
         )
 
     def get_state(self) -> np.ndarray:
-        tot_tklfp = 0
         now_ms = self.probe.sim.network.t / ms
-        # loop over neuron groups (monitors, tklfps)
-        for i_mon in range(len(self._monitors)):
-            self._update_spike_buffer(i_mon)
-            tot_tklfp += self._tklfp_for_monitor(i_mon, now_ms)
-        out = np.reshape(tot_tklfp, (-1,))  # return 1D array (vector)
+        lfp = np.zeros((1, self.probe.n))
+        for ng, wslfp_calc in self._wslfps.items():
+            t_ampa_ms = [now_ms - wslfp_calc.tau_ampa_ms]
+            t_gaba_ms = [now_ms - wslfp_calc.tau_gaba_ms]
+            I_ampa, I_gaba = self._needed_current(ng, t_ampa_ms, t_gaba_ms)
+            lfp += wslfp_calc.calculate(
+                [now_ms], t_ampa_ms, I_ampa, t_gaba_ms, I_gaba, normalize=False
+            )
+        out = np.reshape(lfp, (-1,))  # return 1D array (vector)
         self._update_saved_vars(now_ms, out)
         return out
 
-    def reset(self, **kwargs) -> None:
-        super(TKLFPSignal, self).reset(**kwargs)
-        for i_mon in range(len(self._monitors)):
-            self._reset_buffer(i_mon)
-        self._init_saved_vars()
+    def _needed_current(self, ng, t_ampa_ms, t_gaba_ms) -> np.ndarray:
+        """output must have shape (n_t, n_current_sources)"""
+        raise NotImplementedError
 
-    def _tklfp_for_monitor(self, i_mon, now_ms):
-        i = np.concatenate(self._i_buffers[i_mon])
-        t_ms = np.concatenate(self._t_ms_buffers[i_mon])
-        return self._wslfps[i_mon].compute(i, t_ms, [now_ms])
+    def reset(self, **kwargs) -> None:
+        super(RWSLFPSignalBase, self).reset(**kwargs)
+        self._init_saved_vars()
 
     def to_neo(self) -> neo.AnalogSignal:
         # inherit docstring
@@ -305,7 +313,6 @@ class RWSLFPSignalBase(Signal, NeoExportable):
             signal = cleo.utilities.analog_signal(
                 self.t_ms,
                 self.lfp,
-                "uV",
             )
         except AttributeError:
             return
@@ -322,7 +329,16 @@ class RWSLFPSignalBase(Signal, NeoExportable):
         return signal
 
 
+@define
+class SpikeToCurrentSource:
+    J: Union[np.ndarray, sparse.sparray]
+    mon: SpikeMonitor
+    biexp_kernel_params: dict[str, Any]
+
+
+@define(eq=False)
 class RWSLFPSignalFromSpikes(RWSLFPSignalBase):
+    # can override on injection: tau1|2_ampa|gaba, syn_delay, I_threshold
     tau1_ampa: Quantity = 2 * ms
     tau2_ampa: Quantity = 0.4 * ms
     tau1_gaba: Quantity = 5 * ms
@@ -337,44 +353,126 @@ class RWSLFPSignalFromSpikes(RWSLFPSignalBase):
         init=False, factory=dict, repr=False
     )
 
+    def _get_weight(self, syn, weight):
+        assert isinstance(weight, (int, float, str))
+        if isinstance(weight, (int, float)):
+            return weight
+
+        if isinstance(syn, Synapses):
+            if weight in syn.variables:
+                return getattr(syn, weight)
+            elif weight in syn.namespace:
+                return syn.namespace[weight]
+        elif isinstance(syn, SynapticSubgroup):
+            if weight in syn.synapses.variables:
+                return getattr(syn.synapses, weight)[syn._stored_indices]
+            elif weight in syn.namespace:
+                return syn.synapses.namespace[weight]
+
+        raise ValueError(
+            f"weight {weight} not found in {syn.name} variables or namespace"
+        )
+
+    def _create_spk2curr_source(self, syn, neuron_group, weight, biexp_kwparams):
+        # need source_ng, syn_i, syn_j
+        if isinstance(syn, Synapses):
+            source_ng = syn.source
+            syn_i, syn_j = syn.i, syn.j
+        elif isinstance(syn, SynapticSubgroup):
+            source_ng = syn.synapses.source
+            syn_i = syn.synapses.i[syn._stored_indices]
+            syn_j = syn.synapses.j[syn._stored_indices]
+        else:
+            raise TypeError(
+                "ampa_syns and gaba_syns only take Synapses or SynapticSubgroup objects"
+            )
+        mon = SpikeMonitor(source_ng, record=list(np.unique(syn_i)))
+        self.brian_objects.add(mon)
+
+        J = sparse.lil_array((source_ng.N, neuron_group.N))
+        w = self._get_weight(syn, weight)
+        J[syn_i, syn_j] = w
+        J = J.tocsr()
+
+        return SpikeToCurrentSource(J, mon, biexp_kwparams)
+
     def connect_to_neuron_group(self, neuron_group: NeuronGroup, **kwparams):
         # inherit docstring
         # prep wslfp calculator object
         if neuron_group not in self._wslfps:
             self._init_wslfp_calc(neuron_group, **kwparams)
 
+        weight = kwparams.pop("weight", "w")
         ampa_syns = kwparams.pop("ampa_syns", [])
         gaba_syns = kwparams.pop("gaba_syns", [])
-        weight_name = kwparams.pop("weight_name", "w")
 
+        biexp_kwparams = {}
+        for key in [
+            "tau1_ampa",
+            "tau2_ampa",
+            "tau1_gaba",
+            "tau2_gaba",
+            "syn_delay",
+            "I_threshold",
+        ]:
+            if key in kwparams:
+                biexp_kwparams[key] = kwparams.pop(key)
+
+        if neuron_group not in self._ampa_sources:
+            self._ampa_sources[neuron_group] = []
+            self._gaba_sources[neuron_group] = []
         for ampa_syn in ampa_syns:
-            source_ng = ampa_syn.source
-            if isinstance(source_ng, Subgroup):
-                raise NotImplementedError()
-            mon = SpikeMonitor(source_ng, record=np.unique(ampa_syn.i))
-            J = sparse.lil_array((source_ng.N, neuron_group.N))
-            try:
-                w = getattr(ampa_syn, weight_name)
-            except AttributeError:
-                w = ampa_syn.namespace[weight_name]
-                # TODO: guess we require variable or local namespace
-            J[ampa_syn.i, ampa_syn.j] = w
-            J = J.tocsr()
-            s2c_source = SpikeToCurrentSource(J, mon, kwparams)
-            # TODO
-
+            self._ampa_sources[neuron_group].append(
+                self._create_spk2curr_source(
+                    ampa_syn, neuron_group, weight, biexp_kwparams
+                )
+            )
         for gaba_syn in gaba_syns:
-            ...
+            self._gaba_sources[neuron_group].append(
+                self._create_spk2curr_source(
+                    gaba_syn, neuron_group, weight, biexp_kwparams
+                )
+            )
 
-        if buf_len > 0:
-            # prep buffers
-            self._wslfps.append(tklfp)
-            self._i_buffers.append([np.array([], dtype=int, ndmin=1)] * buf_len)
-            self._t_ms_buffers.append([np.array([], dtype=float, ndmin=1)] * buf_len)
-            self._buffer_positions.append(0)
+    def _get_biexp_kwargs_from_s2cs(self, s2cs: SpikeToCurrentSource, syn_type: str):
+        # check overrides, fall back on Signal-level defaults
+        return {
+            "tau1_ms": s2cs.biexp_kernel_params.get(
+                f"tau1_{syn_type}", getattr(self, f"tau1_{syn_type}")
+            )
+            / ms,
+            "tau2_ms": s2cs.biexp_kernel_params.get(
+                f"tau2_{syn_type}", getattr(self, f"tau2_{syn_type}")
+            )
+            / ms,
+            "syn_delay_ms": s2cs.biexp_kernel_params.get("syn_delay", self.syn_delay)
+            / ms,
+            "threshold": s2cs.biexp_kernel_params.get("I_threshold", self.I_threshold),
+        }
 
-            # prep SpikeMonitor
-            mon = SpikeMonitor(neuron_group)
-            self._monitors.append(mon)
-            self._mon_spikes_already_seen.append(0)
-            self.brian_objects.add(mon)
+    def _needed_current(self, ng, t_ampa_ms, t_gaba_ms) -> np.ndarray:
+        """output must have shape (n_t, n_current_sources)"""
+        n_sources = 1 if self.pop_aggregate else ng.N
+        I_ampa = np.zeros((1, n_sources))
+        for ampa_src in self._ampa_sources[ng]:
+            biexp_kwargs = self._get_biexp_kwargs_from_s2cs(ampa_src, "ampa")
+            I_ampa += wslfp.spikes_to_biexp_currents(
+                t_ampa_ms,
+                ampa_src.mon.t / ms,
+                ampa_src.mon.i,
+                ampa_src.J,
+                **biexp_kwargs,
+            )
+
+        I_gaba = np.zeros((1, n_sources))
+        for gaba_src in self._gaba_sources[ng]:
+            biexp_kwargs = self._get_biexp_kwargs_from_s2cs(gaba_src, "gaba")
+            I_gaba += wslfp.spikes_to_biexp_currents(
+                t_gaba_ms,
+                gaba_src.mon.t / ms,
+                gaba_src.mon.i,
+                gaba_src.J,
+                **biexp_kwargs,
+            )
+
+        return I_ampa, I_gaba
