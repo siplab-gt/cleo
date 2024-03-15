@@ -25,7 +25,7 @@ def times_are_regular(times):
 
 
 def analog_signal(t, values_no_unit, units) -> neo.core.basesignal.BaseSignal:
-    if times_are_regular(t):
+    if times_are_regular(t/ms):
         return neo.AnalogSignal(
             values_no_unit,
             t_start=t[0]/ms * pq.ms,

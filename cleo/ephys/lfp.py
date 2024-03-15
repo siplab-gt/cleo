@@ -7,7 +7,7 @@ from typing import Any
 import numpy as np
 import quantities as pq
 from attrs import define, field
-from brian2 import NeuronGroup, mm, ms
+from brian2 import NeuronGroup, mm, ms, second
 from brian2.monitors.spikemonitor import SpikeMonitor
 from nptyping import NDArray
 from tklfp import TKLFP
@@ -44,7 +44,7 @@ class TKLFPSignal(Signal, NeoExportable):
     to be considered, by default 1e-3.
     This determines the buffer length of past spikes, since the uLFP from a long-past
     spike becomes negligible and is ignored."""
-    t: NDArray[(Any,), float] = field(init=False, repr=False)*ms
+    t: NDArray[(Any,), float] = field(init=False, repr=False)
     """Times at which LFP is recorded, in ms, stored if
     :attr:`~cleo.InterfaceDevice.save_history` on :attr:`~Signal.probe`"""
     lfp_uV: NDArray[(Any, Any), float] = field(init=False, repr=False)
@@ -56,7 +56,7 @@ class TKLFPSignal(Signal, NeoExportable):
     _monitors: list[SpikeMonitor] = field(init=False, factory=list, repr=False)
     _mon_spikes_already_seen: list[int] = field(init=False, factory=list, repr=False)
     _i_buffers: list[list[np.ndarray]] = field(init=False, factory=list, repr=False)
-    _t_buffers: list[list[np.ndarray]] = field(init=False, factory=list, repr=False) * ms
+    _t_buffers: list[list[np.ndarray]] = field(init=False, factory=list, repr=False)
     _buffer_positions: list[int] = field(init=False, factory=list, repr=False)
 
     def _post_init_for_probe(self):
@@ -106,7 +106,7 @@ class TKLFPSignal(Signal, NeoExportable):
             # prep buffers
             self._tklfps.append(tklfp)
             self._i_buffers.append([np.array([], dtype=int, ndmin=1)] * buf_len)
-            self._t_buffers.append([np.array([], dtype=float, ndmin=1)] * buf_len * ms)
+            self._t_buffers.append([np.array([], dtype=float, ndmin=1)] * buf_len)
             self._buffer_positions.append(0)
 
             # prep SpikeMonitor
@@ -136,7 +136,7 @@ class TKLFPSignal(Signal, NeoExportable):
         mon = self._monitors[i_mon]
         buf_len = len(self._i_buffers[i_mon])
         self._i_buffers[i_mon] = [np.array([], dtype=int, ndmin=1)] * buf_len
-        self._t_buffers[i_mon] = [np.array([], dtype=float, ndmin=1)] * buf_len * ms
+        self._t_buffers[i_mon] = [np.array([], dtype=float, ndmin=1)] * buf_len 
         self._buffer_positions[i_mon] = 0
 
     def _update_spike_buffer(self, i_mon):
@@ -155,12 +155,13 @@ class TKLFPSignal(Signal, NeoExportable):
 
     def _tklfp_for_monitor(self, i_mon, now):
         i = np.concatenate(self._i_buffers[i_mon])
-        t = np.concatenate(self._t_buffers[i_mon])
+        print(self._t_buffers)
+        t = np.concatenate(self._t_buffers[i_mon])*second
         return self._tklfps[i_mon].compute(i, t / ms, [now / ms])
 
     def _get_buffer_length(self, tklfp, **kwparams):
         # need sampling period
-        sample_period = kwparams.get("sample_period", None)
+        sample_period = kwparams.get("sample_period_ms", None)*ms
         if sample_period is None:
             try:
                 sample_period = self.probe.sim.io_processor.sample_period

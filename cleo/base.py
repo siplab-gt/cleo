@@ -158,7 +158,7 @@ class IOProcessor(ABC):
     class more useful, since delay handling is already defined.
     """
 
-    sample_period: float
+    sample_period: float = 1 * ms
     """Determines how frequently the processor takes samples"""
 
     latest_ctrl_signal: dict = field(factory=dict, init=False, repr=False)
@@ -180,7 +180,7 @@ class IOProcessor(ABC):
         pass
 
     @abstractmethod
-    def put_state(self, state_dict: dict, sample_time_ms: float) -> None:
+    def put_state(self, state_dict: dict, sample_time: float) -> None:
         """Deliver network state to the :class:`IOProcessor`.
 
         Parameters
