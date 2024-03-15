@@ -113,6 +113,9 @@ class Probe(Recorder, NeoExportable):
                 "coords must be an n by 3 array (with unit) with x, y, and z"
                 "coordinates for n contact locations."
             )
+        signal_names = [signal.name for signal in self.signals]
+        if len(signal_names) != len(set(signal_names)):
+            raise ValueError("Signal names must be unique")
         for signal in self.signals:
             signal.init_for_probe(self)
 
@@ -129,6 +132,10 @@ class Probe(Recorder, NeoExportable):
         *signals : Signal
             signals to add
         """
+        signal_names = [signal.name for signal in self.signals]
+        signal_names.extend(signal.name for signal in signals)
+        if len(signal_names) != len(set(signal_names)):
+            raise ValueError("Signal names must be unique per Probe")
         for signal in signals:
             signal.init_for_probe(self)
             self.signals.append(signal)

@@ -290,8 +290,8 @@ class RWSLFPSignalBase(Signal, NeoExportable):
         now_ms = self.probe.sim.network.t / ms
         lfp = np.zeros((1, self.probe.n))
         for ng, wslfp_calc in self._wslfps.items():
-            t_ampa_ms = [now_ms - wslfp_calc.tau_ampa_ms]
-            t_gaba_ms = [now_ms - wslfp_calc.tau_gaba_ms]
+            t_ampa_ms = now_ms - wslfp_calc.tau_ampa_ms
+            t_gaba_ms = now_ms - wslfp_calc.tau_gaba_ms
             I_ampa, I_gaba = self._needed_current(ng, t_ampa_ms, t_gaba_ms)
             lfp += wslfp_calc.calculate(
                 [now_ms], t_ampa_ms, I_ampa, t_gaba_ms, I_gaba, normalize=False
@@ -300,7 +300,7 @@ class RWSLFPSignalBase(Signal, NeoExportable):
         self._update_saved_vars(now_ms, out)
         return out
 
-    def _needed_current(self, ng, t_ampa_ms, t_gaba_ms) -> np.ndarray:
+    def _needed_current(self, ng, t_ampa_ms: float, t_gaba_ms: float) -> np.ndarray:
         """output must have shape (n_t, n_current_sources)"""
         raise NotImplementedError
 
@@ -468,14 +468,14 @@ class RWSLFPSignalFromSpikes(RWSLFPSignalBase):
             "threshold": s2cs.biexp_kernel_params.get("I_threshold", self.I_threshold),
         }
 
-    def _needed_current(self, ng, t_ampa_ms, t_gaba_ms) -> np.ndarray:
+    def _needed_current(self, ng, t_ampa_ms: float, t_gaba_ms: float) -> np.ndarray:
         """output must have shape (n_t, n_current_sources)"""
         n_sources = 1 if self.pop_aggregate else ng.N
         I_ampa = np.zeros((1, n_sources))
         for ampa_src in self._ampa_sources[ng].values():
             biexp_kwargs = self._get_biexp_kwargs_from_s2cs(ampa_src, "ampa")
             I_ampa += wslfp.spikes_to_biexp_currents(
-                t_ampa_ms,
+                [t_ampa_ms],
                 ampa_src.mon.t / ms,
                 ampa_src.mon.i,
                 ampa_src.J,
@@ -486,7 +486,7 @@ class RWSLFPSignalFromSpikes(RWSLFPSignalBase):
         for gaba_src in self._gaba_sources[ng].values():
             biexp_kwargs = self._get_biexp_kwargs_from_s2cs(gaba_src, "gaba")
             I_gaba += wslfp.spikes_to_biexp_currents(
-                t_gaba_ms,
+                [t_gaba_ms],
                 gaba_src.mon.t / ms,
                 gaba_src.mon.i,
                 gaba_src.J,
@@ -530,12 +530,35 @@ class RWSLFPSignalFromPSCs(RWSLFPSignalBase):
                 f"NeuronGroup {neuron_group.name} does not have a variable {I_ampa_name}"
             )
 
+        # prep wslfp calculator object
+        if neuron_group not in self._wslfps:
+            self._init_wslfp_calc(neuron_group, **kwparams)
+
         self._ampa_vars[neuron_group] = I_ampa_name
         self._gaba_vars[neuron_group] = I_gaba_name
 
         self._t[neuron_group] = []
         self._I_ampa[neuron_group] = []
         self._I_gaba[neuron_group] = []
+
+    def _interp_currents(self, t_ms, I, t_eval_ms: float, n_sources):
+        # TODO: super slow , bogging down the whole simulation
+        # do own interpolation. easy with searchsorted
+        timestart = datetime.now()
+        empty = np.zeros((1, n_sources))
+        if len(t_ms) == 0:
+            return empty
+
+        if len(t_ms) > 1:
+            interpolator = interpolate.PchipInterpolator(t_ms, I, extrapolate=False)
+        elif len(t_ms) == 1:
+            interpolator = lambda t_eval: np.multiply((t_eval == t_ms[0]), I[0:1])
+
+        I_interp = interpolator(t_eval_ms)
+        I_interp = np.reshape(I_interp, (1, n_sources))
+        I_interp = np.nan_to_num(I_interp, nan=0)
+        print("interp took", datetime.now() - timestart)
+        return I_interp
 
     def _needed_current(
         self, ng, t_ampa_ms, t_gaba_ms
@@ -551,15 +574,21 @@ class RWSLFPSignalFromPSCs(RWSLFPSignalBase):
         self._I_ampa[ng].append(I_ampa)
         self._I_gaba[ng].append(I_gaba)
 
-        # Then interpolate history
-        I_ampa = interpolate.PchipInterpolator(
-            self._t[ng], self._I_ampa[ng], axis=0, extrapolate=False
-        )(t_ampa_ms)
-        I_ampa = np.nan_to_num(I_ampa, nan=0)
-
-        I_gaba = interpolate.PchipInterpolator(
-            self._t[ng], self._I_gaba[ng], axis=0, extrapolate=False
-        )(t_gaba_ms)
-        I_gaba = np.nan_to_num(I_gaba, nan=0)
+        # Then interpolate history to get currents at the requested times
+        n_sources = 1 if self.pop_aggregate else ng.N
+        I_ampa = self._interp_currents(
+            self._t[ng], self._I_ampa[ng], t_ampa_ms, n_sources
+        )
+        I_gaba = self._interp_currents(
+            self._t[ng], self._I_gaba[ng], t_gaba_ms, n_sources
+        )
 
         return I_ampa, I_gaba
+
+    def reset(self, **kwargs) -> None:
+        super(RWSLFPSignalBase, self).reset(**kwargs)
+        self._init_saved_vars()
+        for ng in self._t:
+            self._t[ng] = []
+            self._I_ampa[ng] = []
+            self._I_gaba[ng] = []
