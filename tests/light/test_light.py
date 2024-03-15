@@ -1,3 +1,5 @@
+import pytest
+from brian2 import mm, np, asarray, mwatt, mm2, nmeter, um, ms
 import neo
 import pytest
 import quantities as pq
@@ -173,7 +175,7 @@ def test_light_to_neo(n_light, n_direction, squeeze):
         light_model=fiber473nm(),
     )
     t = 5
-    light.t_ms = list(range(t))
+    light.t = list(range(t))*ms
     light.values = np.random.rand(t, n_light)
     sig = light.to_neo()
 

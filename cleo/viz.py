@@ -114,7 +114,7 @@ class VideoVisualizer(InterfaceDevice):
             An Animation object capturing the desired visualization.
             See matplotlib's docs for saving and rendering options.
         """
-        interval_ms = self.dt / ms * slowdown_factor
+        interval = self.dt * slowdown_factor
         self.fig = plt.figure(**figargs)
         self.ax = self.fig.add_subplot(111, projection="3d")
         neuron_artists, device_artists = _plot(
@@ -142,7 +142,7 @@ class VideoVisualizer(InterfaceDevice):
             self.fig,
             update,
             range(len(self._value_per_device_per_frame)),
-            interval=interval_ms,
+            interval=interval / ms,
             blit=True,
         )
 

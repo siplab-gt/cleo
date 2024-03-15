@@ -3,10 +3,11 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections import deque
-from typing import Any, Tuple
-
+from brian2 import ms
 import numpy as np
 from attrs import define, field
+from typing import Any, Tuple
+
 
 from cleo.base import IOProcessor
 from cleo.ioproc.delays import Delay
@@ -130,6 +131,8 @@ class LatencyIOProcessor(IOProcessor):
     
     "fixed" sampling means samples are taken on a fixed schedule,
     with no exceptions.
+    
+        
 
     "when idle" sampling means no samples are taken before the previous
     sample's output has been delivered. A sample is taken ASAP
@@ -167,6 +170,28 @@ class LatencyIOProcessor(IOProcessor):
             raise ValueError("Invalid processing scheme:", value)
 
     out_buffer: deque[Tuple[dict, float]] = field(factory=deque, init=False, repr=False)
+    """
+        "serial" computes the output time by adding the delay for a sample
+        onto the output time of the previous sample, rather than the sampling
+        time. Note this may be of limited
+        utility because it essentially means the *entire* round trip
+        cannot be in parallel at all. More realistic is that simply
+        each block or phase of computation must be serial. If anyone
+        cares enough about this, it will have to be implemented in the
+        future.
+
+        Note
+        ----
+        It doesn't make much sense to combine parallel computation
+        with "when idle" sampling, because "when idle" sampling only produces
+        one sample at a time to process.
+
+        Raises
+        ------
+        ValueError
+            For invalid `sampling` or `processing` kwargs 
+        """
+    
 
     def put_state(self, state_dict: dict, sample_time_ms: float):
         self.t_samp_ms.append(sample_time_ms)
@@ -193,10 +218,10 @@ class LatencyIOProcessor(IOProcessor):
 
     def is_sampling_now(self, query_time_ms):
         if self.sampling == "fixed":
-            if np.isclose(query_time_ms % self.sample_period_ms, 0):
+            if np.isclose(query_time_ms % (self.sample_period / ms), 0):
                 return True
         elif self.sampling == "when idle":
-            if query_time_ms % self.sample_period_ms == 0:
+            if query_time_ms % (self.sample_period / ms) == 0:
                 if self._is_currently_idle(query_time_ms):
                     self._needs_off_schedule_sample = False
                     return True
@@ -237,8 +262,8 @@ class RecordOnlyProcessor(LatencyIOProcessor):
 
     Use this if all you are doing is recording."""
 
-    def __init__(self, sample_period_ms, **kwargs):
-        super().__init__(sample_period_ms, **kwargs)
+    def __init__(self, sample_period, **kwargs):
+        super().__init__(sample_period, **kwargs)
 
-    def process(self, state_dict: dict, sample_time_ms: float) -> Tuple[dict, float]:
-        return ({}, sample_time_ms)
+    def process(self, state_dict: dict, sample_time: float) -> Tuple[dict, float]:
+        return ({}, sample_time / ms)
