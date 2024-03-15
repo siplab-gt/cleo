@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from numbers import Number
 from typing import Any, Union
 
 import neo
@@ -13,7 +14,7 @@ from brian2 import NeuronGroup, Quantity, Subgroup, Synapses, mm, ms, um
 from brian2.monitors.spikemonitor import SpikeMonitor
 from brian2.synapses.synapses import SynapticSubgroup
 from nptyping import NDArray
-from scipy import sparse
+from scipy import interpolate, sparse
 from tklfp import TKLFP
 
 import cleo.utilities
@@ -345,32 +346,35 @@ class RWSLFPSignalFromSpikes(RWSLFPSignalBase):
     tau2_gaba: Quantity = 0.25 * ms
     syn_delay: Quantity = 1 * ms
     I_threshold: float = 1e-3
+    weight: str = "w"
     # for each source, need spike monitor, J, and biexp kernel params
-    _ampa_sources: dict[NeuronGroup, list[SpikeToCurrentSource]] = field(
+    _ampa_sources: dict[NeuronGroup, dict[Synapses, SpikeToCurrentSource]] = field(
         init=False, factory=dict, repr=False
     )
-    _gaba_sources: dict[NeuronGroup, list[SpikeToCurrentSource]] = field(
+    _gaba_sources: dict[NeuronGroup, dict[Synapses, SpikeToCurrentSource]] = field(
         init=False, factory=dict, repr=False
     )
 
     def _get_weight(self, syn, weight):
-        assert isinstance(weight, (int, float, str))
-        if isinstance(weight, (int, float)):
+        assert isinstance(weight, (Number, Quantity, str))
+        if isinstance(weight, (Number, Quantity)):
             return weight
 
         if isinstance(syn, Synapses):
+            syn_name = syn.name
             if weight in syn.variables:
                 return getattr(syn, weight)
             elif weight in syn.namespace:
                 return syn.namespace[weight]
         elif isinstance(syn, SynapticSubgroup):
+            syn_name = syn.synapses.name
             if weight in syn.synapses.variables:
                 return getattr(syn.synapses, weight)[syn._stored_indices]
-            elif weight in syn.namespace:
+            elif weight in syn.synapses.namespace:
                 return syn.synapses.namespace[weight]
 
         raise ValueError(
-            f"weight {weight} not found in {syn.name} variables or namespace"
+            f"weight {weight} not found in {syn_name} variables or namespace"
         )
 
     def _create_spk2curr_source(self, syn, neuron_group, weight, biexp_kwparams):
@@ -393,16 +397,31 @@ class RWSLFPSignalFromSpikes(RWSLFPSignalBase):
         w = self._get_weight(syn, weight)
         J[syn_i, syn_j] = w
         J = J.tocsr()
+        if self.pop_aggregate:
+            J = J.sum(axis=1).reshape((-1, 1))
 
         return SpikeToCurrentSource(J, mon, biexp_kwparams)
 
+    def _process_syn(self, syn, kwparams) -> tuple[Synapses, dict]:
+        """handles the case when a tuple of Synapses, kwargs is passed in"""
+        if isinstance(syn, (tuple, list)):
+            syn, override_kwargs = syn
+            kwparams = {**kwparams, **override_kwargs}
+        else:
+            assert isinstance(syn, Synapses)
+
+        return syn, kwparams
+
     def connect_to_neuron_group(self, neuron_group: NeuronGroup, **kwparams):
         # inherit docstring
+        # this dict structure should allow multiple injections with no problem;
+        # just the most recent injection will be used
+
         # prep wslfp calculator object
         if neuron_group not in self._wslfps:
             self._init_wslfp_calc(neuron_group, **kwparams)
 
-        weight = kwparams.pop("weight", "w")
+        default_weight = kwparams.pop("weight", self.weight)
         ampa_syns = kwparams.pop("ampa_syns", [])
         gaba_syns = kwparams.pop("gaba_syns", [])
 
@@ -415,23 +434,22 @@ class RWSLFPSignalFromSpikes(RWSLFPSignalBase):
             "syn_delay",
             "I_threshold",
         ]:
-            if key in kwparams:
-                biexp_kwparams[key] = kwparams.pop(key)
+            biexp_kwparams[key] = kwparams.pop(key, getattr(self, key))
 
         if neuron_group not in self._ampa_sources:
-            self._ampa_sources[neuron_group] = []
-            self._gaba_sources[neuron_group] = []
+            self._ampa_sources[neuron_group] = {}
+            self._gaba_sources[neuron_group] = {}
         for ampa_syn in ampa_syns:
-            self._ampa_sources[neuron_group].append(
-                self._create_spk2curr_source(
-                    ampa_syn, neuron_group, weight, biexp_kwparams
-                )
+            ampa_syn, updated_kwparams = self._process_syn(ampa_syn, biexp_kwparams)
+            weight = updated_kwparams.pop("weight", default_weight)
+            self._ampa_sources[neuron_group][ampa_syn] = self._create_spk2curr_source(
+                ampa_syn, neuron_group, weight, updated_kwparams
             )
         for gaba_syn in gaba_syns:
-            self._gaba_sources[neuron_group].append(
-                self._create_spk2curr_source(
-                    gaba_syn, neuron_group, weight, biexp_kwparams
-                )
+            gaba_syn, updated_kwparams = self._process_syn(gaba_syn, biexp_kwparams)
+            weight = updated_kwparams.pop("weight", default_weight)
+            self._gaba_sources[neuron_group][gaba_syn] = self._create_spk2curr_source(
+                gaba_syn, neuron_group, weight, updated_kwparams
             )
 
     def _get_biexp_kwargs_from_s2cs(self, s2cs: SpikeToCurrentSource, syn_type: str):
@@ -454,7 +472,7 @@ class RWSLFPSignalFromSpikes(RWSLFPSignalBase):
         """output must have shape (n_t, n_current_sources)"""
         n_sources = 1 if self.pop_aggregate else ng.N
         I_ampa = np.zeros((1, n_sources))
-        for ampa_src in self._ampa_sources[ng]:
+        for ampa_src in self._ampa_sources[ng].values():
             biexp_kwargs = self._get_biexp_kwargs_from_s2cs(ampa_src, "ampa")
             I_ampa += wslfp.spikes_to_biexp_currents(
                 t_ampa_ms,
@@ -465,7 +483,7 @@ class RWSLFPSignalFromSpikes(RWSLFPSignalBase):
             )
 
         I_gaba = np.zeros((1, n_sources))
-        for gaba_src in self._gaba_sources[ng]:
+        for gaba_src in self._gaba_sources[ng].values():
             biexp_kwargs = self._get_biexp_kwargs_from_s2cs(gaba_src, "gaba")
             I_gaba += wslfp.spikes_to_biexp_currents(
                 t_gaba_ms,
@@ -474,5 +492,74 @@ class RWSLFPSignalFromSpikes(RWSLFPSignalBase):
                 gaba_src.J,
                 **biexp_kwargs,
             )
+
+        return I_ampa, I_gaba
+
+
+@define(eq=False)
+class RWSLFPSignalFromPSCs(RWSLFPSignalBase):
+    _ampa_vars: dict[NeuronGroup, str] = field(init=False, factory=dict, repr=False)
+    _gaba_vars: dict[NeuronGroup, str] = field(init=False, factory=dict, repr=False)
+    _t: dict[NeuronGroup, list[float]] = field(init=False, factory=dict, repr=False)
+    _I_ampa: dict[NeuronGroup, list[np.ndarray]] = field(
+        init=False, factory=dict, repr=False
+    )
+    _I_gaba: dict[NeuronGroup, list[np.ndarray]] = field(
+        init=False, factory=dict, repr=False
+    )
+
+    def connect_to_neuron_group(self, neuron_group: NeuronGroup, **kwparams):
+        if ("Iampa_var_name" in kwparams or "Igaba_var_name" in kwparams) and not (
+            "Iampa_var_name" in kwparams and "Igaba_var_name" in kwparams
+        ):
+            raise ValueError(
+                "Iampa_var_name and Igaba_var_name must be included together."
+            )
+        if "Iampa_var_name" not in kwparams:
+            return
+
+        I_ampa_name = kwparams.pop("Iampa_var_name")
+        if not hasattr(neuron_group, I_ampa_name):
+            raise ValueError(
+                f"NeuronGroup {neuron_group.name} does not have a variable {I_ampa_name}"
+            )
+
+        I_gaba_name = kwparams.pop("Igaba_var_name")
+        if not hasattr(neuron_group, I_gaba_name):
+            raise ValueError(
+                f"NeuronGroup {neuron_group.name} does not have a variable {I_ampa_name}"
+            )
+
+        self._ampa_vars[neuron_group] = I_ampa_name
+        self._gaba_vars[neuron_group] = I_gaba_name
+
+        self._t[neuron_group] = []
+        self._I_ampa[neuron_group] = []
+        self._I_gaba[neuron_group] = []
+
+    def _needed_current(
+        self, ng, t_ampa_ms, t_gaba_ms
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """outputs must have shape (n_t, n_current_sources)"""
+        # First add current currents to history
+        self._t[ng].append(self.probe.sim.network.t / ms)
+        I_ampa = getattr(ng, self._ampa_vars[ng])
+        I_gaba = getattr(ng, self._gaba_vars[ng])
+        if self.pop_aggregate:
+            I_ampa = np.sum(I_ampa)
+            I_gaba = np.sum(I_gaba)
+        self._I_ampa[ng].append(I_ampa)
+        self._I_gaba[ng].append(I_gaba)
+
+        # Then interpolate history
+        I_ampa = interpolate.PchipInterpolator(
+            self._t[ng], self._I_ampa[ng], axis=0, extrapolate=False
+        )(t_ampa_ms)
+        I_ampa = np.nan_to_num(I_ampa, nan=0)
+
+        I_gaba = interpolate.PchipInterpolator(
+            self._t[ng], self._I_gaba[ng], axis=0, extrapolate=False
+        )(t_gaba_ms)
+        I_gaba = np.nan_to_num(I_gaba, nan=0)
 
         return I_ampa, I_gaba
