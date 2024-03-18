@@ -13,3 +13,4 @@ Tutorials
     all_optical
     video_visualization
     neo
+    advanced_lfp

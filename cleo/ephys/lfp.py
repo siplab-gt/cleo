@@ -1,7 +1,11 @@
 """Contains LFP signals"""
 from __future__ import annotations
 
+import warnings
+from collections import deque
 from datetime import datetime
+from itertools import chain
+from math import ceil
 from numbers import Number
 from typing import Any, Union
 
@@ -130,7 +134,6 @@ class TKLFPSignal(Signal, NeoExportable):
         return out
 
     def reset(self, **kwargs) -> None:
-        super(TKLFPSignal, self).reset(**kwargs)
         for i_mon in range(len(self._monitors)):
             self._reset_buffer(i_mon)
         self._init_saved_vars()
@@ -287,7 +290,8 @@ class RWSLFPSignalBase(Signal, NeoExportable):
         )
 
     def get_state(self) -> np.ndarray:
-        now_ms = self.probe.sim.network.t / ms
+        # round to avoid floating point errors
+        now_ms = round(self.probe.sim.network.t / ms, 3)
         lfp = np.zeros((1, self.probe.n))
         for ng, wslfp_calc in self._wslfps.items():
             t_ampa_ms = now_ms - wslfp_calc.tau_ampa_ms
@@ -305,7 +309,6 @@ class RWSLFPSignalBase(Signal, NeoExportable):
         raise NotImplementedError
 
     def reset(self, **kwargs) -> None:
-        super(RWSLFPSignalBase, self).reset(**kwargs)
         self._init_saved_vars()
 
     def to_neo(self) -> neo.AnalogSignal:
@@ -498,66 +501,95 @@ class RWSLFPSignalFromSpikes(RWSLFPSignalBase):
 
 @define(eq=False)
 class RWSLFPSignalFromPSCs(RWSLFPSignalBase):
-    _ampa_vars: dict[NeuronGroup, str] = field(init=False, factory=dict, repr=False)
-    _gaba_vars: dict[NeuronGroup, str] = field(init=False, factory=dict, repr=False)
-    _t: dict[NeuronGroup, list[float]] = field(init=False, factory=dict, repr=False)
-    _I_ampa: dict[NeuronGroup, list[np.ndarray]] = field(
+    _ampa_vars: dict[NeuronGroup, list] = field(init=False, factory=dict, repr=False)
+    _gaba_vars: dict[NeuronGroup, list] = field(init=False, factory=dict, repr=False)
+    _t_ampa_bufs: dict[NeuronGroup, deque[float]] = field(
         init=False, factory=dict, repr=False
     )
-    _I_gaba: dict[NeuronGroup, list[np.ndarray]] = field(
+    _I_ampa_bufs: dict[NeuronGroup, deque[np.ndarray]] = field(
+        init=False, factory=dict, repr=False
+    )
+    _t_gaba_bufs: dict[NeuronGroup, deque[float]] = field(
+        init=False, factory=dict, repr=False
+    )
+    _I_gaba: dict[NeuronGroup, deque[np.ndarray]] = field(
         init=False, factory=dict, repr=False
     )
 
     def connect_to_neuron_group(self, neuron_group: NeuronGroup, **kwparams):
-        if ("Iampa_var_name" in kwparams or "Igaba_var_name" in kwparams) and not (
-            "Iampa_var_name" in kwparams and "Igaba_var_name" in kwparams
-        ):
+        # ^ is XOR
+        if ("Iampa_var_names" in kwparams) ^ ("Igaba_var_names" in kwparams):
             raise ValueError(
-                "Iampa_var_name and Igaba_var_name must be included together."
+                "Iampa_var_names and Igaba_var_names must be included together."
             )
-        if "Iampa_var_name" not in kwparams:
+        if "Iampa_var_names" not in kwparams:
             return
 
-        I_ampa_name = kwparams.pop("Iampa_var_name")
-        if not hasattr(neuron_group, I_ampa_name):
-            raise ValueError(
-                f"NeuronGroup {neuron_group.name} does not have a variable {I_ampa_name}"
-            )
-
-        I_gaba_name = kwparams.pop("Igaba_var_name")
-        if not hasattr(neuron_group, I_gaba_name):
-            raise ValueError(
-                f"NeuronGroup {neuron_group.name} does not have a variable {I_ampa_name}"
-            )
+        I_ampa_names = kwparams.pop("Iampa_var_names")
+        I_gaba_names = kwparams.pop("Igaba_var_names")
+        for varname in chain(I_ampa_names, I_gaba_names):
+            if not hasattr(neuron_group, varname):
+                raise ValueError(
+                    f"NeuronGroup {neuron_group.name} does not have a variable {varname}"
+                )
 
         # prep wslfp calculator object
-        if neuron_group not in self._wslfps:
-            self._init_wslfp_calc(neuron_group, **kwparams)
+        if neuron_group in self._wslfps:
+            warnings.warn(
+                f"{self.name} previously connected to {neuron_group.name}."
+                " Reconnecting will overwrite previous connection."
+            )
 
-        self._ampa_vars[neuron_group] = I_ampa_name
-        self._gaba_vars[neuron_group] = I_gaba_name
+        self._init_wslfp_calc(neuron_group, **kwparams)
 
-        self._t[neuron_group] = []
-        self._I_ampa[neuron_group] = []
-        self._I_gaba[neuron_group] = []
+        buf_len_ampa, buf_len_gaba = self._get_buf_lens(self._wslfps[neuron_group])
+        self._t_ampa_bufs[neuron_group] = deque(maxlen=buf_len_ampa)
+        self._I_ampa_bufs[neuron_group] = deque(maxlen=buf_len_ampa)
+        self._t_gaba_bufs[neuron_group] = deque(maxlen=buf_len_gaba)
+        self._I_gaba[neuron_group] = deque(maxlen=buf_len_gaba)
 
-    def _interp_currents(self, t_ms, I, t_eval_ms: float, n_sources):
-        # TODO: super slow , bogging down the whole simulation
-        # do own interpolation. easy with searchsorted
-        timestart = datetime.now()
+        # add underscores to get values without units
+        self._ampa_vars[neuron_group] = [varname + "_" for varname in I_ampa_names]
+        self._gaba_vars[neuron_group] = [varname + "_" for varname in I_gaba_names]
+
+    def _get_buf_lens(self, wslfp_calc, **kwparams):
+        # need sampling period
+        sample_period_ms = kwparams.get("sample_period_ms", None)
+        if sample_period_ms is None:
+            try:
+                sample_period_ms = self.probe.sim.io_processor.sample_period_ms
+            except AttributeError:  # probably means sim doesn't have io_processor
+                raise Exception(
+                    "RSWLFPSignalFromPSCs needs to know the sampling period."
+                    " Either set the simulator's IO processor before injecting"
+                    f" {self.probe.name} or "
+                    f" specify it on injection: .inject({self.probe.name}"
+                    ", sample_period_ms=...)"
+                )
+        buf_len_ampa = ceil(wslfp_calc.tau_ampa_ms / sample_period_ms) + 1
+        buf_len_gaba = ceil(wslfp_calc.tau_gaba_ms / sample_period_ms) + 1
+        return buf_len_ampa, buf_len_gaba
+
+    def _curr_from_buffer(self, t_buf_ms, I_buf, t_eval_ms: float, n_sources):
+        # t_eval_ms is not iterable
         empty = np.zeros((1, n_sources))
-        if len(t_ms) == 0:
+        if len(t_buf_ms) == 0 or t_buf_ms[0] > t_eval_ms:
             return empty
+        # when tau is multiple of sample time, current should be collected
+        # right when needed, at the left end of the buffer
+        elif np.isclose(t_eval_ms, t_buf_ms[0]):
+            return I_buf[0]
 
-        if len(t_ms) > 1:
-            interpolator = interpolate.PchipInterpolator(t_ms, I, extrapolate=False)
-        elif len(t_ms) == 1:
-            interpolator = lambda t_eval: np.multiply((t_eval == t_ms[0]), I[0:1])
+        # if not, should only need to interpolate between first and second positions
+        # if buffer length is correct
+        assert len(t_buf_ms) > 1
+        assert t_buf_ms[0] < t_eval_ms < t_buf_ms[1]
+        I_interp = I_buf[0] + (I_buf[1] - I_buf[0]) * (t_eval_ms - t_buf_ms[0]) / (
+            t_buf_ms[1] - t_buf_ms[0]
+        )
 
-        I_interp = interpolator(t_eval_ms)
         I_interp = np.reshape(I_interp, (1, n_sources))
         I_interp = np.nan_to_num(I_interp, nan=0)
-        print("interp took", datetime.now() - timestart)
         return I_interp
 
     def _needed_current(
@@ -565,30 +597,54 @@ class RWSLFPSignalFromPSCs(RWSLFPSignalBase):
     ) -> tuple[np.ndarray, np.ndarray]:
         """outputs must have shape (n_t, n_current_sources)"""
         # First add current currents to history
-        self._t[ng].append(self.probe.sim.network.t / ms)
-        I_ampa = getattr(ng, self._ampa_vars[ng])
-        I_gaba = getattr(ng, self._gaba_vars[ng])
+
+        # need to round to avoid floating point errors
+        now_ms = round(self.probe.sim.network.t / ms, 3)
+        self._t_ampa_bufs[ng].append(now_ms)
+        self._t_gaba_bufs[ng].append(now_ms)
+
+        I_ampa = np.zeros((1, ng.N))
+        for I_ampa_name in self._ampa_vars[ng]:
+            I_ampa += getattr(ng, I_ampa_name)
+
+        I_gaba = np.zeros((1, ng.N))
+        for I_gaba_name in self._gaba_vars[ng]:
+            I_gaba += getattr(ng, I_gaba_name)
+        # if isinstance(I_ampa_name, str):
+        #     I_ampa = getattr(ng, self._ampa_vars[ng])
+        # else:
+        #     assert isinstance(I_ampa_name, (list, tuple))
+        #     I_ampa = np.sum([getattr(ng, var) for var in I_ampa_name], axis=0)
+
+        # I_gaba_name = self._gaba_vars[ng]
+        # if isinstance(I_gaba_name, str):
+        #     I_gaba = getattr(ng, self._gaba_vars[ng])
+        # else:
+        #     assert isinstance(I_gaba_name, (list, tuple))
+        #     I_gaba = np.sum([getattr(ng, var) for var in I_gaba_name], axis=0)
+
         if self.pop_aggregate:
             I_ampa = np.sum(I_ampa)
             I_gaba = np.sum(I_gaba)
-        self._I_ampa[ng].append(I_ampa)
+        self._I_ampa_bufs[ng].append(I_ampa)
         self._I_gaba[ng].append(I_gaba)
 
         # Then interpolate history to get currents at the requested times
         n_sources = 1 if self.pop_aggregate else ng.N
-        I_ampa = self._interp_currents(
-            self._t[ng], self._I_ampa[ng], t_ampa_ms, n_sources
+        I_ampa = self._curr_from_buffer(
+            self._t_ampa_bufs[ng], self._I_ampa_bufs[ng], t_ampa_ms, n_sources
         )
-        I_gaba = self._interp_currents(
-            self._t[ng], self._I_gaba[ng], t_gaba_ms, n_sources
+        I_gaba = self._curr_from_buffer(
+            self._t_gaba_bufs[ng], self._I_gaba[ng], t_gaba_ms, n_sources
         )
 
         return I_ampa, I_gaba
 
     def reset(self, **kwargs) -> None:
-        super(RWSLFPSignalBase, self).reset(**kwargs)
         self._init_saved_vars()
-        for ng in self._t:
-            self._t[ng] = []
-            self._I_ampa[ng] = []
-            self._I_gaba[ng] = []
+        for ng in self._t_ampa_bufs:
+            buf_len_ampa, buf_len_gaba = self._get_buf_lens(self._wslfps[ng])
+            self._t_ampa_bufs[ng] = deque(maxlen=buf_len_ampa)
+            self._I_ampa_bufs[ng] = deque(maxlen=buf_len_ampa)
+            self._t_gaba_bufs[ng] = deque(maxlen=buf_len_gaba)
+            self._I_gaba[ng] = deque(maxlen=buf_len_gaba)
