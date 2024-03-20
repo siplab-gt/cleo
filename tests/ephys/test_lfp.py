@@ -240,16 +240,7 @@ def test_RWSLFPSignalFromSpikes(rand_seed):
     n_exc = 16
     n_inh = 5
     n_elec = 4
-    # random network setup and spikes
     elec_coords = rng.uniform(-1, 1, (n_elec, 3)) * mm
-    # random spikes during first 100 ms
-    # n_spk = n_exc * 4
-    # i_spk = rng.choice(range(n_exc), n_spk)
-    # t_spk = rng.uniform(0, 100, (n_spk,)) * ms
-    # sgg_exc = SpikeGeneratorGroup(n_exc, i_spk, t_spk)
-    # sgg_exc._N = n_exc  # hack for assign_coords to work
-    # assign_coords(sgg_exc, rng.uniform(-1, 1, (n_exc, 3)) * mm)
-    # sgg_inh = SpikeGeneratorGroup(n_inh, i_spk, t_spk)
 
     exc = b2.PoissonGroup(n_exc, 40 * Hz)
     assign_coords(exc, rng.uniform(-1, 1, (n_exc, 3)) * mm)
@@ -262,37 +253,19 @@ def test_RWSLFPSignalFromSpikes(rand_seed):
 
     # cleo setup
     sim = CLSimulator(Network(exc, inh, syn_e2e, syn_i2e))
-    samp_period = 10 * ms
-    sim.set_io_processor(RecordOnlyProcessor(samp_period / ms))  # record every 10 ms
-    probes = []
-    signals = []
+    sim.set_io_processor(RecordOnlyProcessor(sample_period_ms=10))
 
-    start_time = time.time()
-
-    for i, (
-        pop_agg,
-        amp_func,
-        ornt,
-        tau1_ampa,
-        tau2_ampa,
-        tau1_gaba,
-        tau2_gaba,
-        syn_delay,
-        homog_J,
-        I_threshold,
-    ) in enumerate(
-        product(
-            (True, False),
-            (wslfp.aussel18, wslfp.mazzoni15_pop),
-            (rng.normal(size=(n_exc, 3)), (-0.2, -0.1, -0.3)),
-            (2, 1) * ms,
-            (0.4, 0.2) * ms,
-            (5, 6) * ms,
-            (0.25, 0.2) * ms,
-            (1, 2) * ms,
-            (True, False),
-            (0.1, 0.001),
-        )
+    def add_rwslfp_sig(
+        pop_agg=True,
+        amp_func=wslfp.mazzoni15_pop,
+        ornt=[0, 0, -1],
+        tau1_ampa=2 * ms,
+        tau2_ampa=0.4 * ms,
+        tau1_gaba=5 * ms,
+        tau2_gaba=0.25 * ms,
+        syn_delay=1 * ms,
+        homog_J=True,
+        I_threshold=0.01,
     ):
         rwslfp_sig = RWSLFPSignalFromSpikes(
             pop_aggregate=pop_agg,
@@ -304,9 +277,9 @@ def test_RWSLFPSignalFromSpikes(rand_seed):
             syn_delay=syn_delay,
             I_threshold=I_threshold,
         )
-        signals.append(rwslfp_sig)
         # separate probe for each signal since some injection kwargs need to be different per signal
-        probes.append(Probe(elec_coords, [rwslfp_sig], name=f"probe{i}"))
+        i = len(sim.recorders)
+        probe = Probe(elec_coords, [rwslfp_sig], name=f"probe{i}")
 
         if homog_J:
             syn_e2e.w = 1
@@ -316,15 +289,34 @@ def test_RWSLFPSignalFromSpikes(rand_seed):
             syn_i2e.w = -n_exc / n_inh * rng.lognormal(size=len(syn_i2e))
 
         sim.inject(
-            probes[-1], exc, orientation=ornt, ampa_syns=[syn_e2e], gaba_syns=[syn_i2e]
+            probe, exc, orientation=ornt, ampa_syns=[syn_e2e], gaba_syns=[syn_i2e]
         )
+        return rwslfp_sig
 
-    end_time = time.time()
-    print(f"setup time: {end_time - start_time}")
-    assert False
-
-    # pop agg, amp func, orientation, tau1, tau2, syn_delay, homogeneous vs. heterogeneous weights
-    # variations should all be slightly different
+    signals_by_param = {}
+    for param_name, param_vals in [
+        ("pop_agg", (True, False)),
+        ("amp_func", (wslfp.aussel18, wslfp.mazzoni15_pop)),
+        ("ornt", (rng.normal(size=(n_exc, 3)), (-0.2, -0.1, -0.3))),
+        ("tau1_ampa", (2, 1) * ms),
+        ("tau2_ampa", (0.4, 0.2) * ms),
+        ("tau1_gaba", (5, 6) * ms),
+        ("tau2_gaba", (0.25, 0.2) * ms),
+        ("syn_delay", (1, 2) * ms),
+        ("homog_J", (True, False)),
+        ("I_threshold", (0.1, 0.001)),
+    ]:
+        signals_by_param[param_name] = []
+        for val in param_vals:
+            # store result of each different value for each param
+            signals_by_param[param_name].append(add_rwslfp_sig(**{param_name: val}))
+    sim.run(100 * ms)
+    # each parameter change should change the resulting signal:
+    for param, signals in signals_by_param.items():
+        assert len(signals) > 1
+        for i, sig1 in enumerate(signals):
+            for sig2 in signals[i + 1 :]:
+                assert not np.allclose(sig1.lfp, sig2.lfp)
 
     # pop agg, amp func, and orientation test could be same for PSC and spike versions
 
