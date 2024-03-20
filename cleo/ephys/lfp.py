@@ -238,8 +238,8 @@ class RWSLFPSignalBase(LFPSignalBase):
     
     See `wslfp documentation <https://github.com/siplab-gt/wslfp/blob/master/notebooks/amplitude_comparison.ipynb>`_ for more info."""
     pop_aggregate: bool = False
-    """Threshold, as a proportion of the peak current, below which spikes' contribution
-    to synaptic currents (and thus LFP) is ignored, by default 1e-3."""
+    """Whether to aggregate currents across the population (as opposed to neurons having 
+    differential contributions to LFP depending on their location). False by default."""
 
     _wslfps: dict[NeuronGroup, wslfp.WSLFPCalculator] = field(
         init=False, factory=dict, repr=False
@@ -351,8 +351,8 @@ class RWSLFPSignalFromSpikes(RWSLFPSignalBase):
     RWSLFP refers to the Reference Weighted Sum of synaptic currents LFP proxy from
     `Mazzoni, Lindén et al., 2015 <https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1004584>`_.
 
-    Injection kwargs:
-    -----------------
+    Injection kwargs
+    ----------------
     ampa_syns : list[Synapses | SynapticSubgroup | tuple[Synapses|SynapticSubgroup, dict]]
         Synapses or SynapticSubgroup objects representing AMPA synapses (delivering excitatory currents).
         Or a tuple of the Synapses or SynapticSubgroup object and a dictionary of parameters to override.
@@ -366,13 +366,26 @@ class RWSLFPSignalFromSpikes(RWSLFPSignalBase):
 
     # can override on injection: tau1|2_ampa|gaba, syn_delay, I_threshold
     tau1_ampa: Quantity = 2 * ms
+    """The fall time constant of the biexponential current kernel for AMPA synapses.
+    2 ms by default."""
     tau2_ampa: Quantity = 0.4 * ms
+    """The time constant of subtracted part of the biexponential current kernel for AMPA synapses.
+    0.4 ms by default."""
     tau1_gaba: Quantity = 5 * ms
+    """The fall time constant of the biexponential current kernel for GABA synapses.
+    5 ms by default."""
     tau2_gaba: Quantity = 0.25 * ms
+    """The time constant of subtracted part of the biexponential current kernel for GABA synapses.
+    0.25 ms by default."""
     syn_delay: Quantity = 1 * ms
+    """The synaptic transmission delay, i.e., between a spike and the onset of the postsynaptic current.
+    1 ms by default."""
     I_threshold: float = 1e-3
+    """Threshold, as a proportion of the peak current, below which spikes' contribution
+    to synaptic currents (and thus LFP) is ignored, by default 1e-3."""
     weight: str = "w"
-    # for each source, need spike monitor, J, and biexp kernel params
+    """Name of the weight variable or parameter in the Synapses or SynapticSubgroup objects.
+    Default is 'w'."""
     _ampa_sources: dict[NeuronGroup, dict[Synapses, SpikeToCurrentSource]] = field(
         init=False, factory=dict, repr=False
     )
