@@ -1,10 +1,10 @@
 """Tests for electrodes module"""
-from typing import Tuple, Any
+from typing import Any, Tuple
 
-import pytest
-from brian2 import NeuronGroup, mm, Network, StateMonitor, umeter, np
 import neo
+import pytest
 import quantities as pq
+from brian2 import Network, NeuronGroup, StateMonitor, mm, np, umeter
 
 import cleo
 from cleo import CLSimulator
@@ -12,8 +12,8 @@ from cleo.base import NeoExportable
 from cleo.coords import concat_coords
 from cleo.ephys import (
     Probe,
-    linear_shank_coords,
     Signal,
+    linear_shank_coords,
     poly2_shank_coords,
     poly3_shank_coords,
     tetrode_shank_coords,
@@ -215,8 +215,12 @@ def test_concat_tile_coords():
 @pytest.mark.parametrize("n_signals", [1, 3])
 def test_probe_to_neo(n_signals):
     probe = Probe([0, 0, 0] * mm)
-    probe.add_signals(*[DummySignal() for _ in range(n_signals)])
+    if n_signals > 1:
+        with pytest.raises(ValueError, match="Signal names must be unique"):
+            probe.add_signals(*[DummySignal() for _ in range(n_signals)])
+    probe.add_signals(*[DummySignal(name=f"sig{i}") for i in range(n_signals)])
     probe_neo = probe.to_neo()
+
     assert type(probe_neo) == neo.core.Group
     assert probe_neo.name == probe.name
     assert len(probe_neo.children) == n_signals

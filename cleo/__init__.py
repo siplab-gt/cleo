@@ -1,9 +1,8 @@
 """Contains core classes and functions for the Cleo package."""
 from __future__ import annotations
 
-import cleo.coords
-
 # auto-import submodules
+import cleo.coords
 import cleo.ephys
 import cleo.imaging
 import cleo.ioproc
@@ -17,6 +16,7 @@ from cleo.base import (
     CLSimulator,
     InterfaceDevice,
     IOProcessor,
+    NeoExportable,
     Recorder,
     Stimulator,
     SynapseDevice,

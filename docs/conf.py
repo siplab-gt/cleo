@@ -19,7 +19,7 @@ sys.path.insert(0, os.path.abspath(".."))
 # -- Project information -----------------------------------------------------
 
 project = "Cleo"
-copyright = "2023"
+copyright = "2024"
 author = "Kyle Johnsen, Nathan Cruzado"
 
 
@@ -35,6 +35,7 @@ extensions = [
     "sphinx.ext.napoleon",
     "sphinx.ext.intersphinx",
     "sphinx.ext.viewcode",
+    "sphinx.ext.duration",
     "sphinx_copybutton",
     "sphinx-favicon",
     "myst_nb",

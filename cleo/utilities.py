@@ -2,6 +2,7 @@
 import warnings
 from collections.abc import MutableMapping
 
+import brian2 as b2
 import neo
 import quantities as pq
 from brian2 import Quantity, np, second
@@ -24,7 +25,7 @@ def times_are_regular(times):
     return np.allclose(np.diff(times), times[1] - times[0])
 
 
-def analog_signal(t_ms, values_no_unit, units) -> neo.core.basesignal.BaseSignal:
+def analog_signal(t_ms, values_no_unit, units="") -> neo.core.basesignal.BaseSignal:
     if times_are_regular(t_ms):
         return neo.AnalogSignal(
             values_no_unit,
@@ -292,3 +293,14 @@ def style_plots_for_docs(dark=True):
     plt.rc("savefig", transparent=False)
     plt.rc("axes.spines", top=False, right=False)
     plt.rc("font", **{"sans-serif": "Open Sans"})
+
+
+def unit_safe_append(q1: Quantity, q2: Quantity, axis=0):
+    if not b2.have_same_dimensions(q1, q2):
+        raise ValueError("Dimensions must match")
+    if isinstance(q1, Quantity):
+        assert isinstance(q2, Quantity)
+        unit = q1.get_best_unit()
+        return np.append(q1 / unit, q2 / unit, axis=axis) * unit
+    else:
+        return np.append(q1, q2, axis=axis)

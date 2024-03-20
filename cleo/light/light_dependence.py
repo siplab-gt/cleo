@@ -79,7 +79,7 @@ class LightDependent:
         return light_agg_ng, list(range(len(i_targets)))
 
     def epsilon(self, lambda_new) -> float:
-        """Returns the :math:`\\varepsilon`` value for a given lambda (in nm)
+        """Returns the :math:`\\varepsilon` value for a given lambda (in nm)
         representing the relative sensitivity of the opsin to that wavelength."""
         action_spectrum = np.array(self.spectrum)
         lambdas = action_spectrum[:, 0]
