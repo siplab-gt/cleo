@@ -16,6 +16,7 @@ from cleo.base import (
     CLSimulator,
     InterfaceDevice,
     IOProcessor,
+    NeoExportable,
     Recorder,
     Stimulator,
     SynapseDevice,

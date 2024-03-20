@@ -318,8 +318,6 @@ def test_RWSLFPSignalFromSpikes(rand_seed):
             for sig2 in signals[i + 1 :]:
                 assert not np.allclose(sig1.lfp, sig2.lfp)
 
-    # pop agg, amp func, and orientation test could be same for PSC and spike versions
-
 
 @pytest.mark.parametrize("samp_period_ms", [1, 1.4])
 def test_RWSLFPSignalFromPSCs(rand_seed, samp_period_ms):

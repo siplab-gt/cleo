@@ -28,10 +28,21 @@ from cleo.ephys.probes import Signal
 
 
 class LFPSignalBase(Signal, NeoExportable):
+    """Base class for LFP Signals.
+
+    Injection kwargs
+    ----------------
+    orientation : np.ndarray, optional
+        Array of shape (n_neurons, 3) representing which way is "up," that is, towards
+        the surface of the cortex, for each neuron. If a single vector is given, it is
+        taken to be the orientation for all neurons in the group. [0, 0, -1] is the
+        default, meaning the negative z axis is "up."
+    """
+
     t_ms: NDArray[(Any,), float] = field(init=False, repr=False)
     """Times at which LFP is recorded, in ms, stored if
     :attr:`~cleo.InterfaceDevice.save_history` on :attr:`~Signal.probe`"""
-    lfp: NDArray[(Any, Any), Union[float, Quantity]] = field(init=False, repr=False)
+    lfp: Union[NDArray[(Any, Any), Quantity]] = field(init=False, repr=False)
     """Approximated LFP from every call to :meth:`get_state`.
     Shape is (n_samples, n_channels). Stored if
     :attr:`~cleo.InterfaceDevice.save_history` on :attr:`~Signal.probe`"""
@@ -89,16 +100,12 @@ class TKLFPSignal(LFPSignalBase):
     Requires ``tklfp_type='exc'|'inh'`` to specify cell type
     on injection.
 
-    An ``orientation`` keyword argument can also be specified on
-    injection, which should be an array of shape ``(n_neurons, 3)``
-    representing which way is "up," that is, towards the surface of
-    the cortex, for each neuron. If a single vector is given, it is
-    taken to be the orientation for all neurons in the group. [0, 0, -1]
-    is the default, meaning the negative z axis is "up." As stated
-    elsewhere, Cleo's convention is that z=0 corresponds to the
-    cortical surface and increasing z values represent increasing depth.
-
     TKLFP is computed from spikes using the `tklfp package <https://github.com/kjohnsen/tklfp/>`_.
+
+    Injection kwargs
+    ----------------
+    tklfp_type : str
+        Either 'exc' or 'inh' to specify the cell type.
     """
 
     uLFP_threshold_uV: float = 1e-3
@@ -170,7 +177,6 @@ class TKLFPSignal(LFPSignalBase):
         self._init_saved_vars()
 
     def _reset_buffer(self, i_mon):
-        mon = self._monitors[i_mon]
         buf_len = len(self._i_buffers[i_mon])
         self._i_buffers[i_mon] = [np.array([], dtype=int, ndmin=1)] * buf_len
         self._t_ms_buffers[i_mon] = [np.array([], dtype=float, ndmin=1)] * buf_len
@@ -215,25 +221,22 @@ class TKLFPSignal(LFPSignalBase):
 
 @define(eq=False)
 class RWSLFPSignalBase(LFPSignalBase):
-    """Records the weighted sum of synaptic current LFP proxy from spikes.
+    """Base class for :class:`RWSLFPSignalFromSpikes` and :class:`RWSLFPSignalFromPSCs`.
 
-    Requires list of ``ampa_syns`` and ``gaba_syns` on injection.
+    These signals should only be injected into neurons representing pyramidal cells with
+    standard synaptic structure (see `Mazzoni, Lindén et al., 2015
+    <https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1004584>`_).
 
-    An ``orientation`` keyword argument can also be specified on
-    injection, which should be an array of shape ``(n_neurons, 3)``
-    representing which way is "up," that is, towards the surface of
-    the cortex, for each neuron. If a single vector is given, it is
-    taken to be the orientation for all neurons in the group. [0, 0, -1]
-    is the default, meaning the negative z axis is "up." As stated
-    elsewhere, Cleo's convention is that z=0 corresponds to the
-    cortical surface and increasing z values represent increasing depth.
+    RWSLFP is computed using the `wslfp package <https://github.com/siplab-gt/wslfp/>`_.
 
-    RWSLFP is computed from spikes using the `wslfp package <https://github.com/siplab-gt/wslfp/>`_.
-    WSLFPCalculator params can be specified on injection with alpha, tau_ampa_ms, tau_gaba_ms.
+    ``amp_func`` and ``pop_aggregate`` can be overridden on injection.
     """
 
     # note these set defaults that can be overrriden on injection
     amp_func: callable = wslfp.mazzoni15_nrn
+    """Function to calculate LFP amplitudes, by default ``wslfp.mazzoni15_nrn``.
+    
+    See `wslfp documentation <https://github.com/siplab-gt/wslfp/blob/master/notebooks/amplitude_comparison.ipynb>`_ for more info."""
     pop_aggregate: bool = False
     """Threshold, as a proportion of the peak current, below which spikes' contribution
     to synaptic currents (and thus LFP) is ignored, by default 1e-3."""
@@ -323,6 +326,8 @@ class RWSLFPSignalBase(LFPSignalBase):
 
 @define
 class SpikeToCurrentSource:
+    """Stores info needed to calculate synaptic currents from spikes for a given spike source."""
+
     J: Union[np.ndarray, sparse.sparray]
     mon: SpikeMonitor
     biexp_kernel_params: dict[str, Any]
@@ -330,6 +335,35 @@ class SpikeToCurrentSource:
 
 @define(eq=False)
 class RWSLFPSignalFromSpikes(RWSLFPSignalBase):
+    """Computes RWSLFP from the spikes onto pyramidal cell.
+
+    Use this if your model does not simulate synaptic current dynamics directly.
+    The parameters of this class are used to synthesize biexponential synaptic currents
+    using ``wslfp.spikes_to_biexp_currents()``.
+    ``ampa_syns`` and ``gaba_syns`` are lists of Synapses or SynapticSubgroup objects
+    and must be passed as kwargs on injection, or else this signal will not be recorded
+    for the target neurons (useful for ignoring interneurons).
+    Attributes set on the signal object serve as the default, but can be overridden on injection.
+    Also, in the case that parameters (e.g., ``tau1_ampa`` or ``weight``) vary by synapse,
+    these can be overridden by passing a tuple of the Synapses or SynapticSubgroup object and
+    a dictionary of the parameters to override.
+
+    RWSLFP refers to the Reference Weighted Sum of synaptic currents LFP proxy from
+    `Mazzoni, Lindén et al., 2015 <https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1004584>`_.
+
+    Injection kwargs:
+    -----------------
+    ampa_syns : list[Synapses | SynapticSubgroup | tuple[Synapses|SynapticSubgroup, dict]]
+        Synapses or SynapticSubgroup objects representing AMPA synapses (delivering excitatory currents).
+        Or a tuple of the Synapses or SynapticSubgroup object and a dictionary of parameters to override.
+    gaba_syns : list[Synapses | SynapticSubgroup | tuple[Synapses|SynapticSubgroup, dict]]
+        Synapses or SynapticSubgroup objects representing GABA synapses (delivering inhibitory currents).
+        Or a tuple of the Synapses or SynapticSubgroup object and a dictionary of parameters to override.
+    weight : str | float, optional
+        Name of the weight variable or parameter in the Synapses or SynapticSubgroup objects, or a float
+        in the case of a single weight for all synapses. Default is 'w'.
+    """
+
     # can override on injection: tau1|2_ampa|gaba, syn_delay, I_threshold
     tau1_ampa: Quantity = 2 * ms
     tau2_ampa: Quantity = 0.4 * ms
@@ -489,6 +523,24 @@ class RWSLFPSignalFromSpikes(RWSLFPSignalBase):
 
 @define(eq=False)
 class RWSLFPSignalFromPSCs(RWSLFPSignalBase):
+    """Computes RWSLFP from the currents onto pyramidal cells.
+
+    Use this if your model already simulates synaptic current dynamics.
+    ``Iampa_var_names`` and ``Igaba_var_names`` are lists of variable names to include
+    and must be passed in as kwargs on injection or else the target neuron group will
+    not contribute to this signal (desirable for interneurons).
+
+    RWSLFP refers to the Reference Weighted Sum of synaptic currents LFP proxy from
+    `Mazzoni, Lindén et al., 2015 <https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1004584>`_.
+
+    Injection kwargs
+    ----------------
+    Iampa_var_names : list[str]
+        List of variable names in the neuron group representing AMPA currents.
+    Igaba_var_names : list[str]
+        List of variable names in the neuron group representing GABA currents.
+    """
+
     _ampa_vars: dict[NeuronGroup, list] = field(init=False, factory=dict, repr=False)
     _gaba_vars: dict[NeuronGroup, list] = field(init=False, factory=dict, repr=False)
     _t_ampa_bufs: dict[NeuronGroup, deque[float]] = field(

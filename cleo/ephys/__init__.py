@@ -1,6 +1,7 @@
 """Contains probes, convenience functions for generating electrode array coordinates,
 signals, spiking, and LFP"""
 from cleo.ephys.lfp import (
+    LFPSignalBase,
     RWSLFPSignalBase,
     RWSLFPSignalFromPSCs,
     RWSLFPSignalFromSpikes,
