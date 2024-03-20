@@ -35,6 +35,7 @@ extensions = [
     "sphinx.ext.napoleon",
     "sphinx.ext.intersphinx",
     "sphinx.ext.viewcode",
+    "sphinx.ext.duration",
     "sphinx_copybutton",
     "sphinx-favicon",
     "myst_nb",
