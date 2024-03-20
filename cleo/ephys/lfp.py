@@ -5,7 +5,7 @@ import warnings
 from collections import deque
 from datetime import datetime
 from itertools import chain
-from math import ceil
+from math import floor
 from numbers import Number
 from typing import Any, Union
 
@@ -399,7 +399,7 @@ class RWSLFPSignalFromSpikes(RWSLFPSignalBase):
             syn, override_kwargs = syn
             kwparams = {**kwparams, **override_kwargs}
         else:
-            assert isinstance(syn, Synapses)
+            assert isinstance(syn, (Synapses, SynapticSubgroup))
 
         return syn, kwparams
 
@@ -554,8 +554,8 @@ class RWSLFPSignalFromPSCs(RWSLFPSignalBase):
                     f" specify it on injection: .inject({self.probe.name}"
                     ", sample_period_ms=...)"
                 )
-        buf_len_ampa = ceil(wslfp_calc.tau_ampa_ms / sample_period_ms) + 1
-        buf_len_gaba = ceil(wslfp_calc.tau_gaba_ms / sample_period_ms) + 1
+        buf_len_ampa = floor(wslfp_calc.tau_ampa_ms / sample_period_ms + 1)
+        buf_len_gaba = floor(wslfp_calc.tau_gaba_ms / sample_period_ms + 1)
         return buf_len_ampa, buf_len_gaba
 
     def _curr_from_buffer(self, t_buf_ms, I_buf, t_eval_ms: float, n_sources):

@@ -321,5 +321,72 @@ def test_RWSLFPSignalFromSpikes(rand_seed):
     # pop agg, amp func, and orientation test could be same for PSC and spike versions
 
 
+@pytest.mark.parametrize("samp_period_ms", [1, 1.4])
+def test_RWSLFPSignalFromPSCs(rand_seed, samp_period_ms):
+    rng = np.random.default_rng(rand_seed)
+    b2.seed(rand_seed)
+    n_exc = 16
+    n_elec = 4
+    elec_coords = rng.uniform(-1, 1, (n_elec, 3)) * mm
+
+    exc = b2.NeuronGroup(
+        n_exc,
+        """dIampa1/dt = xi_1 / sqrt(dt) : 1
+           dIampa2/dt = xi_2 / sqrt(dt) : 1
+           dIgaba1/dt = xi_3 / sqrt(dt) : 1
+           dIgaba2/dt = xi_4 / sqrt(dt) : 1
+        """,
+    )
+    assign_coords(exc, rng.uniform(-1, 1, (n_exc, 3)) * mm)
+
+    # cleo setup
+    sim = CLSimulator(Network(exc))
+    sim.set_io_processor(RecordOnlyProcessor(samp_period_ms))
+
+    def add_rwslfp_sig(
+        pop_agg=True,
+        amp_func=wslfp.mazzoni15_pop,
+        ornt=[0, 0, -1],
+        Iampa_var_names=["Iampa1"],
+        Igaba_var_names=["Igaba1"],
+    ):
+        rwslfp_sig = RWSLFPSignalFromPSCs(
+            pop_aggregate=pop_agg,
+            amp_func=amp_func,
+        )
+        # separate probe for each signal since some injection kwargs need to be different per signal
+        i = len(sim.recorders)
+        probe = Probe(elec_coords, [rwslfp_sig], name=f"probe{i}")
+
+        sim.inject(
+            probe,
+            exc,
+            orientation=ornt,
+            Iampa_var_names=Iampa_var_names,
+            Igaba_var_names=Igaba_var_names,
+        )
+        return rwslfp_sig
+
+    signals_by_param = {}
+    for param_name, param_vals in [
+        ("pop_agg", (True, False)),
+        ("amp_func", (wslfp.aussel18, wslfp.mazzoni15_pop)),
+        ("ornt", (rng.normal(size=(n_exc, 3)), (-0.2, -0.1, -0.3))),
+        ("Iampa_var_names", (["Iampa1"], ["Iampa1", "Iampa2"])),
+        ("Igaba_var_names", (["Igaba1"], ["Igaba1", "Igaba2"])),
+    ]:
+        signals_by_param[param_name] = []
+        for val in param_vals:
+            # store result of each different value for each param
+            signals_by_param[param_name].append(add_rwslfp_sig(**{param_name: val}))
+    sim.run(30 * ms)
+    # each parameter change should change the resulting signal:
+    for param, signals in signals_by_param.items():
+        assert len(signals) > 1
+        for i, sig1 in enumerate(signals):
+            for sig2 in signals[i + 1 :]:
+                assert not np.allclose(sig1.lfp, sig2.lfp)
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-xs", "--lf"])
