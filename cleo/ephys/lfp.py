@@ -10,15 +10,15 @@ from numbers import Number
 from typing import Any, Union
 
 import neo
-import numpy as np
 import quantities as pq
 import wslfp
 from attrs import define, field
-from brian2 import NeuronGroup, Quantity, Subgroup, Synapses, mm, ms, um
+from brian2 import NeuronGroup, Quantity, Subgroup, Synapses, mm, ms, np, um
 from brian2.monitors.spikemonitor import SpikeMonitor
 from brian2.synapses.synapses import SynapticSubgroup
+from brian2.units import Unit, uvolt
 from nptyping import NDArray
-from scipy import interpolate, sparse
+from scipy import sparse
 from tklfp import TKLFP
 
 import cleo.utilities
@@ -27,8 +27,63 @@ from cleo.coords import coords_from_ng
 from cleo.ephys.probes import Signal
 
 
+class LFPSignalBase(Signal, NeoExportable):
+    t_ms: NDArray[(Any,), float] = field(init=False, repr=False)
+    """Times at which LFP is recorded, in ms, stored if
+    :attr:`~cleo.InterfaceDevice.save_history` on :attr:`~Signal.probe`"""
+    lfp: NDArray[(Any, Any), Union[float, Quantity]] = field(init=False, repr=False)
+    """Approximated LFP from every call to :meth:`get_state`.
+    Shape is (n_samples, n_channels). Stored if
+    :attr:`~cleo.InterfaceDevice.save_history` on :attr:`~Signal.probe`"""
+    _elec_coords: np.ndarray = field(init=False, repr=False)
+    _lfp_unit: Unit
+
+    def _post_init_for_probe(self):
+        self._elec_coords = self.probe.coords.copy()
+        # need to invert z coords since cleo uses an inverted z axis and
+        # tklfp and wslfp do not
+        self._elec_coords[:, 2] *= -1
+        self._init_saved_vars()
+
+    def _init_saved_vars(self):
+        if self.probe.save_history:
+            self.t_ms = np.empty((0,))
+            self.lfp = np.empty((0, self.probe.n)) * self._lfp_unit
+
+    def _update_saved_vars(self, t_ms, lfp):
+        if self.probe.save_history:
+            # self.t_ms = np.concatenate([self.t_ms, [t_ms]])
+            # self.lfp = np.vstack([self.lfp, lfp])
+            lfp = np.reshape(lfp, (1, -1))
+            t_ms = np.reshape(t_ms, (1,))
+            self.t_ms = cleo.utilities.unit_safe_append(self.t_ms, t_ms)
+            self.lfp = cleo.utilities.unit_safe_append(self.lfp, lfp)
+
+    def to_neo(self) -> neo.AnalogSignal:
+        # inherit docstring
+        try:
+            signal = cleo.utilities.analog_signal(
+                self.t_ms,
+                self.lfp,
+                str(self._lfp_unit),
+            )
+        except AttributeError:
+            return
+        signal.name = self.probe.name + "." + self.name
+        signal.description = f"Exported from Cleo {self.__class__.__name__} object"
+        signal.annotate(export_datetime=datetime.now())
+        # broadcast in case of uniform direction
+        signal.array_annotate(
+            x=self.probe.coords[..., 0] / mm * pq.mm,
+            y=self.probe.coords[..., 1] / mm * pq.mm,
+            z=self.probe.coords[..., 2] / mm * pq.mm,
+            i_channel=np.arange(self.probe.n),
+        )
+        return signal
+
+
 @define(eq=False)
-class TKLFPSignal(Signal, NeoExportable):
+class TKLFPSignal(LFPSignalBase):
     """Records the Teleńczuk kernel LFP approximation.
 
     Requires ``tklfp_type='exc'|'inh'`` to specify cell type
@@ -51,37 +106,13 @@ class TKLFPSignal(Signal, NeoExportable):
     to be considered, by default 1e-3.
     This determines the buffer length of past spikes, since the uLFP from a long-past
     spike becomes negligible and is ignored."""
-    t_ms: NDArray[(Any,), float] = field(init=False, repr=False)
-    """Times at which LFP is recorded, in ms, stored if
-    :attr:`~cleo.InterfaceDevice.save_history` on :attr:`~Signal.probe`"""
-    lfp_uV: NDArray[(Any, Any), float] = field(init=False, repr=False)
-    """Approximated LFP from every call to :meth:`get_state`.
-    Shape is (n_samples, n_channels). Stored if
-    :attr:`~cleo.InterfaceDevice.save_history` on :attr:`~Signal.probe`"""
-    _elec_coords_mm: np.ndarray = field(init=False, repr=False)
     _tklfps: list[TKLFP] = field(init=False, factory=list, repr=False)
     _monitors: list[SpikeMonitor] = field(init=False, factory=list, repr=False)
     _mon_spikes_already_seen: list[int] = field(init=False, factory=list, repr=False)
     _i_buffers: list[list[np.ndarray]] = field(init=False, factory=list, repr=False)
     _t_ms_buffers: list[list[np.ndarray]] = field(init=False, factory=list, repr=False)
     _buffer_positions: list[int] = field(init=False, factory=list, repr=False)
-
-    def _post_init_for_probe(self):
-        self._elec_coords_mm = self.probe.coords / mm
-        # need to invert z coords since cleo uses an inverted z axis and
-        # tklfp does not
-        self._elec_coords_mm[:, 2] *= -1
-        self._init_saved_vars()
-
-    def _init_saved_vars(self):
-        if self.probe.save_history:
-            self.t_ms = np.empty((0,))
-            self.lfp_uV = np.empty((0, self.probe.n))
-
-    def _update_saved_vars(self, t_ms, lfp_uV):
-        if self.probe.save_history:
-            self.t_ms = np.concatenate([self.t_ms, [t_ms]])
-            self.lfp_uV = np.vstack([self.lfp_uV, lfp_uV])
+    _lfp_unit: Unit = uvolt
 
     def connect_to_neuron_group(self, neuron_group: NeuronGroup, **kwparams):
         # inherit docstring
@@ -100,7 +131,7 @@ class TKLFPSignal(Signal, NeoExportable):
             neuron_group.y / mm,
             -neuron_group.z / mm,  # invert neuron zs as well
             is_excitatory=tklfp_type == "exc",
-            elec_coords_mm=self._elec_coords_mm,
+            elec_coords_mm=self._elec_coords / mm,
             orientation=orientation,
         )
 
@@ -129,9 +160,9 @@ class TKLFPSignal(Signal, NeoExportable):
         for i_mon in range(len(self._monitors)):
             self._update_spike_buffer(i_mon)
             tot_tklfp += self._tklfp_for_monitor(i_mon, now_ms)
-        out = np.reshape(tot_tklfp, (-1,))  # return 1D array (vector)
-        self._update_saved_vars(now_ms, out)
-        return out
+        tot_tklfp = np.reshape(tot_tklfp, (-1,)) * uvolt  # return 1D array (vector)
+        self._update_saved_vars(now_ms, tot_tklfp)
+        return tot_tklfp
 
     def reset(self, **kwargs) -> None:
         for i_mon in range(len(self._monitors)):
@@ -181,31 +212,9 @@ class TKLFPSignal(Signal, NeoExportable):
             tklfp.compute_min_window_ms(self.uLFP_threshold_uV) / sample_period_ms
         ).astype(int)
 
-    def to_neo(self) -> neo.AnalogSignal:
-        # inherit docstring
-        try:
-            signal = cleo.utilities.analog_signal(
-                self.t_ms,
-                self.lfp_uV,
-                "uV",
-            )
-        except AttributeError:
-            return
-        signal.name = self.probe.name + "." + self.name
-        signal.description = f"Exported from Cleo {self.__class__.__name__} object"
-        signal.annotate(export_datetime=datetime.now())
-        # broadcast in case of uniform direction
-        signal.array_annotate(
-            x=self.probe.coords[..., 0] / mm * pq.mm,
-            y=self.probe.coords[..., 1] / mm * pq.mm,
-            z=self.probe.coords[..., 2] / mm * pq.mm,
-            i_channel=np.arange(self.probe.n),
-        )
-        return signal
-
 
 @define(eq=False)
-class RWSLFPSignalBase(Signal, NeoExportable):
+class RWSLFPSignalBase(LFPSignalBase):
     """Records the weighted sum of synaptic current LFP proxy from spikes.
 
     Requires list of ``ampa_syns`` and ``gaba_syns` on injection.
@@ -228,41 +237,20 @@ class RWSLFPSignalBase(Signal, NeoExportable):
     pop_aggregate: bool = False
     """Threshold, as a proportion of the peak current, below which spikes' contribution
     to synaptic currents (and thus LFP) is ignored, by default 1e-3."""
-    t_ms: NDArray[(Any,), float] = field(init=False, repr=False)
-    """Times at which LFP is recorded, in ms, stored if
-    :attr:`~cleo.InterfaceDevice.save_history` on :attr:`~Signal.probe`"""
-    lfp: NDArray[(Any, Any), float] = field(init=False, repr=False)
-    """Approximated LFP from every call to :meth:`get_state`.
-    Shape is (n_samples, n_channels). Stored if
-    :attr:`~cleo.InterfaceDevice.save_history` on :attr:`~Signal.probe`"""
-    _elec_coords_um: np.ndarray = field(init=False, repr=False)
+
     _wslfps: dict[NeuronGroup, wslfp.WSLFPCalculator] = field(
         init=False, factory=dict, repr=False
     )
-
-    def _post_init_for_probe(self):
-        self._elec_coords_um = self.probe.coords / um
-        # need to invert z coords since cleo uses an inverted z axis and
-        # tklfp does not
-        self._elec_coords_um[:, 2] *= -1
-        self._init_saved_vars()
-
-    def _init_saved_vars(self):
-        if self.probe.save_history:
-            self.t_ms = np.empty((0,))
-            self.lfp = np.empty((0, self.probe.n))
-
-    def _update_saved_vars(self, t_ms, lfp):
-        if self.probe.save_history:
-            self.t_ms = np.concatenate([self.t_ms, [t_ms]])
-            self.lfp = np.vstack([self.lfp, lfp])
+    _lfp_unit: Unit = 1
 
     def _init_wslfp_calc(self, neuron_group: NeuronGroup, **kwparams):
         nrn_coords_um = coords_from_ng(neuron_group) / um
         nrn_coords_um[:, 2] *= -1
 
-        orientation = kwparams.pop("orientation", np.array([[0, 0, -1]])).copy()
-        orientation[:, 2] *= -1
+        orientation = np.copy(kwparams.pop("orientation", np.array([[0, 0, -1]])))
+        orientation = orientation.reshape((-1, 3))
+        assert np.shape(orientation)[-1] == 3
+        orientation[..., 2] *= -1
 
         if self.pop_aggregate:
             nrn_coords_um = np.mean(nrn_coords_um, axis=0)
@@ -282,7 +270,7 @@ class RWSLFPSignalBase(Signal, NeoExportable):
                 wslfp_kwargs[key] = kwparams.pop(key)
 
         self._wslfps[neuron_group] = wslfp.from_xyz_coords(
-            self._elec_coords_um,
+            self._elec_coords / um,
             nrn_coords_um,
             amp_func=kwparams.pop("amp_func", self.amp_func),
             source_orientation=orientation,
@@ -597,8 +585,7 @@ class RWSLFPSignalFromPSCs(RWSLFPSignalBase):
     ) -> tuple[np.ndarray, np.ndarray]:
         """outputs must have shape (n_t, n_current_sources)"""
         # First add current currents to history
-
-        # need to round to avoid floating point errors
+        # -- need to round to avoid floating point errors
         now_ms = round(self.probe.sim.network.t / ms, 3)
         self._t_ampa_bufs[ng].append(now_ms)
         self._t_gaba_bufs[ng].append(now_ms)
@@ -610,18 +597,6 @@ class RWSLFPSignalFromPSCs(RWSLFPSignalBase):
         I_gaba = np.zeros((1, ng.N))
         for I_gaba_name in self._gaba_vars[ng]:
             I_gaba += getattr(ng, I_gaba_name)
-        # if isinstance(I_ampa_name, str):
-        #     I_ampa = getattr(ng, self._ampa_vars[ng])
-        # else:
-        #     assert isinstance(I_ampa_name, (list, tuple))
-        #     I_ampa = np.sum([getattr(ng, var) for var in I_ampa_name], axis=0)
-
-        # I_gaba_name = self._gaba_vars[ng]
-        # if isinstance(I_gaba_name, str):
-        #     I_gaba = getattr(ng, self._gaba_vars[ng])
-        # else:
-        #     assert isinstance(I_gaba_name, (list, tuple))
-        #     I_gaba = np.sum([getattr(ng, var) for var in I_gaba_name], axis=0)
 
         if self.pop_aggregate:
             I_ampa = np.sum(I_ampa)

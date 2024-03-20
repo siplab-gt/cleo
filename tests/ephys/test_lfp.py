@@ -1,16 +1,32 @@
-"""Tests for ephys.lfp module"""
-import pytest
-from brian2 import mm, Hz, ms, Network, seed, SpikeGeneratorGroup
-import numpy as np
-from brian2.input.poissongroup import PoissonGroup
-from tklfp import TKLFP
-import neo
-import quantities as pq
+# """Tests for ephys.lfp module"""
+import time
+from itertools import product
 
+import brian2.only as b2
+import neo
+import numpy as np
+import pytest
+import quantities as pq
+import wslfp
+from brian2 import Hz, Network, SpikeGeneratorGroup, mm, ms, seed, uvolt
+from tklfp import TKLFP
+
+import cleo
 from cleo import CLSimulator
+from cleo.coords import (
+    assign_coords,
+    assign_coords_rand_rect_prism,
+    assign_xyz,
+    concat_coords,
+)
+from cleo.ephys import (
+    Probe,
+    RWSLFPSignalFromPSCs,
+    RWSLFPSignalFromSpikes,
+    TKLFPSignal,
+    linear_shank_coords,
+)
 from cleo.ioproc import RecordOnlyProcessor
-from cleo.ephys import linear_shank_coords, TKLFPSignal, Probe
-from cleo.coords import assign_coords_rand_rect_prism, assign_xyz, concat_coords
 
 
 def _groups_types_ei(n_e, n_i):
@@ -18,7 +34,7 @@ def _groups_types_ei(n_e, n_i):
     if n_e > 0:
 
         def gen():
-            epg = PoissonGroup(n_e, np.linspace(100, 500, n_e) * Hz)
+            epg = b2.PoissonGroup(n_e, np.linspace(100, 500, n_e) * Hz)
             assign_coords_rand_rect_prism(epg, (-0.2, 0.2), (-2, 0.05), (0.75, 0.85))
             # out.append((ipg, "exc"))
             return (epg, "exc")
@@ -27,7 +43,7 @@ def _groups_types_ei(n_e, n_i):
     if n_i > 0:
 
         def gen():
-            ipg = PoissonGroup(n_i, np.linspace(100, 500, n_i) * Hz)
+            ipg = b2.PoissonGroup(n_i, np.linspace(100, 500, n_i) * Hz)
             assign_coords_rand_rect_prism(ipg, (-0.2, 0.2), (-2, 0.05), (0.75, 0.85))
             # out.append((ipg, "inh"))
             return (ipg, "inh")
@@ -97,12 +113,12 @@ def test_TKLFPSignal(groups_and_types, signal_positive, rand_seed):
     assert np.all((lfp[4:] > 0) == signal_positive)
 
     # reset should clear buffer, zeroing out the signal
-    assert tklfp.lfp_uV.shape == (1, 8)
+    assert tklfp.lfp.shape == (1, 8)
     sim.reset()
-    assert tklfp.lfp_uV.shape == (0, 8)
+    assert tklfp.lfp.shape == (0, 8)
     lfp_reset = tklfp.get_state()
     assert np.all(lfp_reset == 0)
-    assert tklfp.lfp_uV.shape == (1, 8)
+    assert tklfp.lfp.shape == (1, 8)
 
 
 def test_TKLFPSignal_out_of_range():
@@ -110,7 +126,7 @@ def test_TKLFPSignal_out_of_range():
     n = 5
     pgs = []
     for i in range(4):
-        pg = PoissonGroup(n, 500 * Hz)
+        pg = b2.PoissonGroup(n, 500 * Hz)
         assign_xyz(pg, 5 * i, 5 * i, 5 * i)  # ranging from close (origin) to far
         pgs.append(pg)
     net = Network(*pgs)
@@ -127,12 +143,11 @@ def test_TKLFPSignal_out_of_range():
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("seed", [1783, 1865, 1918, 1945])
 @pytest.mark.parametrize("is_exc", [True, False])
-def test_TKLFP_orientation(seed, is_exc):
+def test_TKLFP_orientation(rand_seed, is_exc):
     # here we'll just compare TKLFPSignal's output to TKLFP. Should
     # have done this for the other tests
-    rng = np.random.default_rng(seed)
+    rng = np.random.default_rng(rand_seed)
     n_nrns = 5
     n_elec = 4
     # random network setup and spikes
@@ -180,21 +195,24 @@ def test_TKLFP_orientation(seed, is_exc):
     # the same phenomenon I think the biggest difference is that tklfp
     # computes it all post-hoc but TKLFPSignal can only compute using
     # a causal buffer of spikes
-    assert np.allclose(tklfp_signal.lfp_uV, tklfp_out, atol=5e-3)
+    assert np.allclose(tklfp_signal.lfp / uvolt, tklfp_out, atol=5e-3)
 
 
+@pytest.mark.parametrize(
+    "LFPSignal", [TKLFPSignal, RWSLFPSignalFromSpikes, RWSLFPSignalFromPSCs]
+)
 @pytest.mark.parametrize(
     "t,regular_samples", [(0, False), (1, False), (10, False), (10, True)]
 )
 @pytest.mark.parametrize("n_channels", [1, 4])
-def test_tklfp_signal_to_neo(n_channels, t, regular_samples):
-    sig = TKLFPSignal()
+def test_lfp_signal_to_neo(LFPSignal, n_channels, t, regular_samples):
+    sig = LFPSignal()
     probe = Probe(np.random.rand(n_channels, 3) * mm, [sig])
     if regular_samples:
         sig.t_ms = np.arange(t)
     else:
         sig.t_ms = np.sort(np.random.rand(t) * t)
-    sig.lfp_uV = np.random.rand(t, n_channels)
+    sig.lfp = np.random.rand(t, n_channels)
     neo_sig = sig.to_neo()
 
     if regular_samples and t > 1:
@@ -212,10 +230,104 @@ def test_tklfp_signal_to_neo(n_channels, t, regular_samples):
         neo_sig.array_annotations["z"] / pq.mm == sig.probe.coords[..., 2] / mm
     )
     assert np.all(neo_sig.array_annotations["i_channel"] == np.arange(probe.n))
-    assert np.all(neo_sig.magnitude == sig.lfp_uV)
+    assert np.all(neo_sig.magnitude == sig.lfp)
     assert neo_sig.name == f"{sig.probe.name}.{sig.name}"
 
 
-@pytest.mark.parametrize("pop_agg", [True, False])
-def test_RWSLFPSignalFromSpikes(pop_agg):
-    ...
+def test_RWSLFPSignalFromSpikes(rand_seed):
+    rng = np.random.default_rng(rand_seed)
+    b2.seed(rand_seed)
+    n_exc = 16
+    n_inh = 5
+    n_elec = 4
+    # random network setup and spikes
+    elec_coords = rng.uniform(-1, 1, (n_elec, 3)) * mm
+    # random spikes during first 100 ms
+    # n_spk = n_exc * 4
+    # i_spk = rng.choice(range(n_exc), n_spk)
+    # t_spk = rng.uniform(0, 100, (n_spk,)) * ms
+    # sgg_exc = SpikeGeneratorGroup(n_exc, i_spk, t_spk)
+    # sgg_exc._N = n_exc  # hack for assign_coords to work
+    # assign_coords(sgg_exc, rng.uniform(-1, 1, (n_exc, 3)) * mm)
+    # sgg_inh = SpikeGeneratorGroup(n_inh, i_spk, t_spk)
+
+    exc = b2.PoissonGroup(n_exc, 40 * Hz)
+    assign_coords(exc, rng.uniform(-1, 1, (n_exc, 3)) * mm)
+    inh = b2.PoissonGroup(n_inh, 40 * Hz)
+    # just need synapses onto exc to test RWSLFP
+    syn_e2e = b2.Synapses(exc, exc, "w : 1")
+    syn_e2e.connect(p=0.2)
+    syn_i2e = b2.Synapses(inh, exc, "w : 1")
+    syn_i2e.connect(p=0.2)
+
+    # cleo setup
+    sim = CLSimulator(Network(exc, inh, syn_e2e, syn_i2e))
+    samp_period = 10 * ms
+    sim.set_io_processor(RecordOnlyProcessor(samp_period / ms))  # record every 10 ms
+    probes = []
+    signals = []
+
+    start_time = time.time()
+
+    for i, (
+        pop_agg,
+        amp_func,
+        ornt,
+        tau1_ampa,
+        tau2_ampa,
+        tau1_gaba,
+        tau2_gaba,
+        syn_delay,
+        homog_J,
+        I_threshold,
+    ) in enumerate(
+        product(
+            (True, False),
+            (wslfp.aussel18, wslfp.mazzoni15_pop),
+            (rng.normal(size=(n_exc, 3)), (-0.2, -0.1, -0.3)),
+            (2, 1) * ms,
+            (0.4, 0.2) * ms,
+            (5, 6) * ms,
+            (0.25, 0.2) * ms,
+            (1, 2) * ms,
+            (True, False),
+            (0.1, 0.001),
+        )
+    ):
+        rwslfp_sig = RWSLFPSignalFromSpikes(
+            pop_aggregate=pop_agg,
+            amp_func=amp_func,
+            tau1_ampa=tau1_ampa,
+            tau2_ampa=tau2_ampa,
+            tau1_gaba=tau1_gaba,
+            tau2_gaba=tau2_gaba,
+            syn_delay=syn_delay,
+            I_threshold=I_threshold,
+        )
+        signals.append(rwslfp_sig)
+        # separate probe for each signal since some injection kwargs need to be different per signal
+        probes.append(Probe(elec_coords, [rwslfp_sig], name=f"probe{i}"))
+
+        if homog_J:
+            syn_e2e.w = 1
+            syn_i2e.w = -n_exc / n_inh
+        else:
+            syn_e2e.w = rng.lognormal(size=len(syn_e2e))
+            syn_i2e.w = -n_exc / n_inh * rng.lognormal(size=len(syn_i2e))
+
+        sim.inject(
+            probes[-1], exc, orientation=ornt, ampa_syns=[syn_e2e], gaba_syns=[syn_i2e]
+        )
+
+    end_time = time.time()
+    print(f"setup time: {end_time - start_time}")
+    assert False
+
+    # pop agg, amp func, orientation, tau1, tau2, syn_delay, homogeneous vs. heterogeneous weights
+    # variations should all be slightly different
+
+    # pop agg, amp func, and orientation test could be same for PSC and spike versions
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-xs", "--lf"])
