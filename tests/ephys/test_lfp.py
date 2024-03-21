@@ -386,5 +386,28 @@ def test_RWSLFPSignalFromPSCs(rand_seed, samp_period_ms):
                 assert not np.allclose(sig1.lfp, sig2.lfp)
 
 
+def test_psc_buffer():
+    sig = RWSLFPSignalFromPSCs()
+    t_buf = [1, 2, 4]  # skipped 3 for some reason; should be [2, 3, 4]
+    n_src = 4
+    I_buf = np.arange(3)[..., None] + np.arange(n_src)
+    print(I_buf)
+    t_eval = 2
+    with pytest.warns(match="buffer is unexpected"):
+        assert np.all(
+            sig._curr_from_buffer(t_buf, I_buf, t_eval, n_sources=n_src)
+            == np.arange(1, 5)
+        )
+        assert np.all(
+            sig._curr_from_buffer([1, 3, 4], I_buf, t_eval, n_sources=n_src)
+            == np.arange(0.5, 4.5)
+        )
+
+    assert np.all(sig._curr_from_buffer([3, 4, 5], I_buf, t_eval, n_sources=n_src) == 0)
+    assert np.all(
+        sig._curr_from_buffer([-1, 0, 1], I_buf, t_eval, n_sources=n_src) == 0
+    )
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-xs", "--lf"])

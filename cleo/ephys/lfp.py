@@ -626,7 +626,7 @@ class RWSLFPSignalFromPSCs(RWSLFPSignalBase):
     def _curr_from_buffer(self, t_buf_ms, I_buf, t_eval_ms: float, n_sources):
         # t_eval_ms is not iterable
         empty = np.zeros((1, n_sources))
-        if len(t_buf_ms) == 0 or t_buf_ms[0] > t_eval_ms:
+        if len(t_buf_ms) == 0 or t_buf_ms[0] > t_eval_ms or t_buf_ms[-1] < t_eval_ms:
             return empty
         # when tau is multiple of sample time, current should be collected
         # right when needed, at the left end of the buffer
@@ -636,10 +636,31 @@ class RWSLFPSignalFromPSCs(RWSLFPSignalBase):
         # if not, should only need to interpolate between first and second positions
         # if buffer length is correct
         assert len(t_buf_ms) > 1
-        assert t_buf_ms[0] < t_eval_ms < t_buf_ms[1]
-        I_interp = I_buf[0] + (I_buf[1] - I_buf[0]) * (t_eval_ms - t_buf_ms[0]) / (
-            t_buf_ms[1] - t_buf_ms[0]
-        )
+        if t_buf_ms[0] < t_eval_ms < t_buf_ms[1]:
+            i_l, i_r = 0, 1
+        else:
+            warnings.warn(
+                f"Time buffer is unexpected. Did a sample get skipped? "
+                f"t_buf_ms={t_buf_ms}, t_eval_ms={t_eval_ms}"
+            )
+            i_l, i_r = None, None
+            for i, t in enumerate(t_buf_ms):
+                if t < t_eval_ms:
+                    i_l = i
+                if t >= t_eval_ms:
+                    i_r = i
+                    break
+            if i_l is None or i_r is None or i_l >= i_r:
+                warnings.warn(
+                    "Signal buffer does not contain currents at needed timepoints. "
+                    "Returning 0. "
+                    f"t_buf_ms={t_buf_ms}, t_eval_ms={t_eval_ms}"
+                )
+                return empty
+
+        I_interp = I_buf[i_l] + (I_buf[i_r] - I_buf[i_l]) * (
+            t_eval_ms - t_buf_ms[i_l]
+        ) / (t_buf_ms[i_r] - t_buf_ms[i_l])
 
         I_interp = np.reshape(I_interp, (1, n_sources))
         I_interp = np.nan_to_num(I_interp, nan=0)
