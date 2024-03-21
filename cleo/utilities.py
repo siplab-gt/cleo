@@ -295,6 +295,19 @@ def style_plots_for_docs(dark=True):
     plt.rc("font", **{"sans-serif": "Open Sans"})
 
 
+def style_plots_for_paper():
+    # some hacky workaround for params not being updated until after first plot
+    f = plt.figure()
+    plt.plot()
+    plt.close(f)
+
+    plt.style.use("seaborn-v0_8-paper")
+    plt.rc("savefig", transparent=True, bbox="tight", dpi=300)
+    plt.rc("svg", fonttype="none")
+    plt.rc("axes.spines", top=False, right=False)
+    plt.rc("font", **{"sans-serif": "Open Sans"})
+
+
 def unit_safe_append(q1: Quantity, q2: Quantity, axis=0):
     if not b2.have_same_dimensions(q1, q2):
         raise ValueError("Dimensions must match")
