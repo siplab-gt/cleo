@@ -196,7 +196,7 @@ class LatencyIOProcessor(IOProcessor):
             if np.isclose(query_time_ms % self.sample_period_ms, 0):
                 return True
         elif self.sampling == "when idle":
-            if query_time_ms % self.sample_period_ms == 0:
+            if np.isclose(query_time_ms % self.sample_period_ms, 0):
                 if self._is_currently_idle(query_time_ms):
                     self._needs_off_schedule_sample = False
                     return True

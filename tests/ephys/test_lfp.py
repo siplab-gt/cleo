@@ -234,6 +234,23 @@ def test_lfp_signal_to_neo(LFPSignal, n_channels, t, regular_samples):
     assert neo_sig.name == f"{sig.probe.name}.{sig.name}"
 
 
+_base_param_options = [
+    ("pop_agg", (True, False)),
+    ("amp_func", (wslfp.aussel18, wslfp.mazzoni15_pop)),
+    # ("wslfp_kwargs", ({}, {"tau_ampa_ms": 5})),
+    ("wslfp_kwargs", ({}, {"tau_gaba_ms": 1})),
+    ("wslfp_kwargs", ({}, {"alpha": 1})),
+    (
+        "wslfp_kwargs",
+        ({"source_coords_are_somata": True}, {"source_coords_are_somata": False}),
+    ),
+    (
+        "wslfp_kwargs",
+        ({"source_dendrite_length_um": 250}, {"source_dendrite_length_um": 300}),
+    ),
+]
+
+
 def test_RWSLFPSignalFromSpikes(rand_seed):
     rng = np.random.default_rng(rand_seed)
     b2.seed(rand_seed)
@@ -259,6 +276,7 @@ def test_RWSLFPSignalFromSpikes(rand_seed):
         pop_agg=True,
         amp_func=wslfp.mazzoni15_pop,
         ornt=[0, 0, -1],
+        wslfp_kwargs={},
         tau1_ampa=2 * ms,
         tau2_ampa=0.4 * ms,
         tau1_gaba=5 * ms,
@@ -276,6 +294,7 @@ def test_RWSLFPSignalFromSpikes(rand_seed):
             tau2_gaba=tau2_gaba,
             syn_delay=syn_delay,
             I_threshold=I_threshold,
+            wslfp_kwargs=wslfp_kwargs,
         )
         # separate probe for each signal since some injection kwargs need to be different per signal
         i = len(sim.recorders)
@@ -293,10 +312,8 @@ def test_RWSLFPSignalFromSpikes(rand_seed):
         )
         return rwslfp_sig
 
-    signals_by_param = {}
-    for param_name, param_vals in [
-        ("pop_agg", (True, False)),
-        ("amp_func", (wslfp.aussel18, wslfp.mazzoni15_pop)),
+    signals_for_options = []
+    param_options = [
         ("ornt", (rng.normal(size=(n_exc, 3)), (-0.2, -0.1, -0.3))),
         ("tau1_ampa", (2, 1) * ms),
         ("tau2_ampa", (0.4, 0.2) * ms),
@@ -305,18 +322,23 @@ def test_RWSLFPSignalFromSpikes(rand_seed):
         ("syn_delay", (1, 2) * ms),
         ("homog_J", (True, False)),
         ("I_threshold", (0.1, 0.001)),
-    ]:
-        signals_by_param[param_name] = []
+    ]
+    for param_name, param_vals in _base_param_options + param_options:
+        signals_to_compare = []
         for val in param_vals:
             # store result of each different value for each param
-            signals_by_param[param_name].append(add_rwslfp_sig(**{param_name: val}))
+            signals_to_compare.append(add_rwslfp_sig(**{param_name: val}))
+        signals_for_options.append((param_name, signals_to_compare))
     sim.run(100 * ms)
     # each parameter change should change the resulting signal:
-    for param, signals in signals_by_param.items():
+    assert len(signals_for_options) == len(_base_param_options) + len(param_options)
+    for param, signals in signals_for_options:
         assert len(signals) > 1
         for i, sig1 in enumerate(signals):
             for sig2 in signals[i + 1 :]:
-                assert not np.allclose(sig1.lfp, sig2.lfp)
+                assert not np.allclose(
+                    sig1.lfp, sig2.lfp
+                ), f"{param} variation not yielding different results"
 
 
 @pytest.mark.parametrize("samp_period_ms", [1, 1.4])
@@ -325,7 +347,7 @@ def test_RWSLFPSignalFromPSCs(rand_seed, samp_period_ms):
     b2.seed(rand_seed)
     n_exc = 16
     n_elec = 4
-    elec_coords = rng.uniform(-1, 1, (n_elec, 3)) * mm
+    elec_coords = rng.uniform(-0.5, 0.5, (n_elec, 3)) * mm
 
     exc = b2.NeuronGroup(
         n_exc,
@@ -335,7 +357,7 @@ def test_RWSLFPSignalFromPSCs(rand_seed, samp_period_ms):
            dIgaba2/dt = xi_4 / sqrt(dt) : 1
         """,
     )
-    assign_coords(exc, rng.uniform(-1, 1, (n_exc, 3)) * mm)
+    assign_coords(exc, rng.uniform(-0.5, 0.5, (n_exc, 3)) * mm)
 
     # cleo setup
     sim = CLSimulator(Network(exc))
@@ -345,13 +367,18 @@ def test_RWSLFPSignalFromPSCs(rand_seed, samp_period_ms):
         pop_agg=True,
         amp_func=wslfp.mazzoni15_pop,
         ornt=[0, 0, -1],
+        wslfp_kwargs={},
         Iampa_var_names=["Iampa1"],
         Igaba_var_names=["Igaba1"],
+        name=None,
     ):
         rwslfp_sig = RWSLFPSignalFromPSCs(
             pop_aggregate=pop_agg,
             amp_func=amp_func,
+            wslfp_kwargs=wslfp_kwargs,
         )
+        if name:
+            rwslfp_sig.name = name
         # separate probe for each signal since some injection kwargs need to be different per signal
         i = len(sim.recorders)
         probe = Probe(elec_coords, [rwslfp_sig], name=f"probe{i}")
@@ -365,25 +392,70 @@ def test_RWSLFPSignalFromPSCs(rand_seed, samp_period_ms):
         )
         return rwslfp_sig
 
-    signals_by_param = {}
-    for param_name, param_vals in [
-        ("pop_agg", (True, False)),
-        ("amp_func", (wslfp.aussel18, wslfp.mazzoni15_pop)),
+    signals_for_options = []
+    param_options = [
         ("ornt", (rng.normal(size=(n_exc, 3)), (-0.2, -0.1, -0.3))),
         ("Iampa_var_names", (["Iampa1"], ["Iampa1", "Iampa2"])),
         ("Igaba_var_names", (["Igaba1"], ["Igaba1", "Igaba2"])),
-    ]:
-        signals_by_param[param_name] = []
+    ]
+    for param_name, param_vals in _base_param_options + param_options:
+        signals = []
         for val in param_vals:
             # store result of each different value for each param
-            signals_by_param[param_name].append(add_rwslfp_sig(**{param_name: val}))
+            signals.append(
+                add_rwslfp_sig(**{param_name: val}, name=f"{param_name}_{val}")
+            )
+        signals_for_options.append((param_name, signals))
     sim.run(30 * ms)
+    assert not np.allclose(exc.Iampa1_, exc.Iampa2_)
     # each parameter change should change the resulting signal:
-    for param, signals in signals_by_param.items():
+    assert len(signals_for_options) == len(_base_param_options) + len(param_options)
+    for param, signals in signals_for_options:
         assert len(signals) > 1
         for i, sig1 in enumerate(signals):
             for sig2 in signals[i + 1 :]:
-                assert not np.allclose(sig1.lfp, sig2.lfp)
+                assert not np.allclose(
+                    sig1.lfp, sig2.lfp
+                ), f"{sig1.name} and {sig2.name} not yielding different results"
+
+
+def test_psc_buffer():
+    sig = RWSLFPSignalFromPSCs()
+    t_buf = [1, 2, 4]  # skipped 3 for some reason; should be [2, 3, 4]
+    n_src = 4
+    I_buf = np.arange(3)[..., None] + np.arange(n_src)
+    print(I_buf)
+    t_eval = 2
+    with pytest.warns(match="buffer is unexpected"):
+        assert np.all(
+            sig._curr_from_buffer(t_buf, I_buf, t_eval, n_sources=n_src)
+            == np.arange(1, 5)
+        )
+        assert np.all(
+            sig._curr_from_buffer([1, 3, 4], I_buf, t_eval, n_sources=n_src)
+            == np.arange(0.5, 4.5)
+        )
+
+    assert np.all(sig._curr_from_buffer([3, 4, 5], I_buf, t_eval, n_sources=n_src) == 0)
+    assert np.all(
+        sig._curr_from_buffer([-1, 0, 1], I_buf, t_eval, n_sources=n_src) == 0
+    )
+
+
+def test_psc_buf_len():
+    sig = RWSLFPSignalFromPSCs()
+    # args are buf_width, sample_period
+    assert sig._buf_len(0, 1) == 1
+    assert sig._buf_len(0, 1.5) == 1
+    assert sig._buf_len(0, 12.13) == 1
+    assert sig._buf_len(1, 1) == 2
+    assert sig._buf_len(1, 0.5) == 3
+    assert sig._buf_len(2, 1) == 3
+    assert sig._buf_len(6, 1) == 7
+    assert sig._buf_len(6, 1.2) == 6
+    assert sig._buf_len(6, 1.4) == 6
+    assert sig._buf_len(6, 1.5) == 5
+    assert sig._buf_len(6, 1.6) == 5
 
 
 if __name__ == "__main__":

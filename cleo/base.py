@@ -460,9 +460,11 @@ class CLSimulator(NeoExportable):
             return
 
         def communicate_with_io_proc(t):
-            if io_processor.is_sampling_now(t / ms):
-                io_processor.put_state(self.get_state(), t / ms)
-            stim_values = io_processor.get_stim_values(t / ms)
+            # assuming no one will have timesteps shorter than nanoseconds...
+            now_ms = round(t / ms, 6)
+            if io_processor.is_sampling_now(now_ms):
+                io_processor.put_state(self.get_state(), now_ms)
+            stim_values = io_processor.get_stim_values(now_ms)
             self.update_stimulators(stim_values)
 
         # communication should be at every timestep. The IOProcessor
