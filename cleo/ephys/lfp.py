@@ -5,7 +5,7 @@ import warnings
 from collections import deque
 from datetime import datetime
 from itertools import chain
-from math import floor
+from math import ceil
 from numbers import Number
 from typing import Any, Union
 
@@ -241,6 +241,12 @@ class RWSLFPSignalBase(LFPSignalBase):
     """Whether to aggregate currents across the population (as opposed to neurons having 
     differential contributions to LFP depending on their location). False by default."""
 
+    wslfp_kwargs: dict = field(factory=dict)
+    """Keyword arguments to pass to the WSLFP calculator, e.g., ``alpha``,
+    ``tau_ampa_ms``, ``tau_gaba_ms````source_coords_are_somata``,
+    ``source_dendrite_length_um``, ``amp_kwargs``, ``strict_boundaries``.
+    """
+
     _wslfps: dict[NeuronGroup, wslfp.WSLFPCalculator] = field(
         init=False, factory=dict, repr=False
     )
@@ -271,6 +277,8 @@ class RWSLFPSignalBase(LFPSignalBase):
         ]:
             if key in kwparams:
                 wslfp_kwargs[key] = kwparams.pop(key)
+            elif key in self.wslfp_kwargs:
+                wslfp_kwargs[key] = self.wslfp_kwargs[key]
 
         self._wslfps[neuron_group] = wslfp.from_xyz_coords(
             self._elec_coords / um,
@@ -595,7 +603,9 @@ class RWSLFPSignalFromPSCs(RWSLFPSignalBase):
 
         self._init_wslfp_calc(neuron_group, **kwparams)
 
-        buf_len_ampa, buf_len_gaba = self._get_buf_lens(self._wslfps[neuron_group])
+        buf_len_ampa, buf_len_gaba = self._get_buf_lens_for_wslfp(
+            self._wslfps[neuron_group]
+        )
         self._t_ampa_bufs[neuron_group] = deque(maxlen=buf_len_ampa)
         self._I_ampa_bufs[neuron_group] = deque(maxlen=buf_len_ampa)
         self._t_gaba_bufs[neuron_group] = deque(maxlen=buf_len_gaba)
@@ -605,7 +615,10 @@ class RWSLFPSignalFromPSCs(RWSLFPSignalBase):
         self._ampa_vars[neuron_group] = [varname + "_" for varname in I_ampa_names]
         self._gaba_vars[neuron_group] = [varname + "_" for varname in I_gaba_names]
 
-    def _get_buf_lens(self, wslfp_calc, **kwparams):
+    def _buf_len(self, tau, dt):
+        return ceil((tau + dt) / dt)
+
+    def _get_buf_lens_for_wslfp(self, wslfp_calc, **kwparams):
         # need sampling period
         sample_period_ms = kwparams.get("sample_period_ms", None)
         if sample_period_ms is None:
@@ -619,8 +632,8 @@ class RWSLFPSignalFromPSCs(RWSLFPSignalBase):
                     f" specify it on injection: .inject({self.probe.name}"
                     ", sample_period_ms=...)"
                 )
-        buf_len_ampa = floor(wslfp_calc.tau_ampa_ms / sample_period_ms + 1)
-        buf_len_gaba = floor(wslfp_calc.tau_gaba_ms / sample_period_ms + 1)
+        buf_len_ampa = self._buf_len(wslfp_calc.tau_ampa_ms, sample_period_ms)
+        buf_len_gaba = self._buf_len(wslfp_calc.tau_gaba_ms, sample_period_ms)
         return buf_len_ampa, buf_len_gaba
 
     def _curr_from_buffer(self, t_buf_ms, I_buf, t_eval_ms: float, n_sources):
@@ -704,7 +717,7 @@ class RWSLFPSignalFromPSCs(RWSLFPSignalBase):
     def reset(self, **kwargs) -> None:
         self._init_saved_vars()
         for ng in self._t_ampa_bufs:
-            buf_len_ampa, buf_len_gaba = self._get_buf_lens(self._wslfps[ng])
+            buf_len_ampa, buf_len_gaba = self._get_buf_lens_for_wslfp(self._wslfps[ng])
             self._t_ampa_bufs[ng] = deque(maxlen=buf_len_ampa)
             self._I_ampa_bufs[ng] = deque(maxlen=buf_len_ampa)
             self._t_gaba_bufs[ng] = deque(maxlen=buf_len_gaba)
