@@ -1,9 +1,9 @@
 """Tests for cleo/processing/__init__.py"""
 from typing import Any, Tuple
 
-from brian2 import Hz, Network, PoissonGroup, ms, np
+from brian2 import Hz, Network, NeuronGroup, ms, np
 
-from cleo import CLSimulator
+import cleo
 from cleo.ioproc import ConstantDelay, LatencyIOProcessor, ProcessingBlock
 
 
@@ -111,25 +111,34 @@ def test_LatencyIOProcessor_wait_parallel():
     _test_LatencyIOProcessor(myLIOP, t, sampling, inputs, outputs)
 
 
-class SampleCounter(LatencyIOProcessor):
+class SampleCounter(cleo.IOProcessor):
     """Just count samples"""
 
-    def __init__(self, sample_period_ms, **kwargs):
-        super().__init__(sample_period_ms, **kwargs)
-        self.count = 0
+    def is_sampling_now(self, t_query_ms) -> np.bool:
+        return t_query_ms % self.sample_period_ms == 0
 
-    def process(self, state_dict: dict, sample_time_ms: float) -> Tuple[dict, float]:
+    def __init__(self):
+        self.count = 0
+        self.sample_period_ms = 1
+        self.latest_ctrl_signal = {}
+
+    def put_state(self, state_dict: dict, sample_time_ms: float):
         self.count += 1
+        print(sample_time_ms)
         return ({}, sample_time_ms)
+
+    def get_ctrl_signals(self, query_time_ms: np.float) -> dict:
+        return {}
 
 
 def test_no_skip_sampling():
-    sc = SampleCounter(1)
-    net = Network(PoissonGroup(1, 100 * Hz))
-    sim = CLSimulator(net)
+    sc = SampleCounter()
+    net = Network()
+    sim = cleo.CLSimulator(net)
     sim.set_io_processor(sc)
-    sim.run(150 * ms)
-    assert sc.count == 150
+    nsamp = 3000
+    sim.run(nsamp * ms)
+    assert sc.count == nsamp
 
 
 class WaveformController(LatencyIOProcessor):
