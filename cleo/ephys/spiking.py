@@ -65,7 +65,8 @@ class Spiking(Signal, NeoExportable):
         if self.probe.save_history:
             self.i = np.concatenate([self.i, i])
             self.t_ms = np.concatenate([self.t_ms, t_ms])
-            self.t_samp_ms = np.concatenate([self.t_samp_ms, [t_samp_ms]])
+            t_samp_ms_rep = np.full_like(t_ms, t_samp_ms)
+            self.t_samp_ms = np.concatenate([self.t_samp_ms, t_samp_ms_rep])
 
     def connect_to_neuron_group(
         self, neuron_group: NeuronGroup, **kwparams
