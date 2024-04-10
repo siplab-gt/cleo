@@ -52,13 +52,18 @@ class MyLIOP(LatencyIOProcessor):
         super().__init__(sample_period_ms, **kwargs)
         self.delay = 1.199
         self.component = MyProcessingBlock(delay=ConstantDelay(self.delay))
+        self.count = 0
 
     def process(self, state_dict: dict, sample_time_ms: float) -> Tuple[dict, float]:
-        input = state_dict["in"]
-        out, out_t = self.component.process(
-            input, sample_time_ms, measurement_time=sample_time_ms
-        )
-        return {"out": out}, out_t
+        try:
+            input = state_dict["in"]
+            out, out_t = self.component.process(
+                input, sample_time_ms, measurement_time=sample_time_ms
+            )
+            return {"out": out}, out_t
+        except KeyError:
+            self.count += 1
+            return {}, sample_time_ms
 
 
 def _test_LatencyIOProcessor(myLIOP, t, sampling, inputs, outputs):
@@ -117,14 +122,13 @@ class SampleCounter(cleo.IOProcessor):
     def is_sampling_now(self, t_query_ms) -> np.bool:
         return t_query_ms % self.sample_period_ms == 0
 
-    def __init__(self):
+    def __init__(self, sample_period_ms=1):
         self.count = 0
-        self.sample_period_ms = 1
+        self.sample_period_ms = sample_period_ms
         self.latest_ctrl_signal = {}
 
     def put_state(self, state_dict: dict, sample_time_ms: float):
         self.count += 1
-        print(sample_time_ms)
         return ({}, sample_time_ms)
 
     def get_ctrl_signals(self, query_time_ms: np.float) -> dict:
@@ -139,6 +143,17 @@ def test_no_skip_sampling():
     nsamp = 3000
     sim.run(nsamp * ms)
     assert sc.count == nsamp
+
+
+def test_no_skip_sampling_short():
+    net = Network()
+    sim = cleo.CLSimulator(net)
+    Tsamp = 0.2 * ms
+    liop = MyLIOP(Tsamp / ms)
+    sim.set_io_processor(liop)
+    nsamp = 20
+    sim.run(nsamp * Tsamp)
+    assert liop.count == nsamp
 
 
 class WaveformController(LatencyIOProcessor):
