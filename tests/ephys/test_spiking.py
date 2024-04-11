@@ -1,12 +1,10 @@
 """Tests for ephys.spiking module"""
-import pytest
 import numpy as np
-from brian2 import SpikeGeneratorGroup, ms, mm, Network
-import neo
 import quantities as pq
+from brian2 import Network, SpikeGeneratorGroup, mm, ms
 
 from cleo import CLSimulator
-from cleo.ephys import *
+from cleo.ephys import MultiUnitSpiking, Probe, SortedSpiking
 from cleo.ioproc import RecordOnlyProcessor
 
 
@@ -81,7 +79,7 @@ def test_MUS_multiple_contacts():
     assert np.sum(mus.i == 0) < len(indices)
     assert np.sum(mus.i == 1) < len(indices)
 
-    assert len(mus.i) == len(mus.t_ms)
+    assert len(mus.i) == len(mus.t_ms) == len(mus.t_samp_ms)
 
 
 def test_MUS_multiple_groups():
@@ -106,6 +104,8 @@ def test_MUS_multiple_groups():
     assert 20 < np.sum(mus.i == 0) < 60
     # second channel would have caught all spikes from sgg1 and sgg2
     assert np.sum(mus.i == 1) == 60
+    assert len(mus.t_ms) == len(mus.t_samp_ms)
+    assert np.all(mus.t_samp_ms == 10)
 
 
 def test_MUS_reset():
@@ -156,7 +156,10 @@ def test_SortedSpiking():
     assert all(i == [2, 3, 5])
 
     for i in (0, 1, 4):
-        assert not i in ss.i
+        assert i not in ss.i
+
+    assert ss.t_ms.shape == ss.i.shape == ss.t_samp_ms.shape
+    assert np.all(np.in1d(ss.t_samp_ms, [3, 4, 5, 6]))
 
 
 def _test_reset(spike_signal_class):

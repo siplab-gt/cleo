@@ -193,7 +193,8 @@ class LatencyIOProcessor(IOProcessor):
 
     def is_sampling_now(self, query_time_ms):
         if self.sampling == "fixed":
-            if np.isclose(query_time_ms % self.sample_period_ms, 0):
+            resid = query_time_ms % self.sample_period_ms
+            if np.isclose(resid, 0) or np.isclose(resid, self.sample_period_ms):
                 return True
         elif self.sampling == "when idle":
             if np.isclose(query_time_ms % self.sample_period_ms, 0):
