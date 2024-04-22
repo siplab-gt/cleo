@@ -2,7 +2,7 @@
 </h1>
 
 [![Tests](https://github.com/kjohnsen/cleosim/actions/workflows/test.yml/badge.svg)](https://github.com/kjohnsen/cleosim/actions/workflows/test.yml)
-[![Documentation Status](https://readthedocs.org/projects/cleosim/badge/?version=latest)](https://cleosim.readthedocs.io/en/latest/?badge=latest)
+[![Documentation Status](https://readthedocs.org/projects/cleosim/badge/?version=latest)](https://cleosim.readthedocs.io/latest/?badge=latest)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![DOI](https://zenodo.org/badge/262130097.svg)](https://zenodo.org/doi/10.5281/zenodo.7036270)
 
@@ -62,7 +62,7 @@ Just use pip to install&mdash;the name on PyPI is `cleosim`:
 pip install cleosim
 ```
 
-Then head to the [overview section of the documentation](https://cleosim.readthedocs.io/en/latest/overview.html) for a more detailed discussion of motivation, structure, and basic usage.
+Then head to the [overview section of the documentation](https://cleosim.readthedocs.io/latest/overview.html) for a more detailed discussion of motivation, structure, and basic usage.
 
 ## 📚 Related resources
 Those using Cleo to simulate closed-loop control experiments may be interested in software developed for the execution of real-time, *in-vivo* experiments.
