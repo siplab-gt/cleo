@@ -329,7 +329,7 @@ class Scope(Recorder):
         coords = (
             np.concatenate(
                 [
-                    coords_from_ng(ng)[i_targets]
+                    coords_from_ng(ng)[i_targets] / meter
                     for ng, i_targets in zip(
                         self.neuron_groups, self.i_targets_per_injct
                     )

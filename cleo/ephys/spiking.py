@@ -94,8 +94,9 @@ class Spiking(Signal, NeoExportable):
                 getattr(self.probe, f"{dim}s"),
                 indexing="ij",
             )
-            dist2 += (dim_ng - dim_probe) ** 2
-        distances = np.sqrt(dist2) * meter  # since units stripped
+            # proactively strip units to avoid numpy maybe doing so
+            dist2 += (dim_ng / mm - dim_probe / mm) ** 2
+        distances = np.sqrt(dist2) * mm
         # probs is n_neurons by n_channels
         probs = self._detection_prob_for_distance(distances)
         # cut off to get indices of neurons to monitor
