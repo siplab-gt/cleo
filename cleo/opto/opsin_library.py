@@ -324,5 +324,6 @@ if __name__ == "__main__":
         chrimson_4s(),
         gtacr2_4s(),
         enphr3_3s(),
+        extrapolate=True,
     )
     plt.show()
