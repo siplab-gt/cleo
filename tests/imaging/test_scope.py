@@ -102,7 +102,7 @@ def test_target_neurons_in_plane(rand_seed):
     assert np.sum(np.sqrt(ng.x**2 + ng.y**2) < img_width / 2) == len(i_targets)
 
     # noise_focus_factor (nff) smaller for bigger soma
-    ng.z = rng.uniform(focus_depth - 30 * um, focus_depth + 30 * um, ng.N) * meter
+    ng.z = rng.uniform(focus_depth / um - 30, focus_depth / um + 30, ng.N) * um
     i_targets, nff, cop = target_neurons_in_plane(ng, focus_depth, img_width)
     i_targets_bigger, nff_bigger, cop_bigger = target_neurons_in_plane(
         ng, focus_depth, img_width, soma_radius=20 * um

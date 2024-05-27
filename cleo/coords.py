@@ -196,9 +196,9 @@ def coords_from_xyz(x: Quantity, y: Quantity, z: Quantity) -> Quantity:
     return (
         np.concatenate(
             [
-                np.reshape(x, (*x.shape, 1)),
-                np.reshape(y, (*y.shape, 1)),
-                np.reshape(z, (*z.shape, 1)),
+                np.reshape(x / meter, (*x.shape, 1)),
+                np.reshape(y / meter, (*y.shape, 1)),
+                np.reshape(z / meter, (*z.shape, 1)),
             ],
             axis=-1,
         )
