@@ -391,7 +391,7 @@ class Scope(Recorder):
         color_rgba[:, :3] = 0.3 * color_rgba[:, :3]
         target_markers.set(color=color_rgba)
 
-        handles = ax.get_legend().legendHandles
+        handles = ax.get_legend().legend_handles
         handles.append(target_markers)
         patch = mpl.patches.Patch(color=color, label=self.name)
         handles.append(patch)
