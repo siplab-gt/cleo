@@ -1,4 +1,5 @@
 ---
+file_format: mystnb
 jupytext:
   text_representation:
     format_name: myst
