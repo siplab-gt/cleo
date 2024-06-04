@@ -189,7 +189,7 @@ class Probe(Recorder, NeoExportable):
             label=self.name,
             depthshade=False,
         )
-        handles = ax.get_legend().legendHandles
+        handles = ax.get_legend().legend_handles
         handles.append(markers)
         ax.legend(handles=handles)
         return [markers]
