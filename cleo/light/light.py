@@ -434,7 +434,7 @@ class Light(Stimulator):
                 point_cloud.set_rasterized(kwargs.get("rasterized", True))
             point_clouds.append(point_cloud)
 
-        handles = ax.get_legend().legendHandles
+        handles = ax.get_legend().legend_handles
         c = wavelength_to_rgb(self.wavelength / nmeter)
         opto_patch = mpl.patches.Patch(color=c, label=self.name)
         handles.append(opto_patch)

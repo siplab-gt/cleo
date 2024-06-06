@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "cleosim"
-version = "0.14.3"
+version = "0.14.4"
 description = "Cleo: the Closed-Loop, Electrophysiology, and Optogenetics experiment simulation testbed"
 authors = [
     "Kyle Johnsen <kyle@kjohnsen.org>",
@@ -20,7 +20,7 @@ packages = [{ include = "cleo" }]
 [tool.poetry.dependencies]
 python = ">=3.9,<3.13"
 brian2 = "^2.4, !=2.5.0.2"
-matplotlib = "^3.4"
+matplotlib = "^3.7"
 numpy = "^1.16"
 scipy = "^1.7.2"
 tklfp = "^0.2"
