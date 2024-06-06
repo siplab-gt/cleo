@@ -296,7 +296,9 @@ def style_plots_for_docs(dark=True):
 
 
 def style_plots_for_paper(fontscale=5 / 6):
-    # fontscale=5/6 goes from default paper font size of 9.6 down to 8
+    """
+    fontscale=5/6 goes from default paper font size of 9.6 down to 8
+    """
     # some hacky workaround for params not being updated until after first plot
     f = plt.figure()
     plt.plot()
