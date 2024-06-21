@@ -22,5 +22,5 @@ from cleo.imaging.sensors import (
     jgcamp7c,
     jgcamp7f,
     jgcamp7s,
-    ogb1,
+    ogb_1,
 )

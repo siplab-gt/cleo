@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from attrs import define, field, fields_dict, asdict
-from brian2 import Synapses, np, Quantity, NeuronGroup, second, umolar, nmolar
+from attrs import asdict, define, field, fields_dict
+from brian2 import NeuronGroup, Quantity, Synapses, nmolar, np, second, umolar
 
 from cleo.base import SynapseDevice
 from cleo.light import LightDependent
@@ -405,7 +405,7 @@ _create_geci_fn(
 # from NAOMi, but
 # don't have double exponential convolution parameters for these:
 _create_geci_fn(
-    "OGB1",
+    "OGB-1",
     250,
     1,
     14,
