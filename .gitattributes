@@ -1,1 +1,2 @@
 *.ipynb merge=nbdev-merge
+*.ipynb linguist-language=Python

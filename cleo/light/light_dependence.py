@@ -3,20 +3,56 @@ from __future__ import annotations
 import warnings
 from typing import Callable, Tuple
 
+import matplotlib.pyplot as plt
 from attrs import define, field
 from brian2 import NeuronGroup, mm, np
-from scipy.interpolate import CubicSpline
+from scipy.interpolate import (
+    Akima1DInterpolator,
+    CubicSpline,
+    PchipInterpolator,
+    interp1d,
+)
 
 from cleo.coords import assign_xyz
 from cleo.utilities import brian_safe_name, wavelength_to_rgb
 
 
 def linear_interpolator(lambdas_nm, epsilons, lambda_new_nm):
-    return np.interp(lambda_new_nm, lambdas_nm, epsilons)
+    # return np.interp(lambda_new_nm, lambdas_nm, epsilons)
+    return interp1d(lambdas_nm, epsilons, fill_value="extrapolate")(lambda_new_nm)
 
 
 def cubic_interpolator(lambdas_nm, epsilons, lambda_new_nm):
     return CubicSpline(lambdas_nm, epsilons)(lambda_new_nm)
+
+
+def pchip_interpolator(lambdas_nm, epsilons, lambda_new_nm):
+    return PchipInterpolator(lambdas_nm, epsilons)(lambda_new_nm)
+
+
+def makima_interpolator(lambdas_nm, epsilons, lambda_new_nm):
+    intrp = Akima1DInterpolator(lambdas_nm, np.log(epsilons))
+    intrp.extrapolate = True
+    intrp.method = "makima"
+    return intrp(lambda_new_nm)
+
+
+def _log_(fn, lambdas_nm, epsilons, lambda_new_nm):
+    assert isinstance(epsilons, np.ndarray)
+    epsilons[epsilons == 0] = 1e-10
+    return np.exp(fn(lambdas_nm, np.log(epsilons), lambda_new_nm))
+
+
+def log_linear_interpolator(lambdas_nm, epsilons, lambda_new_nm):
+    return _log_(linear_interpolator, lambdas_nm, epsilons, lambda_new_nm)
+
+
+def log_pchip_interpolator(lambdas_nm, epsilons, lambda_new_nm):
+    return _log_(pchip_interpolator, lambdas_nm, epsilons, lambda_new_nm)
+
+
+def log_makima_interpolator(lambdas_nm, epsilons, lambda_new_nm):
+    return _log_(makima_interpolator, lambdas_nm, epsilons, lambda_new_nm)
 
 
 # hacky MRO stuff...multiple inheritance only works because slots=False,
@@ -48,10 +84,13 @@ class LightDependent:
         )
         return [(-1e10, 1), (1e10, 1)]
 
-    spectrum_interpolator: Callable = field(default=cubic_interpolator, repr=False)
+    spectrum_interpolator: Callable = field(default=log_pchip_interpolator, repr=False)
     """Function of signature (lambdas_nm, epsilons, lambda_new_nm) that interpolates
     the action spectrum data and returns :math:`\\varepsilon \\in [0,1]` for the new
     wavelength."""
+    extrapolate: bool = False
+    """Whether or not to attempt to extrapolate (using :attr:`spectrum_interpolator`)
+    outside of the provided excitation/action spectrum."""
 
     @property
     def light_agg_ngs(self):
@@ -81,19 +120,28 @@ class LightDependent:
     def epsilon(self, lambda_new) -> float:
         """Returns the :math:`\\varepsilon` value for a given lambda (in nm)
         representing the relative sensitivity of the opsin to that wavelength."""
-        action_spectrum = np.array(self.spectrum)
-        lambdas = action_spectrum[:, 0]
-        epsilons = action_spectrum[:, 1]
-        if lambda_new < min(lambdas) or lambda_new > max(lambdas):
-            warnings.warn(
-                f"λ = {lambda_new} nm is outside the range of the action spectrum data"
-                f" for {self.name}. Assuming ε = 0."
-            )
-            return 0
+        lambdas, epsilons = np.array(self.spectrum).T
         eps_new = self.spectrum_interpolator(lambdas, epsilons, lambda_new)
+
+        # out of data range
+        if lambda_new < min(lambdas) or lambda_new > max(lambdas):
+            if not self.extrapolate:
+                warnings.warn(
+                    f"λ = {lambda_new} nm is outside the range of the action spectrum data"
+                    f" for {self.name} and extrapolate=False. Assuming ε = 0."
+                )
+                return 0
+            elif self.extrapolate:
+                warnings.warn(
+                    f"λ = {lambda_new} nm is outside the range of the action spectrum data"
+                    f" for {self.name}. Extrapolating: ε = {eps_new:.3f}."
+                )
         if eps_new < 0:
             warnings.warn(f"ε = {eps_new} < 0 for {self.name}. Setting ε = 0.")
             eps_new = 0
+        if eps_new > 1:
+            warnings.warn(f"ε = {eps_new} > 1 for {self.name}. Setting ε = 1.")
+            eps_new = 1
         return eps_new
 
 
@@ -109,19 +157,27 @@ def equal_photon_flux_spectrum(
     return list(zip(lambdas, eps_Irr))
 
 
-def plot_spectra(*ldds: LightDependent) -> tuple[plt.Figure, plt.Axes]:
+def plot_spectra(
+    *ldds: LightDependent, extrapolate=False
+) -> tuple[plt.Figure, plt.Axes]:
     """Plots the action/excitation spectra for multiple light-dependent devices."""
     import matplotlib.pyplot as plt
 
+    if extrapolate:
+        all_lambdas = [np.array(ldd.spectrum)[:, 0] for ldd in ldds]
+        lambda_min = min([lambdas.min() for lambdas in all_lambdas])
+        lambda_max = max([lambdas.max() for lambdas in all_lambdas])
+
     fig, ax = plt.subplots()
     for ldd in ldds:
-        spectrum = np.array(ldd.spectrum)
-        lambdas = spectrum[:, 0]
-        epsilons = spectrum[:, 1]
-        lambdas_new = np.linspace(min(lambdas), max(lambdas), 100)
+        lambdas, epsilons = np.array(ldd.spectrum).T
+        if not extrapolate:
+            lambda_min = np.min(lambdas)
+            lambda_max = np.max(lambdas)
+        lambdas_new = np.linspace(lambda_min, lambda_max, 100)
         epsilons_new = ldd.spectrum_interpolator(lambdas, epsilons, lambdas_new)
         c_points = [wavelength_to_rgb(l) for l in lambdas]
-        c_line = wavelength_to_rgb(lambdas_new[np.argmax(epsilons_new)])
+        c_line = wavelength_to_rgb(lambdas[np.argmax(epsilons)])
         ax.plot(lambdas_new, epsilons_new, c=c_line, label=ldd.name)
         ax.scatter(lambdas, epsilons, marker="o", s=50, color=c_points)
     title = (

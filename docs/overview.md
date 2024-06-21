@@ -1,4 +1,5 @@
 ---
+file_format: mystnb
 jupytext:
   text_representation:
     format_name: myst
@@ -270,7 +271,6 @@ Here are some features which are missing but could be useful to add:
 
 -   Electrode microstimulation
 -   A more accurate LFP signal (only usable for morphological neurons) based on the volume conductor forward model as in [LFPy](https://lfpy.readthedocs.io/en/latest/index.html) or [Vertex](https://github.com/haeste/Vertex_2)
--   The [Mazzoni-Lindén LFP approximation](https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1004584) for LIF point-neuron networks
 -   Voltage indicators
 -   An expanded calcium indicator library---currently the parameter set for the full [NAOMi](https://bitbucket.org/adamshch/naomi_sim/src/master/) model is only available for GCaMP6f.
 The [phenomenological S2F model](https://www.nature.com/articles/s41586-023-05828-9) should be easy to implement and fit to data, has parameters for several of the latest and greatest GECIs (jGCaMP7 and jGCaMP8 varieties), and should be cheaper to simulate as well.

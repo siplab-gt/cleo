@@ -1,18 +1,18 @@
 from __future__ import annotations
-from typing import Any, Callable
-import warnings
 
-from attrs import define, field
-from brian2 import NeuronGroup, Unit, mm, np, Quantity, um, meter, ms
+import warnings
+from typing import Any, Callable
+
 import matplotlib as mpl
+from attrs import define, field
+from brian2 import NeuronGroup, Quantity, Unit, meter, mm, ms, np, um
 from matplotlib.artist import Artist
 from mpl_toolkits.mplot3d import Axes3D
 from nptyping import NDArray
 
 from cleo.base import Recorder
-
-from cleo.imaging.sensors import Sensor
 from cleo.coords import coords_from_ng
+from cleo.imaging.sensors import Sensor
 from cleo.utilities import normalize_coords, rng
 
 
@@ -235,6 +235,11 @@ class Scope(Recorder):
         # separately for each injection, so we'll recover that here
         n_prev_targets_for_ng = {}
         for ng, i_targets in zip(self.neuron_groups, self.i_targets_per_injct):
+            if ng.name not in signal_per_ng:
+                raise RuntimeError(
+                    f"Sensor {self.sensor.name} has no signal for neuron group {ng.name}."
+                    " Did you forget to call inject_sensor_for_targets() after scope injections??"
+                )
             subset_start = n_prev_targets_for_ng.get(ng, 0)
             subset_for_injct = slice(subset_start, subset_start + len(i_targets))
             signal.append(signal_per_ng[ng.name][subset_for_injct])

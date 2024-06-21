@@ -15,6 +15,7 @@ Documentation contents
 
    overview
    tutorials/index
+   showcase
    reference/index
 
 

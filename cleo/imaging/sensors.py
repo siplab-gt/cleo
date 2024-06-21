@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from attrs import define, field, fields_dict, asdict
-from brian2 import Synapses, np, Quantity, NeuronGroup, second, umolar, nmolar
+from attrs import asdict, define, field, fields_dict
+from brian2 import NeuronGroup, Quantity, Synapses, nmolar, np, second, umolar
 
 from cleo.base import SynapseDevice
 from cleo.light import LightDependent
+from cleo.utilities import brian_safe_name
 
 
 @define(eq=False)
@@ -389,22 +390,22 @@ def _create_geci_fn(
 
     geci_fn.__doc__ += "\n\n" + (" " * 8) + extra_doc
 
-    globals()[name] = geci_fn
+    globals()[brian_safe_name(name.lower())] = geci_fn
 
 
 # from NAOMi:
 #                      K_d, n_H, dFF_max, sigma_noise_rel, dFF_1AP_rel, ca_amp, t_on, t_off
-_create_geci_fn("gcamp6f", 290, 2.7, 25.2, 1.24, 0.735, 76.1251, 0.8535, 98.6173)
-_create_geci_fn("gcamp6s", 147, 2.45, 27.2, 1, 1, 54.6943, 0.4526, 68.5461)
+_create_geci_fn("GCaMP6f", 290, 2.7, 25.2, 1.24, 0.735, 76.1251, 0.8535, 98.6173)
+_create_geci_fn("GCaMP6s", 147, 2.45, 27.2, 1, 1, 54.6943, 0.4526, 68.5461)
 # noise, dFF for GCaMP3 from Dana 2019, since not in Zhang 2023
 _create_geci_fn(
-    "gcamp3", 287, 2.52, 12, (3.9 / 2.1) / (13.3 / 4.4), 3.9 / 13.3, 0.05, 1, 1
+    "GCaMP3", 287, 2.52, 12, (3.9 / 2.1) / (13.3 / 4.4), 3.9 / 13.3, 0.05, 1, 1
 )
 
 # from NAOMi, but
 # don't have double exponential convolution parameters for these:
 _create_geci_fn(
-    "ogb1",
+    "OGB-1",
     250,
     1,
     14,
@@ -412,7 +413,7 @@ _create_geci_fn(
     extra_doc="*Don't know sigma_noise. Default is the GCaMP6s value.*",
 )
 _create_geci_fn(
-    "gcamp6rs09",
+    "GCaMP6-RS09",
     520,
     3.2,
     25,
@@ -420,14 +421,14 @@ _create_geci_fn(
     extra_doc="*Don't know sigma_noise. Default is the GCaMP6s value.*",
 )
 _create_geci_fn(
-    "gcamp6rs06",
+    "GCaMP6-RS06",
     320,
     3,
     15,
     1,
     extra_doc="*Don't know sigma_noise. Default is the GCaMP6s value.*",
 )
-_create_geci_fn("jgcamp7f", 174, 2.3, 30.2, 0.72, 1.71)
-_create_geci_fn("jgcamp7s", 68, 2.49, 40.4, 0.33, 4.96)
-_create_geci_fn("jgcamp7b", 82, 3.06, 22.1, 0.25, 4.64)
-_create_geci_fn("jgcamp7c", 298, 2.44, 145.6, 0.39, 1.85)
+_create_geci_fn("jGCaMP7f", 174, 2.3, 30.2, 0.72, 1.71)
+_create_geci_fn("jGCaMP7s", 68, 2.49, 40.4, 0.33, 4.96)
+_create_geci_fn("jGCaMP7b", 82, 3.06, 22.1, 0.25, 4.64)
+_create_geci_fn("jGCaMP7c", 298, 2.44, 145.6, 0.39, 1.85)
