@@ -27,7 +27,7 @@ from mpl_toolkits.mplot3d import Axes3D
 
 from cleo.registry import registry_for_sim
 from cleo.utilities import add_to_neo_segment, analog_signal, brian_safe_name
-
+import cleo
 
 class NeoExportable(ABC):
     """Mixin class for classes that can be exported to Neo objects"""
@@ -158,7 +158,7 @@ class IOProcessor(ABC):
     class more useful, since delay handling is already defined.
     """
 
-    sample_period_ms: float = 1
+    sample_period: float = 1 * ms
     """Determines how frequently the processor takes samples"""
 
     latest_ctrl_signal: dict = field(factory=dict, init=False, repr=False)
@@ -180,7 +180,7 @@ class IOProcessor(ABC):
         pass
 
     @abstractmethod
-    def put_state(self, state_dict: dict, sample_time_ms: float) -> None:
+    def put_state(self, state_dict: dict, sample_time: float) -> None:
         """Deliver network state to the :class:`IOProcessor`.
 
         Parameters
@@ -274,7 +274,7 @@ class Stimulator(InterfaceDevice, NeoExportable):
     """The current value of the stimulator device"""
     default_value: Any = 0
     """The default value of the device---used on initialization and on :meth:`~reset`"""
-    t_ms: list[float] = field(factory=list, init=False, repr=False)
+    t: list[float] = field(factory=list, init=False, repr=False)
     """Times stimulator was updated, stored if :attr:`~cleo.InterfaceDevice.save_history`"""
     values: list[Any] = field(factory=list, init=False, repr=False)
     """Values taken by the stimulator at each :meth:`~update` call, 
@@ -287,10 +287,10 @@ class Stimulator(InterfaceDevice, NeoExportable):
     def _init_saved_vars(self):
         if self.save_history:
             if self.sim:
-                t0 = self.sim.network.t / ms
+                t0 = self.sim.network.t
             else:
-                t0 = 0
-            self.t_ms = [t0]
+                t0 = 0*ms
+            self.t = [t0]
             self.values = [self.value]
 
     def update(self, ctrl_signal) -> None:
@@ -308,7 +308,7 @@ class Stimulator(InterfaceDevice, NeoExportable):
         """
         self.value = ctrl_signal
         if self.save_history:
-            self.t_ms.append(self.sim.network.t / ms)
+            self.t.append(self.sim.network.t)
             self.values.append(self.value)
 
     def reset(self, **kwargs) -> None:
@@ -317,7 +317,7 @@ class Stimulator(InterfaceDevice, NeoExportable):
         self._init_saved_vars()
 
     def to_neo(self):
-        signal = analog_signal(self.t_ms, self.values, "dimensionless")
+        signal = cleo.utilities.analog_signal(self.t, self.values, "dimensionless")
         signal.name = self.name
         signal.description = "Exported from Cleo stimulator device"
         signal.annotate(export_datetime=datetime.datetime.now())

@@ -19,6 +19,9 @@ from cleo.opto.opsins import (
 )
 
 
+ONE_P_TWO_P_RATIO = 234165.46808748253
+
+
 def chr2_4s() -> FourStateOpsin:
     """Returns a 4-state ChR2 model.
 
@@ -58,6 +61,15 @@ def chr2_4s() -> FourStateOpsin:
             (520, 0.22),
             (540, 0.06),
             (560, 0.01),
+            (800, 0.34 / ONE_P_TWO_P_RATIO),
+            (844, 0.65 / ONE_P_TWO_P_RATIO),
+            (920, 0.96 / ONE_P_TWO_P_RATIO),
+            (940, 1 / ONE_P_TWO_P_RATIO),
+            (946, 1 / ONE_P_TWO_P_RATIO),
+            (1000, 0.57 / ONE_P_TWO_P_RATIO),
+            (1040, 0.22 / ONE_P_TWO_P_RATIO),
+            (1080, 0.06 / ONE_P_TWO_P_RATIO),
+            (1120, 0.01 / ONE_P_TWO_P_RATIO),
         ],
     )
 
@@ -99,6 +111,15 @@ def chr2_b4s() -> BansalFourStateOpsin:
             (520, 0.22),
             (540, 0.06),
             (560, 0.01),
+            (800, 0.34 / ONE_P_TWO_P_RATIO),
+            (844, 0.65 / ONE_P_TWO_P_RATIO),
+            (920, 0.96 / ONE_P_TWO_P_RATIO),
+            (940, 1 / ONE_P_TWO_P_RATIO),
+            (946, 1 / ONE_P_TWO_P_RATIO),
+            (1000, 0.57 / ONE_P_TWO_P_RATIO),
+            (1040, 0.22 / ONE_P_TWO_P_RATIO),
+            (1080, 0.06 / ONE_P_TWO_P_RATIO),
+            (1120, 0.01 / ONE_P_TWO_P_RATIO),
         ],
     )
 
@@ -139,6 +160,14 @@ def chr2_h134r_4s() -> BansalFourStateOpsin:
             (500, 0.22),
             (520, 0.06),
             (540, 0.01),
+            (760, 0.34 / ONE_P_TWO_P_RATIO),
+            (804, 0.65 / ONE_P_TWO_P_RATIO),
+            (880, 0.96 / ONE_P_TWO_P_RATIO),
+            (900, 1 / ONE_P_TWO_P_RATIO),
+            (960, 0.57 / ONE_P_TWO_P_RATIO),
+            (1000, 0.22 / ONE_P_TWO_P_RATIO),
+            (1040, 0.06 / ONE_P_TWO_P_RATIO),
+            (1080, 0.01 / ONE_P_TWO_P_RATIO),
         ],
     )
 
@@ -181,6 +210,15 @@ def vfchrimson_4s() -> BansalFourStateOpsin:
                 (590, 1),
                 (610, 0.8),
                 (630, 0.48),
+                (940, 0.34 / ONE_P_TWO_P_RATIO),
+                (980, 0.51 / ONE_P_TWO_P_RATIO),
+                (1020, 0.71 / ONE_P_TWO_P_RATIO),
+                (1060, 0.75 / ONE_P_TWO_P_RATIO),
+                (1100, 0.86 / ONE_P_TWO_P_RATIO),
+                (1140, 1 / ONE_P_TWO_P_RATIO),
+                (1180, 1 / ONE_P_TWO_P_RATIO),
+                (1220, 0.8 / ONE_P_TWO_P_RATIO),
+                (1260, 0.48 / ONE_P_TWO_P_RATIO),
             ]
         ),
     )
@@ -224,6 +262,15 @@ def chrimson_4s() -> BansalFourStateOpsin:
                 (590, 1),
                 (610, 0.88),
                 (630, 0.55),
+                (940, 0.31 / ONE_P_TWO_P_RATIO),
+                (980, 0.47 / ONE_P_TWO_P_RATIO),
+                (1020, 0.69 / ONE_P_TWO_P_RATIO),
+                (1060, 0.75 / ONE_P_TWO_P_RATIO),
+                (1100, 0.88 / ONE_P_TWO_P_RATIO),
+                (1140, 0.97 / ONE_P_TWO_P_RATIO),
+                (1180, 1 / ONE_P_TWO_P_RATIO),
+                (1220, 0.88 / ONE_P_TWO_P_RATIO),
+                (1260, 0.55 / ONE_P_TWO_P_RATIO),
             ]
         ),
     )
@@ -274,6 +321,23 @@ def gtacr2_4s() -> BansalFourStateOpsin:
             (540, 0.02),
             (550, 0.00),
             (560, 0.00),
+            (800, 0.4 / ONE_P_TWO_P_RATIO),
+            (820, 0.49 / ONE_P_TWO_P_RATIO),
+            (840, 0.56 / ONE_P_TWO_P_RATIO),
+            (860, 0.65 / ONE_P_TWO_P_RATIO),
+            (880, 0.82 / ONE_P_TWO_P_RATIO),
+            (900, 0.88 / ONE_P_TWO_P_RATIO),
+            (920, 0.88 / ONE_P_TWO_P_RATIO),
+            (940, 1.0 / ONE_P_TWO_P_RATIO),
+            (960, 0.91 / ONE_P_TWO_P_RATIO),
+            (980, 0.67 / ONE_P_TWO_P_RATIO),
+            (1000, 0.41 / ONE_P_TWO_P_RATIO),
+            (1020, 0.21 / ONE_P_TWO_P_RATIO),
+            (1040, 0.12 / ONE_P_TWO_P_RATIO),
+            (1060, 0.06 / ONE_P_TWO_P_RATIO),
+            (1080, 0.02 / ONE_P_TWO_P_RATIO),
+            (1100, 0.0 / ONE_P_TWO_P_RATIO),
+            (1120, 0.0 / ONE_P_TWO_P_RATIO),
         ],
     )
 
@@ -310,6 +374,17 @@ def enphr3_3s():
             (560, 0.930),
             (590, 1),
             (630, 0.385),
+            (780, 0.162 / ONE_P_TWO_P_RATIO),
+            (810, 0.239 / ONE_P_TWO_P_RATIO),
+            (860, 0.255 / ONE_P_TWO_P_RATIO),
+            (890, 0.255 / ONE_P_TWO_P_RATIO),
+            (940, 0.371 / ONE_P_TWO_P_RATIO),
+            (990, 0.554 / ONE_P_TWO_P_RATIO),
+            (1040, 0.716 / ONE_P_TWO_P_RATIO),
+            (1085.0, 0.84 / ONE_P_TWO_P_RATIO),
+            (1120, 0.93 / ONE_P_TWO_P_RATIO),
+            (1180, 1 / ONE_P_TWO_P_RATIO),
+            (1260, 0.385 / ONE_P_TWO_P_RATIO),
         ],
     )
 

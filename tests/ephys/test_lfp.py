@@ -209,7 +209,7 @@ def test_lfp_signal_to_neo(LFPSignal, n_channels, t, regular_samples):
     sig = LFPSignal()
     probe = Probe(np.random.rand(n_channels, 3) * mm, [sig])
     if regular_samples:
-        sig.t_ms = np.arange(t)
+        sig.t = np.arange(t) * ms
     else:
         sig.t_ms = np.sort(np.random.rand(t) * t)
     sig.lfp = np.random.rand(t, n_channels)

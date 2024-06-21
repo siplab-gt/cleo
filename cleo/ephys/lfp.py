@@ -117,7 +117,7 @@ class TKLFPSignal(LFPSignalBase):
     _monitors: list[SpikeMonitor] = field(init=False, factory=list, repr=False)
     _mon_spikes_already_seen: list[int] = field(init=False, factory=list, repr=False)
     _i_buffers: list[list[np.ndarray]] = field(init=False, factory=list, repr=False)
-    _t_ms_buffers: list[list[np.ndarray]] = field(init=False, factory=list, repr=False)
+    _t_buffers: list[list[np.ndarray]] = field(init=False, factory=list, repr=False)
     _buffer_positions: list[int] = field(init=False, factory=list, repr=False)
     _lfp_unit: Unit = uvolt
 
@@ -151,7 +151,7 @@ class TKLFPSignal(LFPSignalBase):
             # prep buffers
             self._tklfps.append(tklfp)
             self._i_buffers.append([np.array([], dtype=int, ndmin=1)] * buf_len)
-            self._t_ms_buffers.append([np.array([], dtype=float, ndmin=1)] * buf_len)
+            self._t_buffers.append([np.array([], dtype=float, ndmin=1)] * buf_len)
             self._buffer_positions.append(0)
 
             # prep SpikeMonitor
@@ -162,7 +162,7 @@ class TKLFPSignal(LFPSignalBase):
 
     def get_state(self) -> np.ndarray:
         tot_tklfp = 0
-        now_ms = self.probe.sim.network.t / ms
+        now = self.probe.sim.network.t
         # loop over neuron groups (monitors, tklfps)
         for i_mon in range(len(self._monitors)):
             self._update_spike_buffer(i_mon)
@@ -179,7 +179,7 @@ class TKLFPSignal(LFPSignalBase):
     def _reset_buffer(self, i_mon):
         buf_len = len(self._i_buffers[i_mon])
         self._i_buffers[i_mon] = [np.array([], dtype=int, ndmin=1)] * buf_len
-        self._t_ms_buffers[i_mon] = [np.array([], dtype=float, ndmin=1)] * buf_len
+        self._t_buffers[i_mon] = [np.array([], dtype=float, ndmin=1)] * buf_len
         self._buffer_positions[i_mon] = 0
 
     def _update_spike_buffer(self, i_mon):
@@ -189,24 +189,25 @@ class TKLFPSignal(LFPSignalBase):
 
         # insert new spikes into buffer (overwriting anything previous)
         self._i_buffers[i_mon][buf_pos] = mon.i[n_prev:]
-        self._t_ms_buffers[i_mon][buf_pos] = mon.t[n_prev:] / ms
+        self._t_buffers[i_mon][buf_pos] = mon.t[n_prev:]
 
         self._mon_spikes_already_seen[i_mon] = mon.num_spikes
         # update buffer position
         buf_len = len(self._i_buffers[i_mon])
         self._buffer_positions[i_mon] = (buf_pos + 1) % buf_len
 
-    def _tklfp_for_monitor(self, i_mon, now_ms):
+    def _tklfp_for_monitor(self, i_mon, now):
         i = np.concatenate(self._i_buffers[i_mon])
-        t_ms = np.concatenate(self._t_ms_buffers[i_mon])
-        return self._tklfps[i_mon].compute(i, t_ms, [now_ms])
+        print(self._t_buffers)
+        t = np.concatenate(self._t_buffers[i_mon]) * second
+        return self._tklfps[i_mon].compute(i, t / ms, [now / ms])
 
     def _get_buffer_length(self, tklfp, **kwparams):
         # need sampling period
-        sample_period_ms = kwparams.get("sample_period_ms", None)
-        if sample_period_ms is None:
+        sample_period = kwparams.get("sample_period_ms", None) * ms
+        if sample_period is None:
             try:
-                sample_period_ms = self.probe.sim.io_processor.sample_period_ms
+                sample_period = self.probe.sim.io_processor.sample_period
             except AttributeError:  # probably means sim doesn't have io_processor
                 raise Exception(
                     "TKLFP needs to know the sampling period. Either set the simulator's "
@@ -215,7 +216,7 @@ class TKLFPSignal(LFPSignalBase):
                     ", tklfp_type=..., sample_period_ms=...)"
                 )
         return np.ceil(
-            tklfp.compute_min_window_ms(self.uLFP_threshold_uV) / sample_period_ms
+            tklfp.compute_min_window_ms(self.uLFP_threshold_uV) / (sample_period / ms)
         ).astype(int)
 
 
