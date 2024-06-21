@@ -6,6 +6,7 @@ tmp/*
 # figures from notebooks not saved by default
 notebooks/img/*
 notebooks/results/*
+docs/tutorials/*.svg
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
