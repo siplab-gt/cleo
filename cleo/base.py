@@ -245,13 +245,14 @@ class IOProcessor(ABC):
         """
         return {}
 
-    def get_intersample_ctrl_signal(self, query_time_ms: float) -> dict:
-        """Get per-stimulator control signal between samples. I.e., for implementing
-        a time-varying waveform based on parameters from the last sample.
-        Such parameters will need to be stored in the :class:`~cleo.IOProcessor`."""
-        return {}
+    def _base_reset(self):
+        """Gets called on :meth:`~cleo.CLSimulator.reset`. The user should not implement this,
+        but rather :meth:`~reset`."""
+        pass
 
     def reset(self, **kwargs) -> None:
+        """Gets called on :meth:`~cleo.CLSimulator.reset`. The user should implement this if
+        their processor has a state that needs to be reset."""
         pass
 
 

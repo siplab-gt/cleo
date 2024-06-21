@@ -52,9 +52,11 @@ class MyLIOP(LatencyIOProcessor):
         super().__init__(sample_period_ms, **kwargs)
         self.delay = 1.199
         self.component = MyProcessingBlock(delay=ConstantDelay(self.delay))
+        self.count_no_input = 0
         self.count = 0
 
     def process(self, state_dict: dict, sample_time_ms: float) -> Tuple[dict, float]:
+        self.count += 1
         try:
             input = state_dict["in"]
             out, out_t = self.component.process(
@@ -62,8 +64,12 @@ class MyLIOP(LatencyIOProcessor):
             )
             return {"out": out}, out_t
         except KeyError:
-            self.count += 1
+            self.count_no_input += 1
             return {}, sample_time_ms
+
+    def reset(self):
+        self.count_no_input = 0
+        self.count = 0
 
 
 def _test_LatencyIOProcessor(myLIOP, t, sampling, inputs, outputs):
@@ -73,6 +79,7 @@ def _test_LatencyIOProcessor(myLIOP, t, sampling, inputs, outputs):
         if myLIOP.is_sampling_now(t[i]):
             myLIOP.put_state({"in": inputs[i]}, t[i])
         assert myLIOP.get_stim_values(t[i]) == expected_out[i]
+    assert myLIOP.count == np.sum(sampling)
 
 
 def test_LatencyIOProcessor_fixed_serial():
@@ -81,6 +88,11 @@ def test_LatencyIOProcessor_fixed_serial():
     sampling = [True, True, False, False, True, False, False]
     inputs = [42, 66, -1, -1, 1847, -1, -1]
     outputs = [None, None, 42, None, None, None, 67]  # input + measurement_time
+    _test_LatencyIOProcessor(myLIOP, t, sampling, inputs, outputs)
+    assert len(myLIOP.out_buffer) > 0
+    myLIOP._base_reset()
+    myLIOP.reset()
+    assert len(myLIOP.out_buffer) == 0
     _test_LatencyIOProcessor(myLIOP, t, sampling, inputs, outputs)
 
 
@@ -91,6 +103,11 @@ def test_LatencyIOProcessor_fixed_parallel():
     inputs = [42, 66, -1, -1, 1847, -1, -1]
     outputs = [None, None, 42, None, None, 67, None]  # input + measurement_time
     _test_LatencyIOProcessor(myLIOP, t, sampling, inputs, outputs)
+    assert len(myLIOP.out_buffer) > 0
+    myLIOP._base_reset()
+    myLIOP.reset()
+    assert len(myLIOP.out_buffer) == 0
+    _test_LatencyIOProcessor(myLIOP, t, sampling, inputs, outputs)
 
 
 def test_LatencyIOProcessor_wait_serial():
@@ -99,6 +116,11 @@ def test_LatencyIOProcessor_wait_serial():
     sampling = [True, False, True, False, False, False, True]
     inputs = [42, -1, 66, -1, -1, -1, 1847]
     outputs = [None, None, 42, None, None, None, 67.2]  # input + measurement_time
+    _test_LatencyIOProcessor(myLIOP, t, sampling, inputs, outputs)
+    assert len(myLIOP.out_buffer) > 0
+    myLIOP._base_reset()
+    myLIOP.reset()
+    assert len(myLIOP.out_buffer) == 0
     _test_LatencyIOProcessor(myLIOP, t, sampling, inputs, outputs)
 
 
@@ -114,6 +136,24 @@ def test_LatencyIOProcessor_wait_parallel():
     inputs = [42, -1, 66, -1, -1, -1, 1847]
     outputs = [None, None, 42, None, None, None, 67.2]  # input + measurement_time
     _test_LatencyIOProcessor(myLIOP, t, sampling, inputs, outputs)
+    assert len(myLIOP.out_buffer) > 0
+    myLIOP._base_reset()
+    myLIOP.reset()
+    assert len(myLIOP.out_buffer) == 0
+    _test_LatencyIOProcessor(myLIOP, t, sampling, inputs, outputs)
+
+
+def test_sim_LIOP_reset():
+    sim = cleo.CLSimulator(Network())
+    liop = MyLIOP(1)
+    sim.set_io_processor(liop)
+    sim.run(10 * ms)
+    assert liop.count == liop.count_no_input == 10
+    liop.out_buffer.append(({}, 0))
+    assert len(liop.out_buffer) > 0
+    sim.reset()
+    assert liop.count == liop.count_no_input == 0
+    assert len(liop.out_buffer) == 0
 
 
 class SampleCounter(cleo.IOProcessor):
@@ -153,7 +193,7 @@ def test_no_skip_sampling_short():
     sim.set_io_processor(liop)
     nsamp = 20
     sim.run(nsamp * Tsamp)
-    assert liop.count == nsamp
+    assert liop.count_no_input == nsamp
 
 
 class WaveformController(LatencyIOProcessor):

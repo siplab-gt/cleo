@@ -232,6 +232,11 @@ class LatencyIOProcessor(IOProcessor):
         """
         pass
 
+    def _base_reset(self):
+        self.t_samp_ms = []
+        self.out_buffer = deque()
+        self._needs_off_schedule_sample = False
+
 
 class RecordOnlyProcessor(LatencyIOProcessor):
     """Take samples without performing any control.
