@@ -505,6 +505,7 @@ class CLSimulator(NeoExportable):
         for device in self.devices:
             device.reset(**kwargs)
         if self.io_processor is not None:
+            self.io_processor._base_reset()
             self.io_processor.reset(**kwargs)
 
     def to_neo(self) -> neo.core.Block:
