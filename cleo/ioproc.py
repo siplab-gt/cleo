@@ -1,7 +1,7 @@
-"""Basic processor and processing block definitions"""
+"""Basic processor definitions and control/estimation functions"""
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from collections import deque
 from typing import Any, Tuple
 
@@ -11,107 +11,7 @@ from brian2 import Quantity, ms
 from nptyping import NDArray
 
 from cleo.base import IOProcessor
-from cleo.ioproc.delays import Delay
 from cleo.utilities import unit_safe_append
-
-
-class ProcessingBlock(ABC):
-    """Abstract signal processing stage or control block."""
-
-    delay: Delay
-    """The delay object determining compute latency for the block"""
-    save_history: bool
-    """Whether to record :attr:`t_in`, :attr:`t_out`, 
-    and :attr:`values` with every timestep"""
-    t_in: Quantity
-    """The walltime the block received each input.
-    Only recorded if :attr:`save_history`"""
-    t_out: Quantity
-    """The walltime of each of the block's outputs.
-    Only recorded if :attr:`save_history`"""
-    values: list[Any]
-    """Each of the block's outputs.
-    Only recorded if :attr:`save_history`"""
-
-    def __init__(self, **kwargs):
-        """
-        It's important to use `super().__init__(**kwargs)` in the base class
-        to use the parent-class logic here.
-
-        Keyword args
-        ------------
-        delay : Delay
-            Delay object which adds to the compute time
-
-        Raises
-        ------
-        TypeError
-            When `delay` is not a `Delay` object.
-        """
-        self.delay = kwargs.get("delay", None)
-        if self.delay and not isinstance(self.delay, Delay):
-            raise TypeError("delay must be of the Delay class")
-        self.save_history = kwargs.get("save_history", False)
-        if self.save_history is True:
-            self.t_in = []
-            self.t_out = []
-            self.values = []
-
-    def process(self, input: Any, t_in_ms: float, **kwargs) -> Tuple[Any, float]:
-        """Computes and saves output and output time given input and input time.
-
-        The user should implement :meth:`~compute_output()` for their child
-        classes, which performs the computation itself without regards for
-        timing or saving variables.
-
-        Parameters
-        ----------
-        input : Any
-            Data to be processed
-        t_in_ms : float
-            Time the block receives the input data
-        **kwargs : Any
-            Key-value list of arguments passed to :func:`~compute_output()`
-
-        Returns
-        -------
-        Tuple[Any, float]
-            output, out time in milliseconds
-        """
-        out = self.compute_output(input, **kwargs)
-        if self.delay is not None:
-            t_out_ms = t_in_ms + self.delay.compute()
-        else:
-            t_out_ms = t_in_ms
-        if self.save_history:
-            self.t_in_ms.append(t_in_ms)
-            self.t_out_ms.append(t_out_ms)
-            self.values.append(out)
-        return (out, t_out_ms)
-
-    @abstractmethod
-    def compute_output(self, input: Any, **kwargs) -> Any:
-        """Computes output for given input.
-
-        This is where the user will implement the desired functionality
-        of the `ProcessingBlock` without regard for latency.
-
-        Parameters
-        ----------
-        input : Any
-            Data to be processed. Passed in from :meth:`process`.
-        **kwargs : Any
-            optional key-value argument pairs passed from
-            :meth:`process`. Could be used to pass in such values as
-            the IO processor's walltime or the measurement time for time-
-            dependent functions.
-
-        Returns
-        -------
-        Any
-            output
-        """
-        pass
 
 
 @define

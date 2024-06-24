@@ -5,68 +5,25 @@ import pytest
 from brian2 import Hz, Network, NeuronGroup, Quantity, ms, np
 
 import cleo
-from cleo.ioproc import ConstantDelay, LatencyIOProcessor, ProcessingBlock
-
-
-class MyProcessingBlock(ProcessingBlock):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
-    def compute_output(self, input: Any, **kwargs) -> Any:
-        measurement_time = kwargs["measurement_time"]
-        return input + measurement_time / ms
-
-
-def test_ProcessingBlock():
-    const_delay = 5
-    my_block = MyProcessingBlock(delay=ConstantDelay(const_delay), save_history=True)
-
-    # blank history to start
-    assert len(my_block.t_in_ms) == 0
-    assert len(my_block.t_out_ms) == 0
-    assert len(my_block.values) == 0
-
-    meas_time = [1, 8]
-    in_time = [2, 9]
-    inputs = [42, -1]
-    outputs = [a + b for a, b in zip(inputs, meas_time)]
-    out_times = [t + const_delay for t in in_time]
-
-    for i in [0, 1]:
-        out, out_time = my_block.process(
-            inputs[i],
-            t_in_ms=in_time[i],
-            measurement_time=meas_time[i],
-        )
-        # process with extra arg
-        assert out == outputs[i]
-        # delay
-        assert out_time == out_times[i]
-        # save history
-        assert len(my_block.t_in_ms) == i + 1
-        assert len(my_block.t_out_ms) == i + 1
-        assert len(my_block.values) == i + 1
+from cleo.ioproc import LatencyIOProcessor
 
 
 class MyLIOP(LatencyIOProcessor):
     def __init__(self, sample_period, **kwargs):
         super().__init__(sample_period, **kwargs)
         self.delay = 1.199 * ms
-        self.component = MyProcessingBlock(delay=ConstantDelay(self.delay))
         self.count_no_input = 0
         self.count = 0
 
-    def process(self, state_dict: dict, sample_time_ms: float) -> Tuple[dict, float]:
+    def process(self, state_dict: dict, t_samp: Quantity):
         self.count += 1
         try:
-            input = state_dict["in"]
-            out, out_t = self.component.process(
-                input, sample_time_ms, measurement_time=sample_time_ms
-            )
-            return {"out": out}, out_t
+            in_signal = state_dict["in"]
+            out = in_signal + t_samp / ms
+            return {"out": out}, t_samp + self.delay
         except KeyError:
             self.count_no_input += 1
-            return {}, sample_time_ms
+            return {}, t_samp
 
     def reset(self):
         self.count_no_input = 0
