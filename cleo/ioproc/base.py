@@ -8,6 +8,7 @@ from typing import Any, Tuple
 import numpy as np
 from attrs import define, field, fields
 from brian2 import Quantity, ms
+from nptyping import NDArray
 
 from cleo.base import IOProcessor
 from cleo.ioproc.delays import Delay
@@ -276,3 +277,44 @@ class RecordOnlyProcessor(LatencyIOProcessor):
 
     def process(self, state_dict: dict, sample_time: float) -> Tuple[dict, float]:
         return ({}, sample_time)
+
+
+def firing_rate_estimate(
+    spike_counts: NDArray[(Any,), np.uint],
+    dt: Quantity,
+    prev_rate: Quantity,
+    tau: Quantity,
+) -> Quantity:
+    """Estimate firing rate with a recursive exponential filter.
+
+    Parameters
+    ----------
+    spike_counts: np.ndarray
+        n-length vector of spike counts
+    dt: Quantity
+        Time since last measurement (with Brian temporal unit)
+    prev_rate: Quantity
+        n-length vector of previously estimated firing rates
+    tau: Quantity
+        Time constant of exponential filter (with Brian temporal unit)
+
+    Returns
+    -------
+    Quantity
+        n-length vector of estimated firing rates (with Brian units)
+    """
+    alpha = np.exp(-dt / tau)
+    return prev_rate * alpha + (1 - alpha) * spike_counts / dt
+
+
+def pi_ctrl(
+    measurement: float,
+    reference: float,
+    integ_error: float,
+    dt: Quantity,
+    Kp: float,
+    Ki: Quantity = 0,
+):
+    error = reference - measurement
+    integ_error += error * dt
+    return Kp * error + Ki * integ_error, integ_error
