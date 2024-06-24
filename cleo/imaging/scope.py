@@ -4,7 +4,7 @@ import warnings
 from typing import Any, Callable
 
 import matplotlib as mpl
-from attrs import define, field
+from attrs import define, field, fields
 from brian2 import NeuronGroup, Quantity, Unit, meter, mm, ms, np, um
 from matplotlib.artist import Artist
 from mpl_toolkits.mplot3d import Axes3D
@@ -13,7 +13,7 @@ from nptyping import NDArray
 from cleo.base import Recorder
 from cleo.coords import coords_from_ng
 from cleo.imaging.sensors import Sensor
-from cleo.utilities import normalize_coords, rng
+from cleo.utilities import normalize_coords, rng, unit_safe_append
 
 
 def target_neurons_in_plane(
@@ -124,7 +124,7 @@ class Scope(Recorder):
     dFF: list[NDArray[(Any,), float]] = field(factory=list, init=False, repr=False)
     """ΔF/F from every call to :meth:`get_state`.
     Shape is (n_samples, n_ROIs). Stored if :attr:`~cleo.InterfaceDevice.save_history`"""
-    t_ms: list[float] = field(factory=list, init=False, repr=False)
+    t: Quantity = field(factory=lambda: ms * [], init=False, repr=False)
     """Times at which sensor traces are recorded, in ms, stored if
     :attr:`~cleo.InterfaceDevice.save_history`"""
 
@@ -173,12 +173,12 @@ class Scope(Recorder):
 
     def _init_saved_vars(self):
         if self.save_history:
-            self.t_ms = []
-            self.dFF = []
+            self.t = fields(type(self)).t.default.factory()
+            self.dFF = fields(type(self)).dFF.default.factory()
 
-    def _update_saved_vars(self, t_ms, dFF):
+    def _update_saved_vars(self, t, dFF):
         if self.save_history:
-            self.t_ms.append(t_ms)
+            self.t = unit_safe_append(self.t, t)
             self.dFF.append(dFF)
 
     def __attrs_post_init__(self):
@@ -249,8 +249,8 @@ class Scope(Recorder):
         assert self.n == len(signal) == len(noise) == len(self.sigma_noise)
 
         state = signal + noise
-        now_ms = self.sim.network.t / ms
-        self._update_saved_vars(now_ms, state)
+        t_now = self.sim.network.t
+        self._update_saved_vars(t_now, state)
         return signal + noise
 
     def connect_to_neuron_group(self, neuron_group: NeuronGroup, **kwparams) -> None:

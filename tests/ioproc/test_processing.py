@@ -1,7 +1,8 @@
 """Tests for cleo/processing/__init__.py"""
 from typing import Any, Tuple
 
-from brian2 import Hz, Network, NeuronGroup, ms, np
+import pytest
+from brian2 import Hz, Network, NeuronGroup, Quantity, ms, np
 
 import cleo
 from cleo.ioproc import ConstantDelay, LatencyIOProcessor, ProcessingBlock
@@ -13,7 +14,7 @@ class MyProcessingBlock(ProcessingBlock):
 
     def compute_output(self, input: Any, **kwargs) -> Any:
         measurement_time = kwargs["measurement_time"]
-        return input + measurement_time
+        return input + measurement_time / ms
 
 
 def test_ProcessingBlock():
@@ -48,9 +49,9 @@ def test_ProcessingBlock():
 
 
 class MyLIOP(LatencyIOProcessor):
-    def __init__(self, sample_period_ms, **kwargs):
-        super().__init__(sample_period_ms, **kwargs)
-        self.delay = 1.199
+    def __init__(self, sample_period, **kwargs):
+        super().__init__(sample_period, **kwargs)
+        self.delay = 1.199 * ms
         self.component = MyProcessingBlock(delay=ConstantDelay(self.delay))
         self.count_no_input = 0
         self.count = 0
@@ -83,8 +84,8 @@ def _test_LatencyIOProcessor(myLIOP, t, sampling, inputs, outputs):
 
 
 def test_LatencyIOProcessor_fixed_serial():
-    myLIOP = MyLIOP(1, sampling="fixed", processing="serial")
-    t = [0, 1, 1.2, 1.3, 2, 2.3, 2.4]
+    myLIOP = MyLIOP(1 * ms, sampling="fixed", processing="serial")
+    t = [0, 1, 1.2, 1.3, 2, 2.3, 2.4] * ms
     sampling = [True, True, False, False, True, False, False]
     inputs = [42, 66, -1, -1, 1847, -1, -1]
     outputs = [None, None, 42, None, None, None, 67]  # input + measurement_time
@@ -97,8 +98,8 @@ def test_LatencyIOProcessor_fixed_serial():
 
 
 def test_LatencyIOProcessor_fixed_parallel():
-    myLIOP = MyLIOP(1, sampling="fixed", processing="parallel")
-    t = [0, 1, 1.2, 1.3, 2, 2.3, 2.4]
+    myLIOP = MyLIOP(1 * ms, sampling="fixed", processing="parallel")
+    t = [0, 1, 1.2, 1.3, 2, 2.3, 2.4] * ms
     sampling = [True, True, False, False, True, False, False]
     inputs = [42, 66, -1, -1, 1847, -1, -1]
     outputs = [None, None, 42, None, None, 67, None]  # input + measurement_time
@@ -111,8 +112,8 @@ def test_LatencyIOProcessor_fixed_parallel():
 
 
 def test_LatencyIOProcessor_wait_serial():
-    myLIOP = MyLIOP(1, sampling="when idle", processing="serial")
-    t = [0, 1, 1.2, 1.3, 2, 2.3, 2.4]
+    myLIOP = MyLIOP(1 * ms, sampling="when idle", processing="serial")
+    t = [0, 1, 1.2, 1.3, 2, 2.3, 2.4] * ms
     sampling = [True, False, True, False, False, False, True]
     inputs = [42, -1, 66, -1, -1, -1, 1847]
     outputs = [None, None, 42, None, None, None, 67.2]  # input + measurement_time
@@ -130,8 +131,8 @@ def test_LatencyIOProcessor_wait_parallel():
     because waiting results in only one sample at a time being
     processed."""
 
-    myLIOP = MyLIOP(1, sampling="when idle", processing="parallel")
-    t = [0, 1, 1.2, 1.3, 2, 2.3, 2.4]
+    myLIOP = MyLIOP(1 * ms, sampling="when idle", processing="parallel")
+    t = [0, 1, 1.2, 1.3, 2, 2.3, 2.4] * ms
     sampling = [True, False, True, False, False, False, True]
     inputs = [42, -1, 66, -1, -1, -1, 1847]
     outputs = [None, None, 42, None, None, None, 67.2]  # input + measurement_time
@@ -145,7 +146,7 @@ def test_LatencyIOProcessor_wait_parallel():
 
 def test_sim_LIOP_reset():
     sim = cleo.CLSimulator(Network())
-    liop = MyLIOP(1)
+    liop = MyLIOP(1 * ms)
     sim.set_io_processor(liop)
     sim.run(10 * ms)
     assert liop.count == liop.count_no_input == 10
@@ -159,22 +160,28 @@ def test_sim_LIOP_reset():
 class SampleCounter(cleo.IOProcessor):
     """Just count samples"""
 
-    def is_sampling_now(self, t_query_ms) -> np.bool:
-        return t_query_ms % self.sample_period_ms == 0
+    def is_sampling_now(self, t_query) -> np.bool:
+        """from LatencyIOProcessor"""
+        resid_ms = np.round((t_query % self.sample_period) / ms, 6)
+        if np.isclose(resid_ms, 0) or np.isclose(
+            resid_ms, np.round(self.sample_period / ms, 6)
+        ):
+            return True
 
-    def __init__(self, sample_period_ms=1):
+    def __init__(self):
         self.count = 0
-        self.sample_period_ms = sample_period_ms
+        self.sample_period = 1 * ms
         self.latest_ctrl_signal = {}
 
-    def put_state(self, state_dict: dict, sample_time_ms: float):
+    def put_state(self, state_dict: dict, t_samp: Quantity):
         self.count += 1
-        return ({}, sample_time_ms)
+        return ({}, t_samp)
 
-    def get_ctrl_signals(self, query_time_ms: np.float) -> dict:
+    def get_ctrl_signals(self, t_query: np.float) -> dict:
         return {}
 
 
+@pytest.mark.slow
 def test_no_skip_sampling():
     sc = SampleCounter()
     net = Network()
@@ -189,7 +196,7 @@ def test_no_skip_sampling_short():
     net = Network()
     sim = cleo.CLSimulator(net)
     Tsamp = 0.2 * ms
-    liop = MyLIOP(Tsamp / ms)
+    liop = MyLIOP(Tsamp)
     sim.set_io_processor(liop)
     nsamp = 20
     sim.run(nsamp * Tsamp)
@@ -197,23 +204,23 @@ def test_no_skip_sampling_short():
 
 
 class WaveformController(LatencyIOProcessor):
-    def process(self, state_dict, t_ms):
-        return {"steady": t_ms, "time-varying": t_ms + 1}, t_ms + 3
+    def process(self, state_dict, t):
+        return {"steady": t / ms, "time-varying": t / ms + 1}, t + 3 * ms
 
     def preprocess_ctrl_signals(
-        self, latest_ctrl_signals: dict, query_time_ms: float
+        self, latest_ctrl_signals: dict, t_query: Quantity
     ) -> dict:
         out = {}
         # (sample_time_ms+1) * whether query time is even
         out["time-varying"] = latest_ctrl_signals.get("time-varying", 0) * int(
-            query_time_ms % 2 == 0
+            (t_query / ms) % 2 == 0
         )
         return out
 
 
 def test_intersample_waveform():
-    ctrlr = WaveformController(sample_period_ms=2)
-    trange = np.arange(0, 10)
+    ctrlr = WaveformController(sample_period=2 * ms)
+    trange = np.arange(0, 10) * ms
     exp_outs = [
         {"time-varying": 0},  # t=0
         {"time-varying": 0},

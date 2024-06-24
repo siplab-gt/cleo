@@ -25,9 +25,10 @@ from brian2 import (
 from matplotlib.artist import Artist
 from mpl_toolkits.mplot3d import Axes3D
 
+import cleo
 from cleo.registry import registry_for_sim
 from cleo.utilities import add_to_neo_segment, analog_signal, brian_safe_name
-import cleo
+
 
 class NeoExportable(ABC):
     """Mixin class for classes that can be exported to Neo objects"""
@@ -165,13 +166,13 @@ class IOProcessor(ABC):
     """The most recent control signal returned by :meth:`get_ctrl_signals`"""
 
     @abstractmethod
-    def is_sampling_now(self, time) -> bool:
+    def is_sampling_now(self, t_now: Quantity) -> bool:
         """Determines whether the processor will take a sample at this timestep.
 
         Parameters
         ----------
-        time : Brian 2 temporal Unit
-            Current timestep.
+        t_now : Quantity
+            Current time.
 
         Returns
         -------
@@ -180,7 +181,7 @@ class IOProcessor(ABC):
         pass
 
     @abstractmethod
-    def put_state(self, state_dict: dict, sample_time: float) -> None:
+    def put_state(self, state_dict: dict, t_samp: Quantity) -> None:
         """Deliver network state to the :class:`IOProcessor`.
 
         Parameters
@@ -188,19 +189,19 @@ class IOProcessor(ABC):
         state_dict : dict
             A dictionary of recorder measurements, as returned by
             :func:`~cleo.CLSimulator.get_state()`
-        sample_time_ms: float
+        t_samp: Quantity
             The current simulation timestep. Essential for simulating
             control latency and for time-varying control.
         """
         pass
 
     @abstractmethod
-    def get_ctrl_signals(self, query_time_ms: float) -> dict:
+    def get_ctrl_signals(self, t_query: Quantity) -> dict:
         """Get per-stimulator control signal from the :class:`~cleo.IOProcessor`.
 
         Parameters
         ----------
-        query_time_ms : float
+        t_query : Quantity
             Current simulation time.
 
         Returns
@@ -210,16 +211,16 @@ class IOProcessor(ABC):
         """
         pass
 
-    def get_stim_values(self, query_time_ms: float) -> dict:
-        ctrl_signals = self.get_ctrl_signals(query_time_ms)
+    def get_stim_values(self, t_query: Quantity) -> dict:
+        ctrl_signals = self.get_ctrl_signals(t_query)
         self.latest_ctrl_signal.update(ctrl_signals)
         stim_value_conversions = self.preprocess_ctrl_signals(
-            self.latest_ctrl_signal, query_time_ms
+            self.latest_ctrl_signal, t_query
         )
         return ctrl_signals | stim_value_conversions
 
     def preprocess_ctrl_signals(
-        self, latest_ctrl_signals: dict, query_time_ms: float
+        self, latest_ctrl_signals: dict, t_query: Quantity
     ) -> dict:
         """Preprocess control signals as needed to control stimulator waveforms between samples.
 
@@ -235,7 +236,7 @@ class IOProcessor(ABC):
 
         Parameters
         ----------
-        query_time_ms : float
+        t_query : float
             Current simulation time.
 
         Returns
@@ -289,7 +290,7 @@ class Stimulator(InterfaceDevice, NeoExportable):
             if self.sim:
                 t0 = self.sim.network.t
             else:
-                t0 = 0*ms
+                t0 = 0 * ms
             self.t = [t0]
             self.values = [self.value]
 
@@ -462,10 +463,10 @@ class CLSimulator(NeoExportable):
 
         def communicate_with_io_proc(t):
             # assuming no one will have timesteps shorter than nanoseconds...
-            now_ms = round(t / ms, 6)
-            if io_processor.is_sampling_now(now_ms):
-                io_processor.put_state(self.get_state(), now_ms)
-            stim_values = io_processor.get_stim_values(now_ms)
+            t_now = round(t / ms, 6) * ms
+            if io_processor.is_sampling_now(t_now):
+                io_processor.put_state(self.get_state(), t_now)
+            stim_values = io_processor.get_stim_values(t_now)
             self.update_stimulators(stim_values)
 
         # communication should be at every timestep. The IOProcessor
@@ -670,7 +671,8 @@ class SynapseDevice(InterfaceDevice):
 
         # store at the end, after all checks have passed
         self.source_ngs[neuron_group.name] = source_ng
-        self.brian_objects.add(source_ng)
+        if source_ng is not neuron_group:
+            self.brian_objects.add(source_ng)
         self.synapses[neuron_group.name] = syn
         self.brian_objects.add(syn)
 

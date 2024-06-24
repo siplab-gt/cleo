@@ -5,7 +5,7 @@ from typing import Callable, Tuple
 
 import matplotlib.pyplot as plt
 from attrs import define, field
-from brian2 import NeuronGroup, mm, np
+from brian2 import NeuronGroup, Quantity, mm, np, nmeter
 from scipy.interpolate import (
     Akima1DInterpolator,
     CubicSpline,
@@ -94,6 +94,7 @@ class LightDependent:
 
     @property
     def light_agg_ngs(self):
+        """Returns the "neurons" that aggregate light for this device."""
         return self.source_ngs
 
     def _get_source_for_synapse(
@@ -117,10 +118,11 @@ class LightDependent:
         )
         return light_agg_ng, list(range(len(i_targets)))
 
-    def epsilon(self, lambda_new) -> float:
-        """Returns the :math:`\\varepsilon` value for a given lambda (in nm)
+    def epsilon(self, lambda_new: Quantity) -> float:
+        """Returns the :math:`\\varepsilon` value for a given lambda (including units)
         representing the relative sensitivity of the opsin to that wavelength."""
         lambdas, epsilons = np.array(self.spectrum).T
+        lambda_new /= nmeter
         eps_new = self.spectrum_interpolator(lambdas, epsilons, lambda_new)
 
         # out of data range

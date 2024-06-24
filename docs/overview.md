@@ -163,15 +163,15 @@ This is done by creating a subclass and defining the {meth}`~cleo.ioproc.Latency
 
 ```{code-cell} ipython3
 class MyProcessor(cleo.ioproc.LatencyIOProcessor):
-    def process(self, state_dict, sample_time_ms):
+    def process(self, state_dict, t_samp):
         # state_dict contains a {'recorder_name': value} dict of network.
-        i_spikes, t_ms_spikes, y_spikes = state_dict['Probe']['MultiUnitSpiking']
+        i_spikes, t_spikes, y_spikes = state_dict['Probe']['MultiUnitSpiking']
         # on-off control
         irr0_mW_per_mm2 = 5 if len(i_spikes) < 10 else 0
         # output is a {'stimulator_name': value} dict and output time
-        return {'Light': irr0_mW_per_mm2}, sample_time_ms + 3  # (3 ms delay)
+        return {'Light': irr0_mW_per_mm2}, t_samp + 3 * ms  # (3 ms delay)
 
-sim.set_io_processor(MyProcessor(sample_period_ms=1))
+sim.set_io_processor(MyProcessor(sample_period=1 * ms))
 ```
 
 The {doc}`tutorials/on_off_ctrl`, {doc}`tutorials/PI_ctrl`, and {doc}`tutorials/lqr_ctrl_ldsctrlest` tutorials give examples of closed-loop control ranging from simple to complex.
@@ -212,9 +212,9 @@ For example:
 ```{code-cell} ipython3
 import matplotlib.pyplot as plt
 fig, (ax1, ax2) = plt.subplots(2, 1, sharex=True)
-ax1.scatter(mua.t_ms, mua.i, marker='.', c='white', s=2)
+ax1.scatter(mua.t / ms, mua.i, marker='.', c='white', s=2)
 ax1.set(ylabel='channel index', title='spikes')
-ax2.step(fiber.t_ms, fiber.values, c='#72b5f2')
+ax2.step(fiber.t / ms, fiber.values, c='#72b5f2')
 ax2.set(xlabel='time (ms)', ylabel='irradiance (mW/mm²)', title='photostimulation')
 ```
 

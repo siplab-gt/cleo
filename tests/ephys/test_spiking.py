@@ -50,7 +50,7 @@ def test_MUS_multiple_contacts():
 
     sim.run(1 * ms)  # 1 ms
     i, t, y = mus.get_state()
-    assert (0 in i) and (0.9 in t)
+    assert (0 in i) and (0.9 * ms in t)
 
     sim.run(1 * ms)  # 2 ms
     i, t, y = mus.get_state()
@@ -58,20 +58,20 @@ def test_MUS_multiple_contacts():
 
     sim.run(1 * ms)  # 3 ms
     i, t, y = mus.get_state()
-    assert (0 in i) and (2.1 in t)
+    assert (0 in i) and (2.1 * ms in t)
 
     sim.run(1 * ms)  # 4 ms
     i, t, y = mus.get_state()
     # should pick up 2 spikes on first and 1 or 2 on second channel
     assert 1 in i and len(i) >= 3
-    assert 3.5 in t
+    assert 3.5 * ms in t
 
     # skip to 6 ms
     sim.run(2 * ms)
     # sim.get_state() nested dict is what will be passed to IO processor
     i, t, y = sim.get_state()["Probe"]["mus"]
     assert (0 in i) and (1 in i) and len(i) >= 7
-    assert all(t_i in t.round(2) for t_i in [4.1, 4.9, 5.1, 5.3, 5.5])
+    assert all(t_i in (t / ms).round(2) for t_i in [4.1, 4.9, 5.1, 5.3, 5.5])
 
     # should have picked up at least one but not all spikes outside perfect radius
     assert len(mus.i) > 12
@@ -79,7 +79,7 @@ def test_MUS_multiple_contacts():
     assert np.sum(mus.i == 0) < len(indices)
     assert np.sum(mus.i == 1) < len(indices)
 
-    assert len(mus.i) == len(mus.t_ms) == len(mus.t_samp_ms)
+    assert len(mus.i) == len(mus.t) == len(mus.t_samp)
 
 
 def test_MUS_multiple_groups():
@@ -104,8 +104,8 @@ def test_MUS_multiple_groups():
     assert 20 < np.sum(mus.i == 0) < 60
     # second channel would have caught all spikes from sgg1 and sgg2
     assert np.sum(mus.i == 1) == 60
-    assert len(mus.t_ms) == len(mus.t_samp_ms)
-    assert np.all(mus.t_samp_ms == 10)
+    assert len(mus.t) == len(mus.t_samp)
+    assert np.all(mus.t_samp == 10 * ms)
 
 
 def test_MUS_reset():
@@ -158,8 +158,8 @@ def test_SortedSpiking():
     for i in (0, 1, 4):
         assert i not in ss.i
 
-    assert ss.t_ms.shape == ss.i.shape == ss.t_samp_ms.shape
-    assert np.all(np.in1d(ss.t_samp_ms, [3, 4, 5, 6]))
+    assert ss.t.shape == ss.i.shape == ss.t_samp.shape
+    assert np.all(np.in1d(ss.t_samp, [3, 4, 5, 6]))
 
 
 def _test_reset(spike_signal_class):
@@ -173,15 +173,15 @@ def _test_reset(spike_signal_class):
     )
     probe = Probe([[0, 0, 0]] * mm, [spike_signal], save_history=True)
     sim.inject(probe, sgg)
-    sim.set_io_processor(RecordOnlyProcessor(sample_period_ms=1))
+    sim.set_io_processor(RecordOnlyProcessor(sample_period=1 * ms))
     assert len(spike_signal.i) == 0
-    assert len(spike_signal.t_ms) == 0
+    assert len(spike_signal.t) == 0
     sim.run(3.1 * ms)
     assert len(spike_signal.i) == 3
-    assert len(spike_signal.t_ms) == 3
+    assert len(spike_signal.t) == 3
     sim.reset()
     assert len(spike_signal.i) == 0
-    assert len(spike_signal.t_ms) == 0
+    assert len(spike_signal.t) == 0
 
 
 def test_SortedSpiking_reset():
@@ -199,16 +199,16 @@ def _test_spiking_to_neo(spike_signal_class):
 
     n_spikes = n_channels
     spike_sig.i = np.random.randint(0, n_channels, n_spikes)
-    t_end_ms = n_spikes
-    spike_sig.t_ms = np.random.rand(n_spikes) * t_end_ms
-    probe.sim.network.t_ = t_end_ms * ms
+    t_end = n_spikes * ms
+    spike_sig.t = np.random.rand(n_spikes) * t_end
+    probe.sim.network.t_ = t_end
     stgroup = spike_sig.to_neo()
     assert stgroup.name == f"{spike_sig.probe.name}.{spike_sig.name}"
     assert len(stgroup.spiketrains) == len(set(spike_sig.i))
     for st in stgroup.spiketrains:
         i = int(st.annotations["i"])
         assert len(st) == np.sum(spike_sig.i == i)
-        assert np.all(st.times / pq.ms == spike_sig.t_ms[spike_sig.i == i])
+        assert np.all(st.times / pq.ms == spike_sig.t[spike_sig.i == i] / ms)
     return spike_sig, stgroup
 
 

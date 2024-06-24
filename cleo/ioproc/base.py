@@ -6,11 +6,12 @@ from collections import deque
 from typing import Any, Tuple
 
 import numpy as np
-from attrs import define, field
-from brian2 import ms
+from attrs import define, field, fields
+from brian2 import Quantity, ms
 
 from cleo.base import IOProcessor
 from cleo.ioproc.delays import Delay
+from cleo.utilities import unit_safe_append
 
 
 class ProcessingBlock(ABC):
@@ -19,12 +20,12 @@ class ProcessingBlock(ABC):
     delay: Delay
     """The delay object determining compute latency for the block"""
     save_history: bool
-    """Whether to record :attr:`t_in_ms`, :attr:`t_out_ms`, 
+    """Whether to record :attr:`t_in`, :attr:`t_out`, 
     and :attr:`values` with every timestep"""
-    t_in_ms: list[float]
+    t_in: Quantity
     """The walltime the block received each input.
     Only recorded if :attr:`save_history`"""
-    t_out_ms: list[float]
+    t_out: Quantity
     """The walltime of each of the block's outputs.
     Only recorded if :attr:`save_history`"""
     values: list[Any]
@@ -51,8 +52,8 @@ class ProcessingBlock(ABC):
             raise TypeError("delay must be of the Delay class")
         self.save_history = kwargs.get("save_history", False)
         if self.save_history is True:
-            self.t_in_ms = []
-            self.t_out_ms = []
+            self.t_in = []
+            self.t_out = []
             self.values = []
 
     def process(self, input: Any, t_in_ms: float, **kwargs) -> Tuple[Any, float]:
@@ -123,7 +124,7 @@ class LatencyIOProcessor(IOProcessor):
     one sample at a time to process.
     """
 
-    t_samp_ms: list[float] = field(factory=list, init=False, repr=False)
+    t_samp: Quantity = field(factory=lambda: [] * ms, init=False, repr=False)
     """Record of sampling times---each time :meth:`~put_state` is called."""
 
     sampling: str = field(default="fixed")
@@ -192,37 +193,39 @@ class LatencyIOProcessor(IOProcessor):
             For invalid `sampling` or `processing` kwargs 
         """
 
-    def put_state(self, state_dict: dict, sample_time_ms: float):
-        self.t_samp_ms.append(sample_time_ms)
-        out, t_out_ms = self.process(state_dict, sample_time_ms)
+    def put_state(self, state_dict: dict, t_samp: Quantity):
+        self.t_samp = unit_safe_append(self.t_samp, t_samp)
+        out, t_out = self.process(state_dict, t_samp)
         if self.processing == "serial" and len(self.out_buffer) > 0:
-            prev_t_out_ms = self.out_buffer[-1][1]
+            prev_t_out = self.out_buffer[-1][1]
             # add delay onto the output time of the last computation
-            t_out_ms = prev_t_out_ms + t_out_ms - sample_time_ms
-        self.out_buffer.append((out, t_out_ms))
+            t_out = prev_t_out + t_out - t_samp
+        self.out_buffer.append((out, t_out))
         self._needs_off_schedule_sample = False
 
-    def get_ctrl_signals(self, query_time_ms):
+    def get_ctrl_signals(self, t_query):
         if len(self.out_buffer) == 0:
             return {}
-        next_out_signal, next_t_out_ms = self.out_buffer[0]
-        if query_time_ms >= next_t_out_ms:
+        next_out_signal, next_t_out = self.out_buffer[0]
+        if t_query >= next_t_out:
             self.out_buffer.popleft()
             return next_out_signal
         else:
             return {}
 
-    def _is_currently_idle(self, query_time_ms):
-        return len(self.out_buffer) == 0 or self.out_buffer[0][1] <= query_time_ms
+    def _is_currently_idle(self, t_query):
+        return len(self.out_buffer) == 0 or self.out_buffer[0][1] <= t_query
 
-    def is_sampling_now(self, query_time_ms):
+    def is_sampling_now(self, t_query):
+        resid_ms = np.round((t_query % self.sample_period) / ms, 6)
         if self.sampling == "fixed":
-            resid = query_time_ms % self.sample_period_ms
-            if np.isclose(resid, 0) or np.isclose(resid, self.sample_period_ms):
+            if np.isclose(resid_ms, 0) or np.isclose(
+                resid_ms, np.round(self.sample_period / ms, 6)
+            ):
                 return True
         elif self.sampling == "when idle":
-            if np.isclose(query_time_ms % self.sample_period_ms, 0):
-                if self._is_currently_idle(query_time_ms):
+            if np.isclose(resid_ms, 0):
+                if self._is_currently_idle(t_query):
                     self._needs_off_schedule_sample = False
                     return True
                 else:  # if not done computing
@@ -232,12 +235,12 @@ class LatencyIOProcessor(IOProcessor):
                 # off-schedule, only sample if the last sampling period
                 # was missed (there was an overrun)
                 return self._needs_off_schedule_sample and self._is_currently_idle(
-                    query_time_ms
+                    t_query
                 )
         return False
 
     @abstractmethod
-    def process(self, state_dict: dict, sample_time_ms: float) -> Tuple[dict, float]:
+    def process(self, state_dict: dict, t_samp: Quantity) -> Tuple[dict, Quantity]:
         """Process network state to generate output to update stimulators.
 
         This is the function the user must implement to define the signal processing
@@ -247,18 +250,19 @@ class LatencyIOProcessor(IOProcessor):
         ----------
         state_dict : dict
             {`recorder_name`: `state`} dictionary from :func:`~cleo.CLSimulator.get_state()`
-        time_ms : float
+        t_samp : Quantity
+            The time at which the sample was taken.
 
         Returns
         -------
-        Tuple[dict, float]
-            {'stim_name': `ctrl_signal`} dictionary and output time in milliseconds.
+        Tuple[dict, Quantity]
+            {'stim_name': `ctrl_signal`} dictionary and output time (including unit).
         """
         pass
 
     def _base_reset(self):
-        self.t_samp_ms = []
-        self.out_buffer = deque()
+        self.t_samp = fields(type(self)).t_samp.default.factory()
+        self.out_buffer = fields(type(self)).out_buffer.default.factory()
         self._needs_off_schedule_sample = False
 
 
@@ -271,4 +275,4 @@ class RecordOnlyProcessor(LatencyIOProcessor):
         super().__init__(sample_period, **kwargs)
 
     def process(self, state_dict: dict, sample_time: float) -> Tuple[dict, float]:
-        return ({}, sample_time / ms)
+        return ({}, sample_time)

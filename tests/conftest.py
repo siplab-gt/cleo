@@ -1,8 +1,11 @@
 from functools import wraps
+
+import matplotlib
 import pytest
 from brian2 import prefs
 
 prefs.codegen.target = "numpy"  # to avoid cython overhead for short tests
+matplotlib.use("Agg")  # to avoid GUI backend
 
 
 def pytest_addoption(parser):

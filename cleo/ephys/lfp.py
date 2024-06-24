@@ -9,6 +9,7 @@ from math import ceil
 from numbers import Number
 from typing import Any, Union
 
+import brian2.only as b2
 import neo
 import quantities as pq
 import wslfp
@@ -21,10 +22,15 @@ from nptyping import NDArray
 from scipy import sparse
 from tklfp import TKLFP
 
-import cleo.utilities
 from cleo.base import NeoExportable
 from cleo.coords import coords_from_ng
 from cleo.ephys.probes import Signal
+from cleo.utilities import (
+    analog_signal,
+    unit_safe_append,
+    unit_safe_cat,
+    unit_safe_round,
+)
 
 
 class LFPSignalBase(Signal, NeoExportable):
@@ -39,14 +45,14 @@ class LFPSignalBase(Signal, NeoExportable):
         default, meaning the negative z axis is "up."
     """
 
-    t_ms: NDArray[(Any,), float] = field(init=False, repr=False)
+    t: NDArray[(Any,), float] = field(init=False, repr=False)
     """Times at which LFP is recorded, in ms, stored if
     :attr:`~cleo.InterfaceDevice.save_history` on :attr:`~Signal.probe`"""
-    lfp: Union[NDArray[(Any, Any), Quantity]] = field(init=False, repr=False)
+    lfp: Union[NDArray[(Any, Any), float], Quantity] = field(init=False, repr=False)
     """Approximated LFP from every call to :meth:`get_state`.
     Shape is (n_samples, n_channels). Stored if
     :attr:`~cleo.InterfaceDevice.save_history` on :attr:`~Signal.probe`"""
-    _elec_coords: np.ndarray = field(init=False, repr=False)
+    _elec_coords: Quantity = field(init=False, repr=False)
     _lfp_unit: Unit
 
     def _post_init_for_probe(self):
@@ -58,23 +64,21 @@ class LFPSignalBase(Signal, NeoExportable):
 
     def _init_saved_vars(self):
         if self.probe.save_history:
-            self.t_ms = np.empty((0,))
+            self.t = np.empty((0,)) * ms
             self.lfp = np.empty((0, self.probe.n)) * self._lfp_unit
 
-    def _update_saved_vars(self, t_ms, lfp):
+    def _update_saved_vars(self, t, lfp):
         if self.probe.save_history:
-            # self.t_ms = np.concatenate([self.t_ms, [t_ms]])
-            # self.lfp = np.vstack([self.lfp, lfp])
             lfp = np.reshape(lfp, (1, -1))
-            t_ms = np.reshape(t_ms, (1,))
-            self.t_ms = cleo.utilities.unit_safe_append(self.t_ms, t_ms)
-            self.lfp = cleo.utilities.unit_safe_append(self.lfp, lfp)
+            t = np.reshape(t, (1,))
+            self.t = unit_safe_append(self.t, t)
+            self.lfp = unit_safe_append(self.lfp, lfp, axis=0)
 
     def to_neo(self) -> neo.AnalogSignal:
         # inherit docstring
         try:
-            signal = cleo.utilities.analog_signal(
-                self.t_ms,
+            signal = analog_signal(
+                self.t,
                 self.lfp,
                 str(self._lfp_unit),
             )
@@ -108,7 +112,7 @@ class TKLFPSignal(LFPSignalBase):
         Either 'exc' or 'inh' to specify the cell type.
     """
 
-    uLFP_threshold_uV: float = 1e-3
+    uLFP_threshold: Quantity = 1e-3 * uvolt
     """Threshold, in microvolts, above which the uLFP for a single spike is guaranteed
     to be considered, by default 1e-3.
     This determines the buffer length of past spikes, since the uLFP from a long-past
@@ -162,13 +166,13 @@ class TKLFPSignal(LFPSignalBase):
 
     def get_state(self) -> np.ndarray:
         tot_tklfp = 0
-        now = self.probe.sim.network.t
+        t_now = self.probe.sim.network.t
         # loop over neuron groups (monitors, tklfps)
         for i_mon in range(len(self._monitors)):
             self._update_spike_buffer(i_mon)
-            tot_tklfp += self._tklfp_for_monitor(i_mon, now_ms)
+            tot_tklfp += self._tklfp_for_monitor(i_mon, t_now)
         tot_tklfp = np.reshape(tot_tklfp, (-1,)) * uvolt  # return 1D array (vector)
-        self._update_saved_vars(now_ms, tot_tklfp)
+        self._update_saved_vars(t_now, tot_tklfp)
         return tot_tklfp
 
     def reset(self, **kwargs) -> None:
@@ -196,15 +200,14 @@ class TKLFPSignal(LFPSignalBase):
         buf_len = len(self._i_buffers[i_mon])
         self._buffer_positions[i_mon] = (buf_pos + 1) % buf_len
 
-    def _tklfp_for_monitor(self, i_mon, now):
+    def _tklfp_for_monitor(self, i_mon, t_now):
         i = np.concatenate(self._i_buffers[i_mon])
-        print(self._t_buffers)
-        t = np.concatenate(self._t_buffers[i_mon]) * second
-        return self._tklfps[i_mon].compute(i, t / ms, [now / ms])
+        t = unit_safe_cat(self._t_buffers[i_mon])
+        return self._tklfps[i_mon].compute(i, t / ms, [t_now / ms])
 
     def _get_buffer_length(self, tklfp, **kwparams):
         # need sampling period
-        sample_period = kwparams.get("sample_period_ms", None) * ms
+        sample_period = kwparams.get("sample_period", None)
         if sample_period is None:
             try:
                 sample_period = self.probe.sim.io_processor.sample_period
@@ -213,10 +216,11 @@ class TKLFPSignal(LFPSignalBase):
                     "TKLFP needs to know the sampling period. Either set the simulator's "
                     f"IO processor before injecting {self.probe.name} or "
                     f"specify it on injection: .inject({self.probe.name} "
-                    ", tklfp_type=..., sample_period_ms=...)"
+                    ", tklfp_type=..., sample_period=...)"
                 )
         return np.ceil(
-            tklfp.compute_min_window_ms(self.uLFP_threshold_uV) / (sample_period / ms)
+            tklfp.compute_min_window_ms(self.uLFP_threshold / uvolt)
+            / (sample_period / ms)
         ).astype(int)
 
 
@@ -291,20 +295,22 @@ class RWSLFPSignalBase(LFPSignalBase):
 
     def get_state(self) -> np.ndarray:
         # round to avoid floating point errors
-        now_ms = round(self.probe.sim.network.t / ms, 3)
+        t_now_ms = round(self.probe.sim.network.t / ms, 3)
         lfp = np.zeros((1, self.probe.n))
         for ng, wslfp_calc in self._wslfps.items():
-            t_ampa_ms = now_ms - wslfp_calc.tau_ampa_ms
-            t_gaba_ms = now_ms - wslfp_calc.tau_gaba_ms
+            t_ampa_ms = t_now_ms - wslfp_calc.tau_ampa_ms
+            t_gaba_ms = t_now_ms - wslfp_calc.tau_gaba_ms
             I_ampa, I_gaba = self._needed_current(ng, t_ampa_ms, t_gaba_ms)
             lfp += wslfp_calc.calculate(
-                [now_ms], t_ampa_ms, I_ampa, t_gaba_ms, I_gaba, normalize=False
+                [t_now_ms], t_ampa_ms, I_ampa, t_gaba_ms, I_gaba, normalize=False
             )
         out = np.reshape(lfp, (-1,))  # return 1D array (vector)
-        self._update_saved_vars(now_ms, out)
+        self._update_saved_vars(t_now_ms * ms, out)
         return out
 
-    def _needed_current(self, ng, t_ampa_ms: float, t_gaba_ms: float) -> np.ndarray:
+    def _needed_current(
+        self, ng, t_ampa_ms_ms: float, t_gaba_ms_ms: float
+    ) -> np.ndarray:
         """output must have shape (n_t, n_current_sources)"""
         raise NotImplementedError
 
@@ -314,8 +320,8 @@ class RWSLFPSignalBase(LFPSignalBase):
     def to_neo(self) -> neo.AnalogSignal:
         # inherit docstring
         try:
-            signal = cleo.utilities.analog_signal(
-                self.t_ms,
+            signal = analog_signal(
+                self.t,
                 self.lfp,
             )
         except AttributeError:
@@ -621,20 +627,20 @@ class RWSLFPSignalFromPSCs(RWSLFPSignalBase):
 
     def _get_buf_lens_for_wslfp(self, wslfp_calc, **kwparams):
         # need sampling period
-        sample_period_ms = kwparams.get("sample_period_ms", None)
-        if sample_period_ms is None:
+        sample_period = kwparams.get("sample_period", None)
+        if sample_period is None:
             try:
-                sample_period_ms = self.probe.sim.io_processor.sample_period_ms
+                sample_period = self.probe.sim.io_processor.sample_period
             except AttributeError:  # probably means sim doesn't have io_processor
                 raise Exception(
                     "RSWLFPSignalFromPSCs needs to know the sampling period."
                     " Either set the simulator's IO processor before injecting"
                     f" {self.probe.name} or "
                     f" specify it on injection: .inject({self.probe.name}"
-                    ", sample_period_ms=...)"
+                    ", sample_period=...)"
                 )
-        buf_len_ampa = self._buf_len(wslfp_calc.tau_ampa_ms, sample_period_ms)
-        buf_len_gaba = self._buf_len(wslfp_calc.tau_gaba_ms, sample_period_ms)
+        buf_len_ampa = self._buf_len(wslfp_calc.tau_ampa_ms, sample_period / ms)
+        buf_len_gaba = self._buf_len(wslfp_calc.tau_gaba_ms, sample_period / ms)
         return buf_len_ampa, buf_len_gaba
 
     def _curr_from_buffer(self, t_buf_ms, I_buf, t_eval_ms: float, n_sources):
@@ -681,14 +687,15 @@ class RWSLFPSignalFromPSCs(RWSLFPSignalBase):
         return I_interp
 
     def _needed_current(
-        self, ng, t_ampa_ms, t_gaba_ms
+        self, ng, t_ampa_ms: float, t_gaba_ms: float
     ) -> tuple[np.ndarray, np.ndarray]:
         """outputs must have shape (n_t, n_current_sources)"""
         # First add current currents to history
         # -- need to round to avoid floating point errors
-        now_ms = round(self.probe.sim.network.t / ms, 3)
-        self._t_ampa_bufs[ng].append(now_ms)
-        self._t_gaba_bufs[ng].append(now_ms)
+
+        t_now_ms = round(self.probe.sim.network.t / ms, 3)
+        self._t_ampa_bufs[ng].append(t_now_ms)
+        self._t_gaba_bufs[ng].append(t_now_ms)
 
         I_ampa = np.zeros((1, ng.N))
         for I_ampa_name in self._ampa_vars[ng]:

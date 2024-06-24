@@ -331,7 +331,7 @@ class Light(Stimulator):
     @property
     def color(self):
         """Color of light"""
-        return wavelength_to_rgb(self.wavelength / nmeter)
+        return wavelength_to_rgb(self.wavelength)
 
     def transmittance(self, target_coords) -> np.ndarray:
         """Returns :attr:`light_model` transmittance given light's coords and direction."""
@@ -435,7 +435,7 @@ class Light(Stimulator):
             point_clouds.append(point_cloud)
 
         handles = ax.get_legend().legend_handles
-        c = wavelength_to_rgb(self.wavelength / nmeter)
+        c = wavelength_to_rgb(self.wavelength)
         opto_patch = mpl.patches.Patch(color=c, label=self.name)
         handles.append(opto_patch)
         ax.legend(handles=handles)
@@ -505,7 +505,7 @@ class Light(Stimulator):
         self.source.Irr0 = Irr0_mW_per_mm2 * mwatt / mm2
 
     def _alpha_cmap_for_wavelength(self, intensity):
-        c = wavelength_to_rgb(self.wavelength / nmeter)
+        c = wavelength_to_rgb(self.wavelength)
         c_dimmest = (*c, 0)
         alpha_max = 0.6
         alpha_brightest = alpha_max * intensity

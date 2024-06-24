@@ -5,7 +5,7 @@ from collections.abc import MutableMapping
 import brian2 as b2
 import neo
 import quantities as pq
-from brian2 import Quantity, np, second, ms
+from brian2 import Quantity, ms, np, second
 from brian2.equations.equations import (
     DIFFERENTIAL_EQUATION,
     PARAMETER,
@@ -220,7 +220,9 @@ def modify_model_with_eqs(neuron_group, eqs_to_add):
                         )
 
 
-def wavelength_to_rgb(wavelength_nm, gamma=0.8) -> tuple[float, float, float]:
+def wavelength_to_rgb(
+    wavelength: Quantity, gamma: float = 0.8
+) -> tuple[float, float, float]:
     """taken from http://www.noah.org/wiki/Wavelength_to_RGB_in_Python
     This converts a given wavelength of light to an
     approximate RGB color value. The wavelength must be given
@@ -230,7 +232,7 @@ def wavelength_to_rgb(wavelength_nm, gamma=0.8) -> tuple[float, float, float]:
     Based on code by Dan Bruton
     http://www.physics.sfasu.edu/astro/color/spectra.html
     """
-    wavelength = wavelength_nm
+    wavelength /= b2.nmeter
     if wavelength < 380:
         wavelength = 380.0
     if wavelength > 750:
@@ -317,12 +319,22 @@ def style_plots_for_paper(fontscale=5 / 6):
     plt.rc("font", **{"sans-serif": "Open Sans"})
 
 
-def unit_safe_append(q1: Quantity, q2: Quantity, axis=0):
+def unit_safe_append(q1: Quantity, q2: Quantity, axis=None):
     if not b2.have_same_dimensions(q1, q2):
-        raise ValueError("Dimensions must match")
+        raise ValueError("Dimensions (units) must match")
     if isinstance(q1, Quantity):
         assert isinstance(q2, Quantity)
         unit = q1.get_best_unit()
         return np.append(q1 / unit, q2 / unit, axis=axis) * unit
     else:
         return np.append(q1, q2, axis=axis)
+
+
+def unit_safe_round(q: Quantity, decimals):
+    unit = q.get_best_unit()
+    return np.round(q / unit, decimals) * unit
+
+
+def unit_safe_cat(quantities):
+    unit = quantities[0].get_best_unit()
+    return np.concatenate([q / unit for q in quantities]) * unit

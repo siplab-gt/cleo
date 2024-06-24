@@ -93,7 +93,7 @@ class DeviceInteractionRegistry:
         ValueError
             if the connection has already been made
         """
-        epsilon = ldd.epsilon(light.wavelength / nmeter)
+        epsilon = ldd.epsilon(light.wavelength)
         if epsilon == 0:
             return
 

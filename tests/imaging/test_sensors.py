@@ -1,6 +1,6 @@
 import brian2 as b2
-from brian2 import np
 import pytest
+from brian2 import np
 
 import cleo
 from cleo.imaging import gcamp6f
@@ -31,5 +31,17 @@ def test_geci(rand_seed):
             assert dFF[i_spiking_nrn] > dFF[i_nonspiking_nrn]
 
 
+def test_remove_sensor():
+    ng = b2.NeuronGroup(1, "dv/dt = -v / (10*ms) : 1", threshold="v>1", reset="v=0")
+    sensor = gcamp6f()
+    spmon = b2.SpikeMonitor(ng)
+    sim = cleo.CLSimulator(b2.Network(ng, spmon))
+    sim.inject(sensor, ng)
+    sim.remove(sensor)
+    assert ng in sim.network.objects
+    assert spmon in sim.network.objects
+    assert sensor.synapses[ng.name] not in sim.network.objects
+
+
 if __name__ == "__main__":
-    pytest.main(["-s", __file__])
+    pytest.main(["-sx", __file__])

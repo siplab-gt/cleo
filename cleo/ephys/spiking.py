@@ -7,14 +7,16 @@ from typing import Any, Tuple
 
 import neo
 import numpy as np
+import numpy.typing as npt
 import quantities as pq
 from attrs import define, field, fields
 from bidict import bidict
-from brian2 import NeuronGroup, Quantity, SpikeMonitor, meter, mm, ms
+from brian2 import NeuronGroup, Quantity, SpikeMonitor, mm, ms
 from nptyping import NDArray
 
 from cleo.base import NeoExportable
 from cleo.ephys.probes import Signal
+from cleo.utilities import unit_safe_cat
 
 
 @define(eq=False)
@@ -30,8 +32,8 @@ class Spiking(Signal, NeoExportable):
     cutoff_probability: float = 0.01
     """Spike detection probability below which neurons will not be
     considered. For computational efficiency."""
-    t_ms: NDArray[(Any,), float] = field(
-        init=False, factory=lambda: np.array([], dtype=float), repr=False
+    t: Quantity = field(
+        init=False, factory=lambda: ms * np.array([], dtype=float), repr=False
     )
     """Spike times in ms, stored if
     :attr:`~cleo.InterfaceDevice.save_history` on :attr:`~Signal.probe`"""
@@ -41,8 +43,8 @@ class Spiking(Signal, NeoExportable):
     """Channel (for multi-unit) or neuron (for sorted) indices
     of spikes, stored if
     :attr:`~cleo.InterfaceDevice.save_history` on :attr:`~Signal.probe`"""
-    t_samp_ms: NDArray[(Any,), float] = field(
-        init=False, factory=lambda: np.array([], dtype=float), repr=False
+    t_samp: Quantity = field(
+        init=False, factory=lambda: ms * np.array([], dtype=float), repr=False
     )
     """Sample times in ms when each spike was recorded, stored if
     :attr:`~cleo.InterfaceDevice.save_history` on :attr:`~Signal.probe`"""
@@ -57,16 +59,16 @@ class Spiking(Signal, NeoExportable):
 
     def _init_saved_vars(self):
         if self.probe.save_history:
-            self.t_ms = fields(type(self)).t_ms.default.factory()
+            self.t = fields(type(self)).t.default.factory()
             self.i = fields(type(self)).i.default.factory()
-            self.t_samp_ms = fields(type(self)).t_samp_ms.default.factory()
+            self.t_samp = fields(type(self)).t_samp.default.factory()
 
-    def _update_saved_vars(self, t_ms, i, t_samp_ms):
+    def _update_saved_vars(self, t, i, t_samp):
         if self.probe.save_history:
             self.i = np.concatenate([self.i, i])
-            self.t_ms = np.concatenate([self.t_ms, t_ms])
-            t_samp_ms_rep = np.full_like(t_ms, t_samp_ms)
-            self.t_samp_ms = np.concatenate([self.t_samp_ms, t_samp_ms_rep])
+            self.t = unit_safe_cat([self.t, t])
+            t_samp_rep = np.full_like(t, t_samp)
+            self.t_samp = unit_safe_cat([self.t_samp, t_samp_rep])
 
     def connect_to_neuron_group(
         self, neuron_group: NeuronGroup, **kwparams
@@ -127,13 +129,13 @@ class Spiking(Signal, NeoExportable):
     def get_state(
         self,
     ) -> tuple[NDArray[np.uint], NDArray[float], NDArray[np.uint]]:
-        """Return spikes since method was last called (i, t_ms, y)
+        """Return spikes since method was last called (i, t, y)
 
         Returns
         -------
         tuple[NDArray[np.uint], NDArray[float], NDArray[np.uint]]
-            (i, t_ms, y) where i is channel (for multi-unit) or neuron (for sorted) spike
-            indices, t_ms is spike times, and y is a spike count vector suitable for control-
+            (i, t, y) where i is channel (for multi-unit) or neuron (for sorted) spike
+            indices, t is spike times, and y is a spike count vector suitable for control-
             theoretic uses---i.e., a 0 for every channel/neuron that hasn't spiked and a 1
             for a single spike.
         """
@@ -160,17 +162,16 @@ class Spiking(Signal, NeoExportable):
 
     def _get_new_spikes(self) -> Tuple[npt.NDArray, npt.NDarray]:
         i_probe = np.array([], dtype=np.uint)
-        t_ms = np.array([], dtype=float)
+        t = ms * np.array([], dtype=float)
         for j in range(len(self._monitors)):
             mon = self._monitors[j]
             spikes_already_seen = self._mon_spikes_already_seen[j]
             i_ng = mon.i[spikes_already_seen:]  # can contain spikes we don't care about
             i_probe = np.concatenate((i_probe, self._i_ng_to_i_probe(i_ng, mon)))
-            # get all time in terms of ms
-            t_ms = np.concatenate((t_ms, mon.t[spikes_already_seen:] / ms))
+            t = unit_safe_cat([t, mon.t[spikes_already_seen:]])
             self._mon_spikes_already_seen[j] = mon.num_spikes
 
-        return (i_probe, t_ms)
+        return i_probe, t
 
     def reset(self, **kwargs) -> None:
         # crucial that this be called after network restore
@@ -183,7 +184,7 @@ class Spiking(Signal, NeoExportable):
         group = neo.Group(allowed_types=[neo.SpikeTrain])
         for i in set(self.i):
             st = neo.SpikeTrain(
-                times=self.t_ms[self.i == i] * pq.ms,
+                times=self.t[self.i == i] / ms * pq.ms,
                 t_stop=self.probe.sim.network.t / ms * pq.ms,
             )
             st.annotate(i=int(i))
@@ -221,11 +222,11 @@ class MultiUnitSpiking(Spiking):
         self,
     ) -> tuple[NDArray[np.uint], NDArray[float], NDArray[np.uint]]:
         # inherit docstring
-        i_probe, t_ms = self._get_new_spikes()
-        t_samp_ms = self.probe.sim.network.t / ms
-        i_c, t_ms, y = self._noisily_detect_spikes_per_channel(i_probe, t_ms)
-        self._update_saved_vars(t_ms, i_c, t_samp_ms)
-        return (i_c, t_ms, y)
+        i_probe, t = self._get_new_spikes()
+        t_samp = self.probe.sim.network.t
+        i_c, t, y = self._noisily_detect_spikes_per_channel(i_probe, t)
+        self._update_saved_vars(t, i_c, t_samp)
+        return (i_c, t, y)
 
     def _noisily_detect_spikes_per_channel(
         self, i_probe, t
@@ -291,13 +292,13 @@ class SortedSpiking(Spiking):
         self,
     ) -> tuple[NDArray[np.uint], NDArray[float], NDArray[np.uint]]:
         # inherit docstring
-        i_probe, t_ms = self._get_new_spikes()
-        i_probe, t_ms = self._noisily_detect_spikes(i_probe, t_ms)
+        i_probe, t = self._get_new_spikes()
+        i_probe, t = self._noisily_detect_spikes(i_probe, t)
         y = np.zeros(len(self.i_probe_by_i_ng), dtype=bool)
         y[i_probe] = 1
-        t_samp_ms = self.probe.sim.network.t / ms
-        self._update_saved_vars(t_ms, i_probe, t_samp_ms)
-        return (i_probe, t_ms, y)
+        t_samp = self.probe.sim.network.t / ms
+        self._update_saved_vars(t, i_probe, t_samp)
+        return (i_probe, t, y)
 
     def _noisily_detect_spikes(self, i_probe, t) -> Tuple[NDArray, NDArray]:
         probs_for_spikes = self._dtct_prob_array[i_probe]
