@@ -255,9 +255,9 @@ class Koehler(LightModel):
         x, y, z = xyz_from_rθz(r, theta, zc, coords, end)
         density_factor = 2
         cyl_vol = np.pi * self.radius**2 * self.zmax
-        markersize_um = (cyl_vol / n_points_per_source * density_factor) ** (1 / 3) / um
+        markersize = (cyl_vol / n_points_per_source * density_factor) ** (1 / 3)
         intensity_scale = (1 / n_points_per_source) ** (1 / 3)
-        return coords_from_xyz(x, y, z), markersize_um, intensity_scale
+        return coords_from_xyz(x, y, z), markersize, intensity_scale
 
 
 @define(eq=False)
@@ -376,7 +376,7 @@ class Light(Stimulator):
             kwargs["n_points_per_source"] = kwargs.pop("n_points")
         T_threshold = kwargs.pop("T_threshold", 1e-3)
 
-        viz_points, markersize_um, intensity_scale = self.light_model.viz_params(
+        viz_points, markersize, intensity_scale = self.light_model.viz_params(
             self.coords,
             self.direction,
             T_threshold,
@@ -392,7 +392,7 @@ class Light(Stimulator):
         pt_per_in = 72
         biggest_dim_pt = biggest_dim_pixels / dpi * pt_per_in
 
-        biggest_dim_um = (
+        biggest_dim = (
             max(
                 [
                     ax.get_xlim()[1] - ax.get_xlim()[0],
@@ -401,10 +401,9 @@ class Light(Stimulator):
                 ]
             )
             * axis_scale_unit
-            / um
         )
 
-        markersize_pt = markersize_um / biggest_dim_um * biggest_dim_pt
+        markersize_pt = markersize / biggest_dim * biggest_dim_pt
         markerarea = markersize_pt**2
 
         T = self.light_model.transmittance(self.coords, self.direction, viz_points)

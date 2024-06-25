@@ -31,7 +31,7 @@ def analog_signal(t, values_no_unit, units="") -> neo.core.basesignal.BaseSignal
             values_no_unit,
             t_start=t[0] / ms * pq.ms,
             units=units,
-            sampling_period=(t[1] / ms - t[0] / ms) * pq.ms,
+            sampling_period=(t[1] - t[0]) / ms * pq.ms,
         )
     else:
         return neo.IrregularlySampledSignal(

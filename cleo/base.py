@@ -291,7 +291,7 @@ class Stimulator(InterfaceDevice, NeoExportable):
                 t0 = self.sim.network.t
             else:
                 t0 = 0 * ms
-            self.t = [t0]
+            self.t = t0.reshape((1,))
             self.values = [self.value]
 
     def update(self, ctrl_signal) -> None:
