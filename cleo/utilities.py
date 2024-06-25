@@ -2,7 +2,7 @@
 import warnings
 from collections.abc import MutableMapping
 
-import brian2 as b2
+import brian2.only as b2
 import neo
 import quantities as pq
 from brian2 import Quantity, ms, np, second

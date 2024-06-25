@@ -408,6 +408,32 @@ class CLSimulator(NeoExportable):
         self.devices.add(device)
         return self
 
+    def _remove(self, device: InterfaceDevice) -> CLSimulator:
+        """Remove device and associated Brian objects from the simulation (UNTESTED).
+
+        Parameters
+        ----------
+        device : InterfaceDevice
+            Device to remove
+
+        Returns
+        -------
+        CLSimulator
+            self
+        """
+        for brian_object in device.brian_objects:
+            if brian_object in self.network.objects:
+                self.network.remove(brian_object)
+        if isinstance(device, Recorder):
+            if device.name in self.recorders:
+                del self.recorders[device.name]
+        if isinstance(device, Stimulator):
+            if device.name in self.stimulators:
+                del self.stimulators[device.name]
+        self.devices.remove(device)
+        self.network.store(self._net_store_name)
+        return self
+
     def get_state(self) -> dict:
         """Return current recorder measurements.
 

@@ -25,7 +25,7 @@ from brian2.units import (
 from matplotlib import colors
 from matplotlib.artist import Artist
 from matplotlib.collections import PathCollection
-from nptyping import NDArray
+from nptyping import NDArray, Number, Shape
 
 from cleo.base import CLSimulator
 from cleo.coords import coords_from_xyz
@@ -48,9 +48,9 @@ class LightModel(ABC):
     def transmittance(
         self,
         source_coords: Quantity,
-        source_direction: NDArray[(Any, 3), Any],
+        source_direction: NDArray[Shape["*, 3"], Number],
         target_coords: Quantity,
-    ) -> NDArray[(Any, Any), float]:
+    ) -> NDArray[Shape["*, *"], Float]:
         """Output must be between 0 and 1 with shape (n_sources, n_targets)."""
         pass
 
@@ -58,15 +58,15 @@ class LightModel(ABC):
     def viz_params(
         self,
         coords: Quantity,
-        direction: NDArray[(Any, 3), Any],
+        direction: NDArray[Shape["*, 3"], Any],
         T_threshold: float,
         n_points_per_source: int = None,
         **kwargs,
-    ) -> tuple[NDArray[(Any, Any, 3), Any], float, float]:
+    ) -> tuple[Quantity, Quantity, float]:
         """Returns info needed for visualization.
-        Output is ((m, n_points_per_source, 3) viz_points array, markersize_um, intensity_scale).
+        Output is ((m, n_points_per_source, 3) viz_points array, markersize, intensity_scale).
 
-        For best-looking results, implementations should scale `markersize_um` and `intensity_scale`.
+        For best-looking results, implementations should scale `markersize` and `intensity_scale`.
         """
         pass
 
@@ -185,9 +185,9 @@ class OpticFiber(LightModel):
         x, y, z = xyz_from_rθz(r, theta, zc, coords, end)
         density_factor = 3
         cyl_vol = np.pi * r_thresh**2 * zc_thresh
-        markersize_um = (cyl_vol / n_points_per_source * density_factor) ** (1 / 3) / um
+        markersize = (cyl_vol / n_points_per_source * density_factor) ** (1 / 3)
         intensity_scale = 1.5 * (4e3 / n_points_per_source) ** (1 / 3)
-        return coords_from_xyz(x, y, z), markersize_um, intensity_scale
+        return coords_from_xyz(x, y, z), markersize, intensity_scale
 
     def _find_rz_thresholds(self, thresh):
         """find r and z thresholds for visualization purposes"""
@@ -302,7 +302,7 @@ class Light(Stimulator):
                 "coordinates for n contact locations."
             )
 
-    direction: NDArray[(Any, 3), Any] = field(
+    direction: NDArray[Shape["*, 3]", Number]] = field(
         default=(0, 0, 1), converter=normalize_coords
     )
     """(x, y, z) vector specifying direction in which light
@@ -322,7 +322,7 @@ class Light(Stimulator):
     Only relevant in video visualization.
     """
 
-    default_value: NDArray[(Any,), float] = field(kw_only=True, repr=False)
+    default_value: NDArray[Shape["*]", Number]] = field(kw_only=True, repr=False)
 
     @default_value.default
     def _default_default(self):

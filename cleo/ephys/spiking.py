@@ -12,7 +12,7 @@ import quantities as pq
 from attrs import define, field, fields
 from bidict import bidict
 from brian2 import NeuronGroup, Quantity, SpikeMonitor, mm, ms
-from nptyping import NDArray
+from nptyping import NDArray, Shape, UInt, Float
 
 from cleo.base import NeoExportable
 from cleo.ephys.probes import Signal
@@ -37,7 +37,7 @@ class Spiking(Signal, NeoExportable):
     )
     """Spike times in ms, stored if
     :attr:`~cleo.InterfaceDevice.save_history` on :attr:`~Signal.probe`"""
-    i: NDArray[(Any,), np.uint] = field(
+    i: NDArray[Shape["*"], UInt] = field(
         init=False, factory=lambda: np.array([], dtype=np.uint), repr=False
     )
     """Channel (for multi-unit) or neuron (for sorted) indices
@@ -53,7 +53,7 @@ class Spiking(Signal, NeoExportable):
     neuron group indices and the indices the probe uses"""
     _monitors: list[SpikeMonitor] = field(init=False, factory=list, repr=False)
     _mon_spikes_already_seen: list[int] = field(init=False, factory=list, repr=False)
-    _dtct_prob_array: NDArray[(Any, Any), float] = field(
+    _dtct_prob_array: NDArray[Shape["*, *"], Float] = field(
         init=False, default=None, repr=False
     )
 

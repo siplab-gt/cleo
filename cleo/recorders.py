@@ -1,15 +1,16 @@
 """Contains basic recorders."""
 from typing import Any
+
 from attrs import define, field
 from brian2 import (
-    PopulationRateMonitor,
-    StateMonitor,
-    SpikeMonitor,
-    Quantity,
     NeuronGroup,
+    PopulationRateMonitor,
+    Quantity,
+    SpikeMonitor,
+    StateMonitor,
+    np,
 )
-import numpy as np
-from nptyping import NDArray
+from nptyping import NDArray, Shape, UInt
 
 from cleo.base import Recorder
 
@@ -92,7 +93,7 @@ class GroundTruthSpikeRecorder(Recorder):
         self.brian_objects.add(self._mon)
         self.neuron_group = neuron_group
 
-    def get_state(self) -> NDArray[(Any,), np.uint]:
+    def get_state(self) -> NDArray[Shape["*"], UInt]:
         """
         Returns
         -------

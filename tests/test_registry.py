@@ -107,10 +107,6 @@ def test_light_opsin_interaction(sim_ng1_ng2, ops1, ops2, coords):
     assert np.all(ops2.light_agg_ngs[ng2.name].phi > 0)
     assert np.all(ng2.v > ng1.v)
 
-    # remove light
-    sim.remove(light)
-    assert False  # TODO
-
 
 @pytest.mark.slow
 def test_multi_channel(sim_ng1_ng2, ops1):

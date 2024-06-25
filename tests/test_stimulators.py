@@ -21,6 +21,10 @@ def test_StateVariableSetter(neurons, neurons2):
     assert neurons.v == -70
     assert neurons2.v == -70
 
+    with pytest.raises(AttributeError):
+        # tries to access sim.network.t but it doesn't have sim
+        sv_stim.connect_to_neuron_group(neurons)
+    sv_stim.save_history = False
     sv_stim.connect_to_neuron_group(neurons)
     assert neurons.v == -1
     assert neurons2.v == -70

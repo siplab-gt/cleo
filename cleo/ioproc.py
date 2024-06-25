@@ -8,7 +8,7 @@ from typing import Any, Tuple
 import numpy as np
 from attrs import define, field, fields
 from brian2 import Quantity, ms
-from nptyping import NDArray
+from nptyping import NDArray, Shape, UInt
 
 from cleo.base import IOProcessor
 from cleo.utilities import unit_safe_append
@@ -180,7 +180,7 @@ class RecordOnlyProcessor(LatencyIOProcessor):
 
 
 def firing_rate_estimate(
-    spike_counts: NDArray[(Any,), np.uint],
+    spike_counts: NDArray[Shape["*"], UInt],
     dt: Quantity,
     prev_rate: Quantity,
     tau: Quantity,

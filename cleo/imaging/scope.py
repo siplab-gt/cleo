@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 import warnings
-from typing import Any, Callable
+from typing import Callable
 
 import matplotlib as mpl
 from attrs import define, field, fields
 from brian2 import NeuronGroup, Quantity, Unit, meter, mm, ms, np, um
 from matplotlib.artist import Artist
 from mpl_toolkits.mplot3d import Axes3D
-from nptyping import NDArray
+from nptyping import Float, NDArray, Shape, UInt
 
 from cleo.base import Recorder
 from cleo.coords import coords_from_ng
@@ -24,7 +24,9 @@ def target_neurons_in_plane(
     scope_direction: tuple = (0, 0, 1),
     soma_radius: Quantity = 10 * um,
     sensor_location: str = "cytoplasm",
-) -> tuple[NDArray[(Any,), int], NDArray[(Any,), float], NDArray[(Any, 3), float]]:
+) -> tuple[
+    NDArray[Shape["*"], UInt], NDArray[Shape["*"], Float], NDArray[Shape["*"], Float]
+]:
     """
     Returns a tuple of (i_targets, noise_focus_factor, coords_on_plane)
 
@@ -49,7 +51,7 @@ def target_neurons_in_plane(
 
     Returns
     -------
-    Tuple[NDArray[(Any,), int], NDArray[(Any,), float], NDArray[(Any, 3), float]]
+    Tuple[NDArray[Shape['*'], UInt], NDArray[Shape['*'], Float], NDArray[Shape['*'], Float]]
         A tuple of (i_targets, noise_focus_factor, coords_on_plane)
     """
     assert sensor_location in ("cytoplasm", "membrane")
@@ -90,7 +92,7 @@ class Scope(Recorder):
 
     Injection kwargs
     ----------------
-    rho_rel_generator : Callable[[int], NDArray[(Any,), float]], optional
+    rho_rel_generator : Callable[[int], NDArray[Shape['*'], Float]], optional
         A function assigning expression levels. Takes n as an arg, outputs float array.
         ``lambda n: np.ones(n)`` by default.
     focus_depth : Quantity, optional
@@ -109,7 +111,7 @@ class Scope(Recorder):
     """The depth of the focal plane, with distance units"""
     location: Quantity = [0, 0, 0] * mm
     """Location of the objective lens."""
-    direction: NDArray[(3,), float] = field(
+    direction: NDArray[Shape["3"], Float] = field(
         default=(0, 0, 1), converter=normalize_coords
     )
     """Direction in which the microscope is pointing.
@@ -121,7 +123,9 @@ class Scope(Recorder):
     """SNR below which neurons are discarded.
     Applied only when not focus_depth is not None"""
     rand_seed: int = field(default=None, repr=False)
-    dFF: list[NDArray[(Any,), float]] = field(factory=list, init=False, repr=False)
+    dFF: list[NDArray[Shape["*, *"], Float]] = field(
+        factory=list, init=False, repr=False
+    )
     """ΔF/F from every call to :meth:`get_state`.
     Shape is (n_samples, n_ROIs). Stored if :attr:`~cleo.InterfaceDevice.save_history`"""
     t: Quantity = field(factory=lambda: ms * [], init=False, repr=False)
@@ -130,19 +134,19 @@ class Scope(Recorder):
 
     neuron_groups: list[NeuronGroup] = field(factory=list, repr=False, init=False)
     """neuron groups the scope has been injected into, in order of injection"""
-    i_targets_per_injct: list[NDArray[(Any,), int]] = field(
+    i_targets_per_injct: list[NDArray[Shape["*"], UInt]] = field(
         factory=list, repr=False, init=False
     )
     """targets of neurons selected from each injection"""
-    sigma_per_injct: list[NDArray[(Any,), float]] = field(
+    sigma_per_injct: list[NDArray[Shape["*"], Float]] = field(
         factory=list, repr=False, init=False
     )
     """`sigma_noise` of neurons selected from each injection"""
-    focus_coords_per_injct: list[NDArray[(Any,), float]] = field(
+    focus_coords_per_injct: list[NDArray[Shape["*"], Float]] = field(
         factory=list, repr=False, init=False
     )
     """coordinates on the focal plane of neurons selected from each injection"""
-    rho_rel_per_injct: list[NDArray[(Any,), float]] = field(
+    rho_rel_per_injct: list[NDArray[Shape["*"], Float]] = field(
         factory=list, repr=False, init=False
     )
     """relative expression levels of neurons selected from each injection"""
@@ -153,12 +157,12 @@ class Scope(Recorder):
         return np.sum(len(i_t) for i_t in self.i_targets_per_injct)
 
     @property
-    def sigma_noise(self) -> NDArray[(Any,), float]:
+    def sigma_noise(self) -> NDArray[Shape["*"], Float]:
         """noise std dev (in terms of ΔF/F) for all targets, in order injected."""
         return np.concatenate(self.sigma_per_injct)
 
     @property
-    def dFF_1AP(self) -> NDArray[(Any,), float]:
+    def dFF_1AP(self) -> NDArray[Shape["*"], Float]:
         """dFF_1AP for all targets, in order injected. Varies with expression levels."""
         rho_rel = np.array([])
         n_prev_targets_for_ng = {}
@@ -189,7 +193,11 @@ class Scope(Recorder):
 
     def target_neurons_in_plane(
         self, ng, focus_depth: Quantity = None, soma_radius: Quantity = None
-    ) -> tuple[NDArray[(Any,), int], NDArray[(Any,), float], NDArray[(Any, 3), float]]:
+    ) -> tuple[
+        NDArray[Shape["*"], UInt],
+        NDArray[Shape["*"], Float],
+        NDArray[Shape["*"], Float],
+    ]:
         """calls :func:`target_neurons_in_plane` with scope parameter defaults.
         `focus_depth` and `soma_radius` can be overridden here.
 
@@ -206,7 +214,7 @@ class Scope(Recorder):
 
         Returns
         -------
-        Tuple[NDArray[(Any,), int], NDArray[(Any,), float], NDArray[(Any, 3), float]]
+        Tuple[NDArray[Shape['*'], UInt], NDArray[Shape['*'], Float], NDArray[Shape['*'], Float]]
             A tuple of (i_targets, noise_focus_factor, coords_on_plane)
         """
         focus_depth = focus_depth or self.focus_depth
@@ -221,12 +229,12 @@ class Scope(Recorder):
             self.sensor.location,
         )
 
-    def get_state(self) -> NDArray[(Any,), float]:
+    def get_state(self) -> NDArray[Shape["*"], Float]:
         """Returns a 1D array of ΔF/F values for all targets, in order injected.
 
         Returns
         -------
-        NDArray[(Any,), float]
+        NDArray[Shape['*'], Float]
             Fluorescence values for all targets
         """
         signal = []

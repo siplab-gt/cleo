@@ -37,7 +37,7 @@ def test_remove_sensor():
     spmon = b2.SpikeMonitor(ng)
     sim = cleo.CLSimulator(b2.Network(ng, spmon))
     sim.inject(sensor, ng)
-    sim.remove(sensor)
+    sim._remove(sensor)
     assert ng in sim.network.objects
     assert spmon in sim.network.objects
     assert sensor.synapses[ng.name] not in sim.network.objects
