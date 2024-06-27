@@ -1,9 +1,7 @@
-from logging import getLogger
 from pathlib import Path
 
 import pytest
-from myst_nb.core.config import NbParserConfig
-from myst_nb.core.execute import create_client
+from jupyter_cache.executors.utils import single_nb_execution
 from myst_nb.core.read import read_myst_markdown_notebook
 
 
@@ -16,16 +14,12 @@ def test_overview_notebook_execution():
     with open(notebook_path, "r") as file:
         nb = read_myst_markdown_notebook(file.read())
 
-    with create_client(
-        nb, notebook_path, NbParserConfig(execution_timeout=600), getLogger(), None
-    ) as nb_client:
-        pass  # executes notebook
-    exec_result = nb_client.exec_metadata
-    assert exec_result["succeeded"]
-    assert exec_result["runtime"] > 0
+    result = single_nb_execution(nb, cwd=current_dir, timeout=30, allow_errors=False)
+    assert result.err is None, result.err
 
     for cell in nb["cells"]:
         if cell["cell_type"] == "code":
+            assert cell["execution_count"] > 0
             last_code_cell = cell
     assert len(last_code_cell["outputs"]) > 0
 

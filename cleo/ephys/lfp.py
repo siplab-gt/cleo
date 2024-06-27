@@ -18,7 +18,7 @@ from brian2 import NeuronGroup, Quantity, Subgroup, Synapses, mm, ms, np, um
 from brian2.monitors.spikemonitor import SpikeMonitor
 from brian2.synapses.synapses import SynapticSubgroup
 from brian2.units import Unit, uvolt
-from nptyping import NDArray, Shape, Float
+from nptyping import Float, NDArray, Shape
 from scipy import sparse
 from tklfp import TKLFP
 
@@ -45,10 +45,10 @@ class LFPSignalBase(Signal, NeoExportable):
         default, meaning the negative z axis is "up."
     """
 
-    t: NDArray[Shape["*"], Quantity] = field(init=False, repr=False)
+    t: Quantity = field(init=False, repr=False)
     """Times at which LFP is recorded, in ms, stored if
     :attr:`~cleo.InterfaceDevice.save_history` on :attr:`~Signal.probe`"""
-    lfp: Union[NDArray[Shape["*, *"], Float], Quantity] = field(init=False, repr=False)
+    lfp: Quantity = field(init=False, repr=False)
     """Approximated LFP from every call to :meth:`get_state`.
     Shape is (n_samples, n_channels). Stored if
     :attr:`~cleo.InterfaceDevice.save_history` on :attr:`~Signal.probe`"""

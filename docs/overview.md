@@ -169,9 +169,9 @@ class MyProcessor(cleo.ioproc.LatencyIOProcessor):
         # on-off control
         irr0_mW_per_mm2 = 5 if len(i_spikes) < 10 else 0
         # output is a {'stimulator_name': value} dict and output time
-        return {'Light': irr0_mW_per_mm2}, t_samp + 3 * ms  # (3 ms delay)
+        return {'Light': irr0_mW_per_mm2}, t_samp + 3 * b2.ms  # (3 ms delay)
 
-sim.set_io_processor(MyProcessor(sample_period=1 * ms))
+sim.set_io_processor(MyProcessor(sample_period=1 * b2.ms))
 ```
 
 The {doc}`tutorials/on_off_ctrl`, {doc}`tutorials/PI_ctrl`, and {doc}`tutorials/lqr_ctrl_ldsctrlest` tutorials give examples of closed-loop control ranging from simple to complex.
@@ -212,9 +212,9 @@ For example:
 ```{code-cell} ipython3
 import matplotlib.pyplot as plt
 fig, (ax1, ax2) = plt.subplots(2, 1, sharex=True)
-ax1.scatter(mua.t / ms, mua.i, marker='.', c='white', s=2)
+ax1.scatter(mua.t / b2.ms, mua.i, marker='.', c='white', s=2)
 ax1.set(ylabel='channel index', title='spikes')
-ax2.step(fiber.t / ms, fiber.values, c='#72b5f2')
+ax2.step(fiber.t / b2.ms, fiber.values, c='#72b5f2')
 ax2.set(xlabel='time (ms)', ylabel='irradiance (mW/mm²)', title='photostimulation')
 ```
 

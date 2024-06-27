@@ -27,7 +27,11 @@ from mpl_toolkits.mplot3d import Axes3D
 
 import cleo
 from cleo.registry import registry_for_sim
-from cleo.utilities import add_to_neo_segment, analog_signal, brian_safe_name
+from cleo.utilities import (
+    add_to_neo_segment,
+    brian_safe_name,
+    unit_safe_append,
+)
 
 
 class NeoExportable(ABC):
@@ -309,7 +313,7 @@ class Stimulator(InterfaceDevice, NeoExportable):
         """
         self.value = ctrl_signal
         if self.save_history:
-            self.t.append(self.sim.network.t)
+            self.t = unit_safe_append(self.t, self.sim.network.t)
             self.values.append(self.value)
 
     def reset(self, **kwargs) -> None:
