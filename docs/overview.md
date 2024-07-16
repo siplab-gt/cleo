@@ -167,9 +167,9 @@ class MyProcessor(cleo.ioproc.LatencyIOProcessor):
         # state_dict contains a {'recorder_name': value} dict of network.
         i_spikes, t_spikes, y_spikes = state_dict['Probe']['MultiUnitSpiking']
         # on-off control
-        irr0_mW_per_mm2 = 5 if len(i_spikes) < 10 else 0
+        irr0 = 5 if len(i_spikes) < 10 else 0
         # output is a {'stimulator_name': value} dict and output time
-        return {'Light': irr0_mW_per_mm2}, t_samp + 3 * b2.ms  # (3 ms delay)
+        return {'Light': irr0 * b2.mwatt / b2.mm2}, t_samp + 3 * b2.ms  # (3 ms delay)
 
 sim.set_io_processor(MyProcessor(sample_period=1 * b2.ms))
 ```

@@ -62,6 +62,13 @@ class GaussianEllipsoid(LightModel):
         intensity_scale = (1000 / n_points_per_source) ** (1 / 3)
         return coords_from_xyz(x, y, z), markersize, intensity_scale
 
+    @property
+    def area0(self) -> Quantity:
+        # 10 microns, on upper end of what's used as spot size in Ronzitti et al., 2017
+        # Irr0 = P / spot_area, as in Ronzitti et al., 2017
+        cell_radius = 0.010  # mm
+        return np.pi * cell_radius**2
+
     def _gaussian_transmittance(self, r, z):
         """r is lateral distance, z is axial distance from focal point.
 

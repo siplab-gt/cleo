@@ -121,7 +121,8 @@ class LightDependent:
     def epsilon(self, lambda_new: Quantity) -> float:
         """Returns the :math:`\\varepsilon` value for a given lambda (including units)
         representing the relative sensitivity of the opsin to that wavelength."""
-        lambdas, epsilons = np.array(self.spectrum).T
+        lam_eps_array = np.array(self.spectrum)
+        lambdas, epsilons = lam_eps_array[lam_eps_array[:, 0].argsort()].T
         lambda_new /= nmeter
         eps_new = self.spectrum_interpolator(lambdas, epsilons, lambda_new)
 
@@ -178,8 +179,8 @@ def plot_spectra(
             lambda_max = np.max(lambdas)
         lambdas_new = np.linspace(lambda_min, lambda_max, 100)
         epsilons_new = ldd.spectrum_interpolator(lambdas, epsilons, lambdas_new)
-        c_points = [wavelength_to_rgb(l) for l in lambdas]
-        c_line = wavelength_to_rgb(lambdas[np.argmax(epsilons)])
+        c_points = [wavelength_to_rgb(l) for l in lambdas * nmeter]
+        c_line = wavelength_to_rgb(lambdas[np.argmax(epsilons)] * nmeter)
         ax.plot(lambdas_new, epsilons_new, c=c_line, label=ldd.name)
         ax.scatter(lambdas, epsilons, marker="o", s=50, color=c_points)
     title = (

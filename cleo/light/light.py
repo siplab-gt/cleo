@@ -25,7 +25,7 @@ from brian2.units import (
 from matplotlib import colors
 from matplotlib.artist import Artist
 from matplotlib.collections import PathCollection
-from nptyping import NDArray, Number, Shape
+from nptyping import Float, NDArray, Number, Shape
 
 from cleo.base import CLSimulator
 from cleo.coords import coords_from_xyz
@@ -68,6 +68,12 @@ class LightModel(ABC):
 
         For best-looking results, implementations should scale `markersize` and `intensity_scale`.
         """
+        pass
+
+    @property
+    @abstractmethod
+    def area0(self) -> Quantity:
+        """The area of the light source(s), used to convert between power and irradiance."""
         pass
 
     def _get_rz_for_xyz(self, source_coords, source_direction, target_coords):
@@ -135,6 +141,10 @@ class OpticFiber(LightModel):
         assert np.allclose(np.linalg.norm(source_dir_uvec, axis=-1), 1)
         r, z = self._get_rz_for_xyz(source_coords, source_dir_uvec, target_coords)
         return self._Foutz12_transmittance(r, z)
+
+    @property
+    def area0(self) -> Quantity:
+        return np.pi * self.R0**2
 
     def _Foutz12_transmittance(self, r, z, scatter=True, spread=True, gaussian=True):
         """Foutz et al. 2012 transmittance model: Gaussian cone with Kubelka-Munk propagation.
@@ -259,6 +269,18 @@ class Koehler(LightModel):
         intensity_scale = (1 / n_points_per_source) ** (1 / 3)
         return coords_from_xyz(x, y, z), markersize, intensity_scale
 
+    @property
+    def area0(self) -> Quantity:
+        return np.pi * self.radius**2
+
+
+def _is_power(q: Quantity) -> bool:
+    return q.has_same_dimensions(mwatt)
+
+
+def _is_irr(q: Quantity) -> bool:
+    return q.has_same_dimensions(mwatt / mm2)
+
 
 @define(eq=False)
 class Light(Stimulator):
@@ -310,13 +332,13 @@ class Light(Stimulator):
     
     Will be converted to unit magnitude."""
 
-    max_Irr0_mW_per_mm2: float = field(default=None, kw_only=True)
-    """The maximum irradiance the light source can emit.
+    max_value: Quantity = field(default=None, kw_only=True)
+    """The maximum value (power or irradiance) the light source can emit.
     
     Usually determined by hardware in a real experiment."""
 
-    max_Irr0_mW_per_mm2_viz: float = field(default=None, kw_only=True)
-    """Maximum irradiance for visualization purposes. 
+    max_value_viz: Quantity = field(default=None, kw_only=True)
+    """Maximum value (power or irradiance) for visualization purposes. 
     
     i.e., the level at or above which the light appears maximally bright.
     Only relevant in video visualization.
@@ -445,23 +467,23 @@ class Light(Stimulator):
         self, artists: list[Artist], value, *args, **kwargs
     ) -> list[Artist]:
         assert len(artists) == self.n
-        if self.max_Irr0_mW_per_mm2_viz is not None:
-            max_Irr0 = self.max_Irr0_mW_per_mm2_viz
-        elif self.max_Irr0_mW_per_mm2 is not None:
-            max_Irr0 = self.max_Irr0_mW_per_mm2
+        if self.max_value_viz is not None:
+            max_val = self.max_value_viz
+        elif self.max_value is not None:
+            max_val = self.max_value
         else:
             raise Exception(
-                f"Light'{self.name}' needs max_Irr0_mW_per_mm2_viz "
-                "or max_Irr0_mW_per_mm2 "
-                "set to visualize light intensity."
+                f"Light'{self.name}' needs max_value_viz "
+                "or max_value set to visualize light intensity."
             )
+        max_val = self._val_same_unit_as(max_val, value)
 
         updated_artists = []
         for point_cloud, source_value in zip(artists, value):
             prev_value = getattr(point_cloud, "_prev_value", None)
             if source_value != prev_value:
                 intensity = (
-                    source_value / max_Irr0 if source_value <= max_Irr0 else max_Irr0
+                    source_value / max_val if source_value <= max_val else max_val
                 )
                 point_cloud.set_cmap(self._alpha_cmap_for_wavelength(intensity))
                 updated_artists.append(point_cloud)
@@ -469,39 +491,64 @@ class Light(Stimulator):
 
         return updated_artists
 
-    def update(self, value: Union[float, np.ndarray]) -> None:
-        """Set the light intensity, in mW/mm2 (without unit) for 1P
-        excitation or laser power (mW) for 2P excitation (GaussianEllipsoid light model).
-
-        Parameters
-        ----------
-        Irr0_mW_per_mm2 : float
-            Desired light intensity for light source
-        """
-        if type(value) != np.ndarray:
-            value = np.array(value).reshape((-1,))
-        if value.shape not in [(), (1,), (self.n,)]:
+    def _preprocess_value(self, value: Quantity) -> Quantity:
+        if not isinstance(value, Quantity):
+            raise ValueError(
+                f"Input to light must be a Quantity. Got {type(value)} instead."
+            )
+        if np.shape(value) not in [(), (1,), (self.n,)]:
             raise ValueError(
                 f"Input to light must be a scalar or an array of"
                 f" length {self.n}. Got {value.shape} instead."
             )
-        if type(self.light_model) == "GaussianEllipsoid":
-            # 10 microns, on upper end of what's used as spot size in Ronzitti et al., 2017
-            # Irr0 = P / spot_area, as in Ronzitti et al., 2017
-            cell_radius = 0.010  # mm
-            cell_area = np.pi * cell_radius**2
-            Irr0_mW_per_mm2 = value / cell_area
+        if len(np.shape(value)) == 0:
+            value = np.reshape(value, (-1,))
+        if not (_is_power(value) or _is_irr(value)):
+            raise ValueError(
+                f"Input to light must be in units of power or irradiance."
+                f" Got {value.dim} instead."
+            )
+        return value
+
+    def _val_same_unit_as(self, value: Quantity, target: Quantity) -> Quantity:
+        if value.has_same_dimensions(target):
+            return value
+        elif _is_power(value) and _is_irr(target):
+            return value / self.light_model.area0
+        elif _is_irr(value) and _is_power(target):
+            return value * self.light_model.area0
         else:
-            Irr0_mW_per_mm2 = value
-        if np.any(Irr0_mW_per_mm2 < 0):
-            warnings.warn(f"{self.name}: negative light intensity Irr0 clipped to 0")
-            Irr0_mW_per_mm2[Irr0_mW_per_mm2 < 0] = 0
-        if self.max_Irr0_mW_per_mm2 is not None:
-            Irr0_mW_per_mm2[
-                Irr0_mW_per_mm2 > self.max_Irr0_mW_per_mm2
-            ] = self.max_Irr0_mW_per_mm2
-        super(Light, self).update(Irr0_mW_per_mm2)
-        self.source.Irr0 = Irr0_mW_per_mm2 * mwatt / mm2
+            raise ValueError(
+                f"value and target must both be power or irradiance. "
+                f"Got {value.dim} and {target.dim} instead."
+            )
+
+    def update(self, value: Quantity) -> None:
+        """Set the light power or irradiance. The units of the input value
+        determine which.
+
+        Parameters
+        ----------
+        value : Quantity
+            The light irradiance (mW/mm^2) or power (mW). If a scalar, it will be
+            broadcast to all sources. If an array, it must be the same shape
+            as the number of sources.
+        """
+        value = self._preprocess_value(value)
+        if np.any(value < 0):
+            warnings.warn(f"{self.name}: negative light value clipped to 0")
+            value[value < 0] = 0
+        if self.max_value is not None:
+            max_val = self._val_same_unit_as(self.max_value, value)
+            value[value > max_val] = max_val
+        super(Light, self).update(value)
+
+        if _is_power(value):
+            irr0 = value / self.light_model.area0
+        else:
+            assert _is_irr(value)
+            irr0 = value
+        self.source.Irr0 = irr0
 
     def _alpha_cmap_for_wavelength(self, intensity):
         c = wavelength_to_rgb(self.wavelength)
