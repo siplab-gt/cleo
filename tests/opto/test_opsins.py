@@ -6,6 +6,7 @@ from brian2 import (
     ms,
     mV,
     mwatt,
+    mm2,
     namp,
     np,
     pamp,
@@ -218,12 +219,12 @@ def test_simple_opsin_unitless():
     ng_model = "dv/dt = (-v + Iopto) / (10*ms) : 1"
     # since Iopto not in model
     with pytest.raises(BrianObjectException):
-        ng, opsin, sim = _prep_simple_opsin(ng_model, 1)
+        ng, opsin, sim = _prep_simple_opsin(ng_model, 1 / (mwatt / mm2))
 
     ng_model += "\n Iopto : 1"
-    ng, opsin, sim = _prep_simple_opsin(ng_model, 1)
+    ng, opsin, sim = _prep_simple_opsin(ng_model, 1 / (mwatt / mm2))
 
-    opsin.source_ngs[ng.name].Irr = 1 * mwatt / meter**2
+    opsin.source_ngs[ng.name].Irr = 1 * mwatt / mm2
     sim.run(1 * ms)
     assert ng.v > 0
 
@@ -233,11 +234,11 @@ def test_simple_opsin_amps():
     ng_model = "dv/dt = (-v + 50*Mohm * Iopto) / (10*ms) : volt"
     # since Iopto not in model
     with pytest.raises(BrianObjectException):
-        ng, opsin, sim = _prep_simple_opsin(ng_model, 1 * namp)
+        ng, opsin, sim = _prep_simple_opsin(ng_model, 1 * namp / (mwatt / mm2))
 
     ng_model += "\n Iopto : ampere"
-    ng, opsin, sim = _prep_simple_opsin(ng_model, 1 * namp)
-    opsin.source_ngs[ng.name].Irr = 1 * mwatt / meter**2
+    ng, opsin, sim = _prep_simple_opsin(ng_model, 1 * namp / (mwatt / mm2))
+    opsin.source_ngs[ng.name].Irr = 1 * mwatt / mm2
     sim.run(1 * ms)
     assert ng.v > 0
 

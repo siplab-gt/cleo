@@ -21,6 +21,7 @@ from brian2.units import (
     ms,
     msiemens,
     mV,
+    mwatt,
     nsiemens,
     pcoulomb,
     psiemens,
@@ -275,14 +276,13 @@ class ProportionalCurrentOpsin(Opsin):
 
     I_per_Irr: Quantity = field(kw_only=True)
     """ How much current (in amps or unitless, depending on neuron model)
-    to deliver per mW/mm2.
+    to deliver (must include per unit irradiance).
     """
     # would be IOPTO_UNIT but that throws off Equation parsing
     model: str = field(
         init=False,
         default="""
-            IOPTO_VAR_NAME_post = I_per_Irr / (mwatt / mm2) 
-                * Irr_pre * rho_rel : IOPTO_UNIT (summed)
+            IOPTO_VAR_NAME_post = I_per_Irr * Irr_pre * rho_rel : IOPTO_UNIT (summed)
             rho_rel : 1
         """,
     )
@@ -290,8 +290,9 @@ class ProportionalCurrentOpsin(Opsin):
     required_vars: list[Tuple[str, Unit]] = field(factory=list, init=False)
 
     def __attrs_post_init__(self):
-        if isinstance(self.I_per_Irr, Quantity):
-            Iopto_unit = get_unit(self.I_per_Irr.dim)
+        I_per_mW_per_mm2 = self.I_per_Irr * (mwatt / mm2)
+        if isinstance(I_per_mW_per_mm2, Quantity):
+            Iopto_unit = get_unit(I_per_mW_per_mm2.dim)
         else:
             Iopto_unit = radian
         self.per_ng_unit_replacements = [("IOPTO_UNIT", Iopto_unit.name)]
