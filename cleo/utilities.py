@@ -294,7 +294,12 @@ def style_plots_for_docs(dark=True):
         plt.style.use("default")
     plt.rc("savefig", transparent=False)
     plt.rc("axes.spines", top=False, right=False)
-    plt.rc("font", **{"sans-serif": "Open Sans"})
+    plt.rc(
+        "font",
+        **{
+            "sans-serif": "Open Sans, DejaVu Sans, Bitstream Vera Sans, Computer Modern Sans Serif, Lucida Grande, Verdana, Geneva, Lucid, Arial, Helvetica, Avant Garde, sans-serif"
+        },
+    )
 
 
 def style_plots_for_paper(fontscale=5 / 6):
@@ -316,7 +321,12 @@ def style_plots_for_paper(fontscale=5 / 6):
     plt.rc("savefig", transparent=True, bbox="tight", dpi=300)
     plt.rc("svg", fonttype="none")
     plt.rc("axes.spines", top=False, right=False)
-    plt.rc("font", **{"sans-serif": "Open Sans"})
+    plt.rc(
+        "font",
+        **{
+            "sans-serif": "Open Sans, DejaVu Sans, Bitstream Vera Sans, Computer Modern Sans Serif, Lucida Grande, Verdana, Geneva, Lucid, Arial, Helvetica, Avant Garde, sans-serif"
+        },
+    )
 
 
 def unit_safe_append(q1: Quantity, q2: Quantity, axis=None):
