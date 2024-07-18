@@ -45,23 +45,26 @@ def test_MUS_multiple_contacts():
 
     # remember i here is channel, no longer neuron
     i, t, y = mus.get_state()
-    assert len(i) == 0
-    assert len(t) == 0
+    assert len(i) == len(t) == y.sum() == 0
 
     sim.run(1 * ms)  # 1 ms
     i, t, y = mus.get_state()
+    assert len(i) == len(t) == y.sum()
     assert (0 in i) and (0.9 * ms in t)
 
     sim.run(1 * ms)  # 2 ms
     i, t, y = mus.get_state()
+    assert len(i) == len(t) == y.sum()
     assert len(i) == 0 and len(t) == 0
 
     sim.run(1 * ms)  # 3 ms
     i, t, y = mus.get_state()
+    assert len(i) == len(t) == y.sum()
     assert (0 in i) and (2.1 * ms in t)
 
     sim.run(1 * ms)  # 4 ms
     i, t, y = mus.get_state()
+    assert len(i) == len(t) == y.sum()
     # should pick up 2 spikes on first and 1 or 2 on second channel
     assert 1 in i and len(i) >= 3
     assert 3.5 * ms in t
@@ -70,6 +73,7 @@ def test_MUS_multiple_contacts():
     sim.run(2 * ms)
     # sim.get_state() nested dict is what will be passed to IO processor
     i, t, y = sim.get_state()["Probe"]["mus"]
+    assert len(i) == len(t) == y.sum()
     assert (0 in i) and (1 in i) and len(i) >= 7
     assert all(t_i in (t / ms).round(2) for t_i in [4.1, 4.9, 5.1, 5.3, 5.5])
 
@@ -104,7 +108,7 @@ def test_MUS_multiple_groups():
     assert 20 < np.sum(mus.i == 0) < 60
     # second channel would have caught all spikes from sgg1 and sgg2
     assert np.sum(mus.i == 1) == 60
-    assert len(mus.t) == len(mus.t_samp)
+    assert len(mus.t) == len(mus.t_samp) == y.sum()
     assert np.all(mus.t_samp == 10 * ms)
 
 
@@ -142,18 +146,22 @@ def test_SortedSpiking():
     sim.run(3 * ms)  # 3 ms
     i, t, y = sim.get_state()["Probe"]["ss"]
     assert all(i == [2, 2])
+    assert len(i) == len(t) == y.sum()
 
     sim.run(1 * ms)  # 4 ms
     i, t, y = ss.get_state()
     assert all(i == [2, 3])
+    assert len(i) == len(t) == y.sum()
 
     sim.run(1 * ms)  # 5 ms
     i, t, y = ss.get_state()
     assert all(i == [3, 5])
+    assert len(i) == len(t) == y.sum()
 
     sim.run(1 * ms)  # 6 ms
     i, t, y = ss.get_state()
     assert all(i == [2, 3, 5])
+    assert len(i) == len(t) == y.sum()
 
     for i in (0, 1, 4):
         assert i not in ss.i

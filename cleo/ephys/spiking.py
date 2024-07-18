@@ -12,11 +12,11 @@ import quantities as pq
 from attrs import define, field, fields
 from bidict import bidict
 from brian2 import NeuronGroup, Quantity, SpikeMonitor, mm, ms
-from nptyping import NDArray, Shape, UInt, Float
+from nptyping import Float, NDArray, Shape, UInt
 
 from cleo.base import NeoExportable
 from cleo.ephys.probes import Signal
-from cleo.utilities import unit_safe_cat
+from cleo.utilities import rng, unit_safe_cat
 
 
 @define(eq=False)
@@ -232,7 +232,7 @@ class MultiUnitSpiking(Spiking):
         self, i_probe, t
     ) -> Tuple[NDArray, NDArray, NDArray]:
         probs_for_spikes = self._dtct_prob_array[i_probe]
-        detected_spikes = np.random.random(probs_for_spikes.shape) < probs_for_spikes
+        detected_spikes = rng.random(probs_for_spikes.shape) < probs_for_spikes
         y = np.sum(detected_spikes, axis=0)
         # ⬇ nonzero gives row, column indices of each nonzero element
         i_spike_detected, i_c_detected = detected_spikes.nonzero()
@@ -294,15 +294,18 @@ class SortedSpiking(Spiking):
         # inherit docstring
         i_probe, t = self._get_new_spikes()
         i_probe, t = self._noisily_detect_spikes(i_probe, t)
-        y = np.zeros(len(self.i_probe_by_i_ng), dtype=bool)
-        y[i_probe] = 1
+        y = np.bincount(i_probe.astype(int))
+        # include 0s for upper indices not seen:
+        y = np.concatenate([y, np.zeros(len(self.i_probe_by_i_ng) - len(y))])
         t_samp = self.probe.sim.network.t / ms
         self._update_saved_vars(t, i_probe, t_samp)
         return (i_probe, t, y)
 
     def _noisily_detect_spikes(self, i_probe, t) -> Tuple[NDArray, NDArray]:
+        # dtct_prob_array: n_nrns x n_channels
         probs_for_spikes = self._dtct_prob_array[i_probe]
-        detected_spikes = np.random.random(probs_for_spikes.shape) < probs_for_spikes
+        # now n_spks x n_channels
+        detected_spikes = rng.random(probs_for_spikes.shape) < probs_for_spikes
         i_spike_detected = detected_spikes.nonzero()
         i_probe_out = i_probe[i_spike_detected]
         t_out = t[i_spike_detected]
