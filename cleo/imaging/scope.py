@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import warnings
+from datetime import datetime
 from typing import Callable
 
 import matplotlib as mpl
+import neo
+import quantities as pq
 from attrs import define, field, fields
 from brian2 import NeuronGroup, Quantity, Unit, meter, mm, ms, np, um
 from matplotlib.artist import Artist
@@ -13,7 +16,13 @@ from nptyping import Float, NDArray, Shape, UInt
 from cleo.base import Recorder
 from cleo.coords import coords_from_ng
 from cleo.imaging.sensors import Sensor
-from cleo.utilities import normalize_coords, rng, unit_safe_append
+from cleo.utilities import (
+    analog_signal,
+    normalize_coords,
+    rng,
+    unit_safe_append,
+    unit_safe_cat,
+)
 
 
 def target_neurons_in_plane(
@@ -159,19 +168,23 @@ class Scope(Recorder):
     @property
     def sigma_noise(self) -> NDArray[Shape["*"], Float]:
         """noise std dev (in terms of ΔF/F) for all targets, in order injected."""
+        if self.n == 0:
+            return np.array([])
         return np.concatenate(self.sigma_per_injct)
+
+    @property
+    def focus_coords(self) -> Quantity:
+        """coordinates on the focal plane of all targets, in order injected."""
+        if self.n == 0:
+            return [] * mm
+        return unit_safe_cat(self.focus_coords_per_injct)
 
     @property
     def dFF_1AP(self) -> NDArray[Shape["*"], Float]:
         """dFF_1AP for all targets, in order injected. Varies with expression levels."""
-        rho_rel = np.array([])
-        n_prev_targets_for_ng = {}
-        for ng, i_targets in zip(self.neuron_groups, self.i_targets_per_injct):
-            syn = self.sensor.synapses[ng.name]
-            subset_start = n_prev_targets_for_ng.get(ng, 0)
-            subset_for_injct = slice(subset_start, subset_start + len(i_targets))
-            rho_rel = np.concatenate([rho_rel, syn.rho_rel[subset_for_injct]])
-            n_prev_targets_for_ng[ng] = subset_start + len(i_targets)
+        if self.n == 0:
+            return np.array([])
+        rho_rel = np.concatenate(self.rho_rel_per_injct)
         assert rho_rel.shape == (self.n,)
         return rho_rel * self.sensor.dFF_1AP
 
@@ -411,3 +424,33 @@ class Scope(Recorder):
         ax.legend(handles=handles)
 
         return [scope_marker, target_markers, plane]
+
+    def to_neo(self) -> neo.AnalogSignal:
+        # inherit docstring
+        try:
+            signal = analog_signal(self.t, self.dFF, "")
+        except AttributeError:
+            return
+        signal.name = self.name
+        signal.description = (
+            "Fluorescence trace for each ROI. Exported from Cleo Scope device"
+        )
+        signal.annotate(
+            export_datetime=datetime.now(),
+            sensor=self.sensor.name,
+            scope_direction=self.direction,
+            scope_location=self.location / um * pq.um,
+            focus_depth=self.focus_depth / um * pq.um,
+            img_width=self.img_width / um * pq.um,
+        )
+        if self.n > 0:
+            focus_coords = self.focus_coords / um * pq.um
+            signal.array_annotate(
+                dFF_1AP=self.dFF_1AP,
+                x=focus_coords[..., 0],
+                y=focus_coords[..., 1],
+                z=focus_coords[..., 2],
+                i_roi=np.arange(self.n),
+            )
+        return signal
+        # want ROI coordinates and size in image
