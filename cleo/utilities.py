@@ -15,8 +15,10 @@ from brian2.equations.equations import (
 from brian2.groups.group import get_dtype
 from matplotlib import pyplot as plt
 
-rng = np.random.default_rng()
-"""supposed to be the central random number generator, but not yet used everywhere"""
+rng: np.random.Generator = np.random.default_rng()
+"""A central random number generator.
+
+Seed is set with :func:`cleo.utilities.set_seed`"""
 
 
 def set_seed(rand_seed: int):

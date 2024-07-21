@@ -131,7 +131,6 @@ class Scope(Recorder):
     snr_cutoff: float = field(default=1)
     """SNR below which neurons are discarded.
     Applied only when not focus_depth is not None"""
-    rand_seed: int = field(default=None, repr=False)
     dFF: list[NDArray[Shape["*, *"], Float]] = field(
         factory=list, init=False, repr=False
     )

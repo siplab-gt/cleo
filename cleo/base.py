@@ -27,11 +27,7 @@ from mpl_toolkits.mplot3d import Axes3D
 
 import cleo
 from cleo.registry import registry_for_sim
-from cleo.utilities import (
-    add_to_neo_segment,
-    brian_safe_name,
-    unit_safe_append,
-)
+from cleo.utilities import add_to_neo_segment, brian_safe_name, rng, unit_safe_append
 
 
 class NeoExportable(ABC):
@@ -674,7 +670,7 @@ class SynapseDevice(InterfaceDevice):
             if "i_targets" in kwparams:
                 raise ValueError("p_expression and i_targets are incompatible")
             p_expression = kwparams.get("p_expression", 1)
-            expr_bool = np.random.rand(neuron_group.N) < p_expression
+            expr_bool = rng.random(neuron_group.N) < p_expression
             i_targets = np.where(expr_bool)[0]
         elif "i_targets" in kwparams:
             i_targets = kwparams["i_targets"]
