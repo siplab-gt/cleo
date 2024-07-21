@@ -19,6 +19,18 @@ rng = np.random.default_rng()
 """supposed to be the central random number generator, but not yet used everywhere"""
 
 
+def set_seed(rand_seed: int):
+    """Set the seed for the central random number generator
+
+    Parameters
+    ----------
+    rand_seed : int
+        random seed
+    """
+    global rng
+    rng = np.random.default_rng(rand_seed)
+
+
 def times_are_regular(times):
     if len(times) < 2:
         return False

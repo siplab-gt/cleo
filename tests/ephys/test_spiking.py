@@ -3,6 +3,8 @@ import numpy as np
 import quantities as pq
 from brian2 import Network, SpikeGeneratorGroup, mm, ms
 
+import cleo
+import cleo.utilities
 from cleo import CLSimulator
 from cleo.ephys import MultiUnitSpiking, Probe, SortedSpiking
 from cleo.ioproc import RecordOnlyProcessor
@@ -22,14 +24,16 @@ def _spike_generator_group(z_coords_mm, indices=None, times_ms=None, **kwparams)
     return sgg
 
 
-def test_MUS_multiple_contacts():
-    np.random.seed(1830)
+def test_MUS_multiple_contacts(rand_seed):
+    cleo.utilities.set_seed(rand_seed)
     # raster of test spikes: each character is 1-ms bin
     # | || |  <- neuron 0, 0mm     contact at .25mm
     #    |||  <- neuron 1, 0.5mm   contact at .75mm
     #     ||  <- neuron 2, 1mm
-    indices = [0, 0, 0, 1, 1, 2, 0, 1, 2]
+    # and add a bunch of spikes at the end to test probabilities
+    indices = [0, 0, 0, 1, 1, 2, 0, 1, 2] + [0] * 10 + [2] * 10
     times = [0.9, 2.1, 3.5, 3.5, 4.1, 4.9, 5.1, 5.3, 5.5]
+    times.extend(np.linspace(6.1, 10.9, 20))
     sgg = _spike_generator_group((0, 0.5, 1), indices, times)
     net = Network(sgg)
     sim = CLSimulator(net)
@@ -69,8 +73,7 @@ def test_MUS_multiple_contacts():
     assert 1 in i and len(i) >= 3
     assert 3.5 * ms in t
 
-    # skip to 6 ms
-    sim.run(2 * ms)
+    sim.run(2 * ms)  # to 6 ms
     # sim.get_state() nested dict is what will be passed to IO processor
     i, t, y = sim.get_state()["Probe"]["mus"]
     assert len(i) == len(t) == y.sum()
@@ -79,6 +82,7 @@ def test_MUS_multiple_contacts():
 
     # should have picked up at least one but not all spikes outside perfect radius
     assert len(mus.i) > 12
+    sim.run(5 * ms)  # to 11 ms
     # each channel should have picked up not all spikes
     assert np.sum(mus.i == 0) < len(indices)
     assert np.sum(mus.i == 1) < len(indices)
@@ -87,7 +91,7 @@ def test_MUS_multiple_contacts():
 
 
 def test_MUS_multiple_groups():
-    np.random.seed(1836)
+    cleo.utilities.set_seed(1836)
     sgg1 = _spike_generator_group((0, 0.1, 9000), period=1 * ms)  # i_probe = 4, 5
     sgg2 = _spike_generator_group((0.19, 0.2), period=0.5 * ms)  # i_probe = 6, 7
     # too far away to record at all:
@@ -117,7 +121,7 @@ def test_MUS_reset():
 
 
 def test_SortedSpiking():
-    np.random.seed(1918)
+    cleo.utilities.set_seed(1918)
     # sgg0 neurons at i_eg 0 and 1 are in range, but have no spikes
     sgg0 = _spike_generator_group((0.1, 777, 0.3), indices=[], times_ms=[])
     # raster of test spikes: each character is 1-ms bin
