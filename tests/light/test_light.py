@@ -1,9 +1,7 @@
-import pytest
-from brian2 import mm, np, asarray, mwatt, mm2, nmeter, um, ms
 import neo
 import pytest
 import quantities as pq
-from brian2 import asarray, mm, mm2, mwatt, nmeter, np, um
+from brian2 import asarray, mm, mm2, ms, mwatt, nmeter, np, um
 
 from cleo.light import GaussianEllipsoid, Koehler, Light, LightModel, fiber473nm
 from cleo.utilities import normalize_coords
@@ -166,17 +164,26 @@ def test_viz_params(
     assert len(viz_points) == n_to_plot
 
 
+@pytest.mark.parametrize("two_photon", [True, False])
 @pytest.mark.parametrize("squeeze", [True, False])
 @pytest.mark.parametrize("n_light, n_direction", [(1, 1), (4, 1), (4, 4)])
-def test_light_to_neo(n_light, n_direction, squeeze):
+def test_light_to_neo(n_light, n_direction, squeeze, two_photon):
+    light_model_type = GaussianEllipsoid if two_photon else fiber473nm
     light = Light(
         coords=rand_coords(n_light, squeeze),
         direction=rand_coords(n_direction, squeeze, 1),
-        light_model=fiber473nm(),
+        light_model=light_model_type(),
     )
     t = 5
-    light.t = list(range(t))*ms
+    light.t = list(range(t)) * ms
     light.values = np.random.rand(t, n_light)
+    if two_photon:
+        b2_units = mwatt
+        pq_units = pq.mW
+    else:
+        b2_units = mwatt / mm2
+        pq_units = pq.mW / pq.mm**2
+    light.values *= b2_units
     sig = light.to_neo()
 
     assert np.all(sig.array_annotations["x"] / pq.mm == light.coords[..., 0] / mm)
@@ -188,7 +195,8 @@ def test_light_to_neo(n_light, n_direction, squeeze):
     assert np.all(sig.array_annotations["direction_z"] == light.direction[..., 2])
 
     assert np.all(sig.array_annotations["i_channel"] == np.arange(light.n))
-    assert np.all(sig.magnitude == light.values)
+    assert np.all(sig / pq_units == light.values / b2_units)
+    assert np.all(sig.times / pq.ms == light.t / ms)
     assert sig.name == light.name
 
 

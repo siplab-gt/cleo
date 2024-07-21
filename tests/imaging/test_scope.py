@@ -136,7 +136,7 @@ def test_scope_to_neo(regular):
 
     sig = scope.to_neo()
     assert np.all(sig.times / pq.ms == scope.t / ms)
-    assert np.all(sig.magnitude == scope.dFF)
+    assert np.all(sig == scope.dFF)
 
     assert sig.annotations["sensor"] == scope.sensor.name
     assert np.all(sig.annotations["scope_direction"] == scope.direction)

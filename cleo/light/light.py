@@ -564,7 +564,16 @@ class Light(Stimulator):
         )
 
     def to_neo(self):
-        signal = analog_signal(self.t, self.values, "mW/mm**2")
+        # TODO: 2P to neo
+        if len(self.values) > 0 and _is_power(self.values[0]):
+            values = [q / mwatt for q in self.values]
+            unit = "mW"
+        else:
+            if len(self.values) > 0:
+                assert _is_irr(self.values[0])
+            values = [q / (mwatt / mm2) for q in self.values]
+            unit = "mW/mm**2"
+        signal = analog_signal(self.t, values, unit)
         signal.name = self.name
         signal.description = "Exported from Cleo Light device"
         signal.annotate(export_datetime=datetime.datetime.now())

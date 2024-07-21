@@ -279,7 +279,7 @@ class Stimulator(InterfaceDevice, NeoExportable):
     """The current value of the stimulator device"""
     default_value: Any = 0
     """The default value of the device---used on initialization and on :meth:`~reset`"""
-    t: list[float] = field(factory=list, init=False, repr=False)
+    t: Quantity = field(factory=lambda: np.array([]) * ms, init=False, repr=False)
     """Times stimulator was updated, stored if :attr:`~cleo.InterfaceDevice.save_history`"""
     values: list[Any] = field(factory=list, init=False, repr=False)
     """Values taken by the stimulator at each :meth:`~update` call, 
