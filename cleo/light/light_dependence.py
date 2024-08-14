@@ -5,7 +5,7 @@ from typing import Callable, Tuple
 
 import matplotlib.pyplot as plt
 from attrs import define, field
-from brian2 import NeuronGroup, Quantity, mm, np, nmeter
+from brian2 import NeuronGroup, Quantity, mm, nmeter, np
 from scipy.interpolate import (
     Akima1DInterpolator,
     CubicSpline,
@@ -161,9 +161,29 @@ def equal_photon_flux_spectrum(
 
 
 def plot_spectra(
-    *ldds: LightDependent, extrapolate=False
+    *ldds: LightDependent, extrapolate: bool = False, range: str = "1p"
 ) -> tuple[plt.Figure, plt.Axes]:
-    """Plots the action/excitation spectra for multiple light-dependent devices."""
+    """Plots the action/excitation spectra for multiple light-dependent devices
+
+    Parameters
+    ----------
+    *ldds : LightDependent
+        Device(s) to plot spectra for
+    extrapolate : bool, optional
+        Whether to plot extrapolated spectra, by default False
+    range : str, optional
+        "1p", "2p", or "1p2p", indicating What wavelengths to plot, by default "1p"
+
+    Returns
+    -------
+    tuple[plt.Figure, plt.Axes]
+        The Figure and Axes objects containing the plot
+
+    Raises
+    ------
+    ValueError
+        For an incorrect `range`
+    """
     import matplotlib.pyplot as plt
 
     if extrapolate:
@@ -183,9 +203,18 @@ def plot_spectra(
         c_line = wavelength_to_rgb(lambdas[np.argmax(epsilons)] * nmeter)
         ax.plot(lambdas_new, epsilons_new, c=c_line, label=ldd.name)
         ax.scatter(lambdas, epsilons, marker="o", s=50, color=c_points)
+
     title = (
         "Action/excitation spectra" if len(ldds) > 1 else f"Action/excitation spectrum"
     )
-    ax.set(xlabel="λ (nm)", ylabel="ε", title=title)
+    if range.lower() not in ("1p", "2p", "1p2p"):
+        raise ValueError(f"range must be 1p, 2p, or 1p2p. Got {range}.")
+    xlim = {
+        "1p": (350, 800),
+        "1p2p": (350, 1300),
+        "2p": (750, 1300),
+    }[range]
+
+    ax.set(xlabel="λ (nm)", ylabel="ε", title=title, xlim=xlim)
     fig.legend()
     return fig, ax
