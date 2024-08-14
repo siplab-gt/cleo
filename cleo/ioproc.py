@@ -213,7 +213,7 @@ def pi_ctrl(
     integ_error: float,
     dt: Quantity,
     Kp: float,
-    Ki: Quantity = 0,
+    Ki: Quantity = 0 / ms,
 ):
     error = reference - measurement
     integ_error += error * dt

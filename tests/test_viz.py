@@ -2,7 +2,7 @@ import itertools
 
 import matplotlib.pyplot as plt
 import pytest
-from brian2 import Network, NeuronGroup, mm, ms
+from brian2 import Network, NeuronGroup, mm, mm2, ms, mwatt
 
 import cleo
 from cleo import CLSimulator
@@ -24,7 +24,7 @@ def test_VideoVisualizer():
         reset="v = 0 * volt",
     )
     assign_xyz(ng, 0, 0, 0)
-    light = Light(light_model=fiber473nm(), max_value=20)
+    light = Light(light_model=fiber473nm(), max_value=20 * mwatt / mm2)
     # opsin = chr2_4s()
     probe = Probe([(0, 0, 0.1)] * mm)
 
@@ -54,7 +54,7 @@ def test_plot_sim():
         reset="v = 0 * volt",
     )
     assign_xyz(ng, 0, 0, 0)
-    light = Light(light_model=fiber473nm(), max_value=20)
+    light = Light(light_model=fiber473nm(), max_value=20 * mwatt / mm2)
     # opsin = chr2_4s()
     probe = Probe([(0, 0, 0.1)] * mm)
 

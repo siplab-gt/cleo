@@ -362,3 +362,9 @@ def unit_safe_round(q: Quantity, decimals):
 def unit_safe_cat(quantities):
     unit = quantities[0].get_best_unit()
     return np.concatenate([q / unit for q in quantities]) * unit
+
+
+def unit_safe_allclose(q1: Quantity, q2: Quantity):
+    assert b2.have_same_dimensions(q1, q2)
+    unit = q1.get_best_unit()
+    return np.allclose(q1 / unit, q2 / unit)

@@ -200,6 +200,11 @@ class Spiking(Signal, NeoExportable):
 class MultiUnitSpiking(Spiking):
     """Detects (unsorted) spikes per channel."""
 
+    @property
+    def n(self):
+        """Number of channels on probe"""
+        return self.probe.n
+
     def connect_to_neuron_group(self, neuron_group: NeuronGroup, **kwparams) -> None:
         """Configure signal to record from specified neuron group
 
@@ -260,6 +265,11 @@ class SortedSpiking(Spiking):
     coming from neuron groups, since the probe must consider
     multiple potential groups and within a group ignores those
     neurons that are too far away to be easily detected."""
+
+    @property
+    def n(self):
+        """Number of recorded neurons"""
+        return len(self.i_probe_by_i_ng)
 
     def connect_to_neuron_group(self, neuron_group: NeuronGroup, **kwparams) -> None:
         """Configure sorted spiking signal to record from given neuron group

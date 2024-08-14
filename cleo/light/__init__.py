@@ -1,5 +1,5 @@
 from cleo.light.light import (
-    Koehler,
+    KoehlerBeam,
     Light,
     LightModel,
     OpticFiber,

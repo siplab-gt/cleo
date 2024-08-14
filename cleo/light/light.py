@@ -4,7 +4,7 @@ from __future__ import annotations
 import datetime
 import warnings
 from abc import ABC, abstractmethod
-from typing import Any, Union
+from typing import Any
 
 import matplotlib as mpl
 import quantities as pq
@@ -239,7 +239,7 @@ def fiber473nm(
 
 
 @define
-class Koehler(LightModel):
+class KoehlerBeam(LightModel):
     """Even illumination over a circular area, with no scattering."""
 
     radius: Quantity
@@ -324,7 +324,7 @@ class Light(Stimulator):
                 "coordinates for n contact locations."
             )
 
-    direction: NDArray[Shape["*, 3]", Number]] = field(
+    direction: NDArray[Shape["*, 3"], Number] = field(
         default=(0, 0, 1), converter=normalize_coords
     )
     """(x, y, z) vector specifying direction in which light
@@ -344,7 +344,7 @@ class Light(Stimulator):
     Only relevant in video visualization.
     """
 
-    default_value: NDArray[Shape["*]", Number]] = field(kw_only=True, repr=False)
+    default_value: NDArray[Shape["*"], Number] = field(kw_only=True, repr=False)
 
     @default_value.default
     def _default_default(self):
@@ -385,8 +385,30 @@ class Light(Stimulator):
     @property
     def source(self) -> Subgroup:
         """Returns the "neuron(s)" representing the light source(s)."""
+        if self.sim is None:
+            return None
         registry = registry_for_sim(self.sim)
         return registry.source_for_light(self)
+
+    @property
+    def irradiance(self) -> Quantity:
+        """Returns history of light irradiance with units."""
+        return self.values * mwatt / mm2
+
+    @property
+    def irradiance_(self) -> Quantity:
+        """Returns history of light irradiance without units (/(mwatt/mm2))."""
+        return self.values
+
+    @property
+    def power(self) -> Quantity:
+        """Returns history of light power with units."""
+        return self.irradiance * self.light_model.area0
+
+    @property
+    def power_(self) -> Quantity:
+        """Returns history of light power without units (/mwatt)."""
+        return self.power / mwatt
 
     def add_self_to_plot(self, ax, axis_scale_unit, **kwargs) -> list[PathCollection]:
         # show light with point field, assigning r and z coordinates
@@ -492,7 +514,10 @@ class Light(Stimulator):
         return updated_artists
 
     def _preprocess_value(self, value: Quantity) -> Quantity:
-        if not isinstance(value, Quantity):
+        """ensures value is a 1D, n-length Quantity of proper units"""
+        if isinstance(value, (int, float)) and value == 0:
+            value = 0 * mwatt / mm2
+        elif not isinstance(value, Quantity):
             raise ValueError(
                 f"Input to light must be a Quantity. Got {type(value)} instead."
             )
@@ -502,7 +527,8 @@ class Light(Stimulator):
                 f" length {self.n}. Got {value.shape} instead."
             )
         if len(np.shape(value)) == 0:
-            value = np.reshape(value, (-1,))
+            unit = value.get_best_unit()
+            value = np.broadcast_to(value / unit, (self.n,)) * unit
         if not (_is_power(value) or _is_irr(value)):
             raise ValueError(
                 f"Input to light must be in units of power or irradiance."
@@ -541,14 +567,17 @@ class Light(Stimulator):
         if self.max_value is not None:
             max_val = self._val_same_unit_as(self.max_value, value)
             value[value > max_val] = max_val
-        super(Light, self).update(value)
 
         if _is_power(value):
             irr0 = value / self.light_model.area0
         else:
             assert _is_irr(value)
             irr0 = value
-        self.source.Irr0 = irr0
+
+        # values are stored as irradiance with mW/mm2 stripped
+        super(Light, self).update(irr0 / (mwatt / mm2))
+        if self.source is not None:
+            self.source.Irr0 = irr0
 
     def _alpha_cmap_for_wavelength(self, intensity):
         c = wavelength_to_rgb(self.wavelength)
@@ -564,7 +593,6 @@ class Light(Stimulator):
         )
 
     def to_neo(self):
-        # TODO: 2P to neo
         if len(self.values) > 0 and _is_power(self.values[0]):
             values = [q / mwatt for q in self.values]
             unit = "mW"

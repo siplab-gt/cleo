@@ -159,7 +159,7 @@ class IOProcessor(ABC):
     class more useful, since delay handling is already defined.
     """
 
-    sample_period: float = 1 * ms
+    sample_period: Quantity = 1 * ms
     """Determines how frequently the processor takes samples"""
 
     latest_ctrl_signal: dict = field(factory=dict, init=False, repr=False)
@@ -271,10 +271,8 @@ class Recorder(InterfaceDevice):
 class Stimulator(InterfaceDevice, NeoExportable):
     """Device for manipulating the network"""
 
-    value: Any = field(init=False, default=None)
+    value: Any = field(init=False, default=0)
     """The current value of the stimulator device"""
-    default_value: Any = 0
-    """The default value of the device---used on initialization and on :meth:`~reset`"""
     t: Quantity = field(factory=lambda: np.array([]) * ms, init=False, repr=False)
     """Times stimulator was updated, stored if :attr:`~cleo.InterfaceDevice.save_history`"""
     values: list[Any] = field(factory=list, init=False, repr=False)
@@ -282,17 +280,12 @@ class Stimulator(InterfaceDevice, NeoExportable):
     stored if :attr:`~cleo.InterfaceDevice.save_history`"""
 
     def __attrs_post_init__(self):
-        self.value = self.default_value
-        self._init_saved_vars()
+        self.reset()
 
     def _init_saved_vars(self):
         if self.save_history:
-            if self.sim:
-                t0 = self.sim.network.t
-            else:
-                t0 = 0 * ms
-            self.t = t0.reshape((1,))
-            self.values = [self.value]
+            self.t = [] * ms
+            self.values = []
 
     def update(self, ctrl_signal) -> None:
         """Set the stimulator value.
@@ -309,13 +302,17 @@ class Stimulator(InterfaceDevice, NeoExportable):
         """
         self.value = ctrl_signal
         if self.save_history:
-            self.t = unit_safe_append(self.t, self.sim.network.t)
+            if self.sim:
+                t = self.sim.network.t
+            else:
+                t = 0 * ms
+            self.t = unit_safe_append(self.t, t)
             self.values.append(self.value)
 
     def reset(self, **kwargs) -> None:
         """Reset the stimulator device to a neutral state"""
-        self.value = self.default_value
         self._init_saved_vars()
+        self.update(0)
 
     def to_neo(self):
         signal = cleo.utilities.analog_signal(self.t, self.values, "dimensionless")

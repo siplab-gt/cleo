@@ -3,8 +3,8 @@ import pytest
 import quantities as pq
 from brian2 import asarray, mm, mm2, ms, mwatt, nmeter, np, um
 
-from cleo.light import GaussianEllipsoid, Koehler, Light, LightModel, fiber473nm
-from cleo.utilities import normalize_coords
+from cleo.light import GaussianEllipsoid, KoehlerBeam, Light, LightModel, fiber473nm
+from cleo.utilities import normalize_coords, unit_safe_allclose
 
 
 def rand_coords(rows, squeeze, repr_dist=1 * mm):
@@ -111,8 +111,34 @@ def test_coords():
     assert light.coords.shape == (2, 3)
 
 
+@pytest.mark.parametrize("n_coords", [1, 2])
 @pytest.mark.parametrize(
-    "light_model", [fiber473nm(), GaussianEllipsoid(), Koehler(1 * mm)]
+    "values",
+    [
+        (1, 2) * mwatt,
+        (0.5, 1) * mwatt / mm2,
+        (1 * mwatt, 1 * mwatt / mm2),
+    ],
+)
+def test_light_power_irradiance(n_coords, values):
+    area0 = 2 * mm2
+    light = Light(
+        coords=rand_coords(n_coords, False),
+        light_model=KoehlerBeam(radius=np.sqrt(area0 / np.pi)),
+    )
+    for val in values:
+        light.update(val)
+
+    for i_channel in range(n_coords):
+        # 0 automatically intialized
+        assert unit_safe_allclose(light.power[:, i_channel], [0, 1, 2] * mwatt)
+        assert unit_safe_allclose(
+            light.irradiance[:, i_channel], [0, 1, 2] * mwatt / area0
+        )
+
+
+@pytest.mark.parametrize(
+    "light_model", [fiber473nm(), GaussianEllipsoid(), KoehlerBeam(1 * mm)]
 )
 @pytest.mark.parametrize(
     "m, squeeze_coords, squeeze_dir",
