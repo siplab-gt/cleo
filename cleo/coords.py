@@ -197,9 +197,10 @@ def coords_from_xyz(x: Quantity, y: Quantity, z: Quantity) -> Quantity:
     return (
         np.concatenate(
             [
-                np.reshape(x / meter, (*x.shape, 1)),
-                np.reshape(y / meter, (*y.shape, 1)),
-                np.reshape(z / meter, (*z.shape, 1)),
+                # use [:] to work around VariableView.shape getting parent group shape
+                np.reshape(x / meter, (*x[:].shape, 1)),
+                np.reshape(y / meter, (*y[:].shape, 1)),
+                np.reshape(z / meter, (*z[:].shape, 1)),
             ],
             axis=-1,
         )
