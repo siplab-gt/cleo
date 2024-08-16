@@ -160,6 +160,7 @@ def chr2_h134r_4s() -> BansalFourStateOpsin:
             (500, 0.22),
             (520, 0.06),
             (540, 0.01),
+            # TODO: 40 nm shift?
             (760, 0.34 / ONE_P_TWO_P_RATIO),
             (804, 0.65 / ONE_P_TWO_P_RATIO),
             (880, 0.96 / ONE_P_TWO_P_RATIO),

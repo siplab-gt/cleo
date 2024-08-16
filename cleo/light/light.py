@@ -398,7 +398,7 @@ class Light(Stimulator):
     @property
     def irradiance_(self) -> Quantity:
         """Returns history of light irradiance without units (/(mwatt/mm2))."""
-        return self.values
+        return self.irradiance / (mwatt / mm2)
 
     @property
     def power(self) -> Quantity:
@@ -488,6 +488,7 @@ class Light(Stimulator):
     def update_artists(
         self, artists: list[Artist], value, *args, **kwargs
     ) -> list[Artist]:
+        value *= mwatt / mm2
         assert len(artists) == self.n
         if self.max_value_viz is not None:
             max_val = self.max_value_viz
