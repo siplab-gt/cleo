@@ -594,13 +594,11 @@ class Light(Stimulator):
         )
 
     def to_neo(self):
-        if len(self.values) > 0 and _is_power(self.values[0]):
-            values = [q / mwatt for q in self.values]
+        if type(self.light_model) == "GaussianEllipsoid":
+            values = self.power_
             unit = "mW"
         else:
-            if len(self.values) > 0:
-                assert _is_irr(self.values[0])
-            values = [q / (mwatt / mm2) for q in self.values]
+            values = self.irradiance_
             unit = "mW/mm**2"
         signal = analog_signal(self.t, values, unit)
         signal.name = self.name
