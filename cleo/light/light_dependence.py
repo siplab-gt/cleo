@@ -186,17 +186,34 @@ def plot_spectra(
     """
     import matplotlib.pyplot as plt
 
+    if range.lower() not in ("1p", "2p", "1p2p"):
+        raise ValueError(f"range must be 1p, 2p, or 1p2p. Got {range}.")
+    xlim = {
+        "1p": (350, 800),
+        "1p2p": (350, 1300),
+        "2p": (800, 1300),
+    }[range]
+
     if extrapolate:
         all_lambdas = [np.array(ldd.spectrum)[:, 0] for ldd in ldds]
         lambda_min = min([lambdas.min() for lambdas in all_lambdas])
         lambda_max = max([lambdas.max() for lambdas in all_lambdas])
 
+        lambda_min = max(lambda_min, xlim[0])
+        lambda_max = min(lambda_max, xlim[1])
+
     fig, ax = plt.subplots()
     for ldd in ldds:
         lambdas, epsilons = np.array(ldd.spectrum).T
+        i_data_in_range = (lambdas > xlim[0]) & (lambdas < xlim[1])
+        lambdas, epsilons = lambdas[i_data_in_range], epsilons[i_data_in_range]
         if not extrapolate:
             lambda_min = np.min(lambdas)
             lambda_max = np.max(lambdas)
+
+            lambda_min = max(lambda_min, xlim[0])
+            lambda_max = min(lambda_max, xlim[1])
+
         lambdas_new = np.linspace(lambda_min, lambda_max, 100)
         epsilons_new = ldd.spectrum_interpolator(lambdas, epsilons, lambdas_new)
         c_points = [wavelength_to_rgb(l) for l in lambdas * nmeter]
@@ -207,14 +224,13 @@ def plot_spectra(
     title = (
         "Action/excitation spectra" if len(ldds) > 1 else f"Action/excitation spectrum"
     )
-    if range.lower() not in ("1p", "2p", "1p2p"):
-        raise ValueError(f"range must be 1p, 2p, or 1p2p. Got {range}.")
-    xlim = {
-        "1p": (350, 800),
-        "1p2p": (350, 1300),
-        "2p": (750, 1300),
-    }[range]
 
-    ax.set(xlabel="λ (nm)", ylabel="ε", title=title, xlim=xlim)
+    ax.set(
+        xlabel="λ (nm)",
+        ylabel="ε",
+        title=title,
+        xlim=xlim,
+        ylim=[0, epsilons_new.max()],
+    )
     fig.legend()
     return fig, ax

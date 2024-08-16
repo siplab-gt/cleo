@@ -66,7 +66,7 @@ class GaussianEllipsoid(LightModel):
     def area0(self) -> Quantity:
         # 10 microns, on upper end of what's used as spot size in Ronzitti et al., 2017
         # Irr0 = P / spot_area, as in Ronzitti et al., 2017
-        cell_radius = 0.010  # mm
+        cell_radius = 10 * um
         return np.pi * cell_radius**2
 
     def _gaussian_transmittance(self, r, z):

@@ -19,7 +19,7 @@ from cleo.opto.opsins import (
 )
 
 
-ONE_P_TWO_P_RATIO = 234165.46808748253
+ONE_P_TWO_P_RATIO = 270382.2996938772
 
 
 def chr2_4s() -> FourStateOpsin:

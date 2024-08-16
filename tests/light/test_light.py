@@ -1,8 +1,9 @@
 import neo
 import pytest
 import quantities as pq
-from brian2 import asarray, mm, mm2, ms, mwatt, nmeter, np, um
+from brian2 import Network, NeuronGroup, asarray, mm, mm2, ms, mwatt, nmeter, np, um
 
+import cleo
 from cleo.light import GaussianEllipsoid, KoehlerBeam, Light, LightModel, fiber473nm
 from cleo.utilities import normalize_coords, unit_safe_allclose
 
@@ -135,6 +136,15 @@ def test_light_power_irradiance(n_coords, values):
         assert unit_safe_allclose(
             light.irradiance[:, i_channel], [0, 1, 2] * mwatt / area0
         )
+
+    # can update with irradiance or power
+    ng = NeuronGroup(1, "v:1")
+    sim = cleo.CLSimulator(Network(ng))
+    sim.inject(light, ng)
+    light.update(1 * mwatt / mm2)
+    assert np.allclose(light.value, 1)
+    light.update(1 * mwatt)
+    assert np.allclose(light.value, 0.5)
 
 
 @pytest.mark.parametrize(
