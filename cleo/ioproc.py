@@ -179,7 +179,7 @@ class RecordOnlyProcessor(LatencyIOProcessor):
         return ({}, sample_time)
 
 
-def firing_rate_estimate(
+def exp_firing_rate_estimate(
     spike_counts: NDArray[Shape["*"], UInt],
     dt: Quantity,
     prev_rate: Quantity,
