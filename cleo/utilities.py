@@ -29,8 +29,12 @@ def set_seed(rand_seed: int):
     rand_seed : int
         random seed
     """
-    global rng
-    rng = np.random.default_rng(rand_seed)
+    new_rng = np.random.default_rng(rand_seed)
+    assert (
+        rng.bit_generator.state["bit_generator"]
+        == new_rng.bit_generator.state["bit_generator"]
+    ), "should be same bit generator type (default PCG64)"
+    rng.bit_generator.state = new_rng.bit_generator.state
 
 
 def times_are_regular(times):
