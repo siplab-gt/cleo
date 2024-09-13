@@ -594,7 +594,7 @@ class Light(Stimulator):
         )
 
     def to_neo(self):
-        if type(self.light_model) == "GaussianEllipsoid":
+        if type(self.light_model).__name__ == "GaussianEllipsoid":
             values = self.power_
             unit = "mW"
         else:

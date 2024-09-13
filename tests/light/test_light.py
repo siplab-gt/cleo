@@ -216,10 +216,11 @@ def test_light_to_neo(n_light, n_direction, squeeze, two_photon):
     if two_photon:
         b2_units = mwatt
         pq_units = pq.mW
+        light_output = light.power
     else:
         b2_units = mwatt / mm2
         pq_units = pq.mW / pq.mm**2
-    light.values *= b2_units
+        light_output = light.irradiance
     sig = light.to_neo()
 
     assert np.all(sig.array_annotations["x"] / pq.mm == light.coords[..., 0] / mm)
@@ -231,10 +232,10 @@ def test_light_to_neo(n_light, n_direction, squeeze, two_photon):
     assert np.all(sig.array_annotations["direction_z"] == light.direction[..., 2])
 
     assert np.all(sig.array_annotations["i_channel"] == np.arange(light.n))
-    assert np.all(sig / pq_units == light.values / b2_units)
+    assert np.all(sig / pq_units == light_output / b2_units)
     assert np.all(sig.times / pq.ms == light.t / ms)
     assert sig.name == light.name
 
 
 if __name__ == "__main__":
-    pytest.main(["-xs", __file__])
+    pytest.main(["-x", __file__])
