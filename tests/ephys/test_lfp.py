@@ -251,6 +251,7 @@ _base_param_options = [
 ]
 
 
+@pytest.mark.slow
 def test_RWSLFPSignalFromSpikes(rand_seed):
     rng = np.random.default_rng(rand_seed)
     b2.seed(rand_seed)
@@ -341,6 +342,7 @@ def test_RWSLFPSignalFromSpikes(rand_seed):
                 ), f"{param} variation not yielding different results"
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("samp_period", [1, 1.4] * ms)
 def test_RWSLFPSignalFromPSCs(rand_seed, samp_period):
     rng = np.random.default_rng(rand_seed)
