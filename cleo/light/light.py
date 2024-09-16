@@ -22,10 +22,10 @@ from brian2.units import (
     nmeter,
     um,
 )
+from jaxtyping import Float
 from matplotlib import colors
 from matplotlib.artist import Artist
 from matplotlib.collections import PathCollection
-from nptyping import Float, NDArray, Number, Shape
 
 from cleo.base import CLSimulator
 from cleo.coords import coords_from_xyz
@@ -48,23 +48,23 @@ class LightModel(ABC):
     def transmittance(
         self,
         source_coords: Quantity,
-        source_direction: NDArray[Shape["*, 3"], Number],
+        source_direction: Float[np.ndarray, "*sources 3"],
         target_coords: Quantity,
-    ) -> NDArray[Shape["*, *"], Float]:
-        """Output must be between 0 and 1 with shape (n_sources, n_targets)."""
+    ) -> Float[np.ndarray, "*sources n_targets"]:
+        """Output must be between 0 and 1 with shape (\\*sources, n_targets)."""
         pass
 
     @abstractmethod
     def viz_params(
         self,
         coords: Quantity,
-        direction: NDArray[Shape["*, 3"], Any],
+        direction: Float[np.ndarray, "*sources 3"],
         T_threshold: float,
         n_points_per_source: int = None,
         **kwargs,
     ) -> tuple[Quantity, Quantity, float]:
         """Returns info needed for visualization.
-        Output is ((m, n_points_per_source, 3) viz_points array, markersize, intensity_scale).
+        Output is ((\\*sources, n_points_per_source, 3) viz_points array, markersize, intensity_scale).
 
         For best-looking results, implementations should scale `markersize` and `intensity_scale`.
         """
@@ -135,9 +135,9 @@ class OpticFiber(LightModel):
     def transmittance(
         self,
         source_coords: Quantity,
-        source_dir_uvec: NDArray[(Any, 3), Any],
+        source_dir_uvec: Float[np.ndarray, "*sources 3"],
         target_coords: Quantity,
-    ) -> NDArray[(Any, Any), float]:
+    ) -> Float[np.ndarray, "*sources n_targets"]:
         assert np.allclose(np.linalg.norm(source_dir_uvec, axis=-1), 1)
         r, z = self._get_rz_for_xyz(source_coords, source_dir_uvec, target_coords)
         return self._Foutz12_transmittance(r, z)
@@ -183,7 +183,7 @@ class OpticFiber(LightModel):
     def viz_params(
         self,
         coords: Quantity,
-        direction: NDArray[(Any, 3), Any],
+        direction: Float[np.ndarray, "*sources 3"],
         T_threshold: float,
         n_points_per_source: int = 4000,
         **kwargs,
@@ -324,7 +324,7 @@ class Light(Stimulator):
                 "coordinates for n contact locations."
             )
 
-    direction: NDArray[Shape["*, 3"], Number] = field(
+    direction: Float[np.ndarray, "*sources 3"] = field(
         default=(0, 0, 1), converter=normalize_coords
     )
     """(x, y, z) vector specifying direction in which light
@@ -343,12 +343,6 @@ class Light(Stimulator):
     i.e., the level at or above which the light appears maximally bright.
     Only relevant in video visualization.
     """
-
-    default_value: NDArray[Shape["*"], Number] = field(kw_only=True, repr=False)
-
-    @default_value.default
-    def _default_default(self):
-        return np.zeros(self.n)
 
     @property
     def color(self):

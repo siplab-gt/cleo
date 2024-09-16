@@ -8,7 +8,7 @@ from typing import Any, Tuple
 import numpy as np
 from attrs import define, field, fields
 from brian2 import Quantity, ms
-from nptyping import NDArray, Shape, UInt
+from jaxtyping import UInt
 
 from cleo.base import IOProcessor
 from cleo.utilities import unit_safe_append
@@ -180,7 +180,7 @@ class RecordOnlyProcessor(LatencyIOProcessor):
 
 
 def exp_firing_rate_estimate(
-    spike_counts: NDArray[Shape["*"], UInt],
+    spike_counts: UInt[np.ndarray, "num_spike_sources"],
     dt: Quantity,
     prev_rate: Quantity,
     tau: Quantity,

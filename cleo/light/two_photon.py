@@ -3,7 +3,7 @@ from typing import Any
 from attrs import define
 from brian2 import Quantity, np
 from brian2.units import nmeter, um
-from nptyping import NDArray, Number, Shape
+from jaxtyping import Float
 
 from cleo.coords import concat_coords, coords_from_ng, coords_from_xyz
 from cleo.light import Light, LightModel
@@ -32,9 +32,9 @@ class GaussianEllipsoid(LightModel):
     def transmittance(
         self,
         source_coords: Quantity,
-        source_dir_uvec: NDArray[Shape["*, 3"], Number],
+        source_dir_uvec: Float[np.ndarray, "*sources 3"],
         target_coords: Quantity,
-    ) -> NDArray[Shape["*, *"], Number]:
+    ) -> Float[np.ndarray, "*sources targets"]:
         assert np.allclose(np.linalg.norm(source_dir_uvec, axis=-1), 1)
         r, z = self._get_rz_for_xyz(source_coords, source_dir_uvec, target_coords)
         return self._gaussian_transmittance(r, z)
@@ -42,7 +42,7 @@ class GaussianEllipsoid(LightModel):
     def viz_params(
         self,
         coords: Quantity,
-        direction: NDArray[Shape["*, 3"], Number],
+        direction: Float[np.ndarray, "*sources 3"],
         T_threshold: float,
         n_points_per_source: int = 4000,
         **kwargs,

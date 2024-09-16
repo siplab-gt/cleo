@@ -1,6 +1,4 @@
 """Contains basic recorders."""
-from typing import Any
-
 from attrs import define, field
 from brian2 import (
     NeuronGroup,
@@ -10,7 +8,7 @@ from brian2 import (
     StateMonitor,
     np,
 )
-from nptyping import NDArray, Shape, UInt
+from jaxtyping import UInt
 
 from cleo.base import Recorder
 
@@ -93,11 +91,11 @@ class GroundTruthSpikeRecorder(Recorder):
         self.brian_objects.add(self._mon)
         self.neuron_group = neuron_group
 
-    def get_state(self) -> NDArray[Shape["*"], UInt]:
+    def get_state(self) -> UInt[np.ndarray, "n_neurons"]:
         """
         Returns
         -------
-        NDArray[(n_neurons,), np.uint]
+        UInt[np.ndarray, "n_neurons"]
             n_neurons-length array with spike counts over the latest
             control period.
         """

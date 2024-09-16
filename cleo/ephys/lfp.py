@@ -18,7 +18,6 @@ from brian2 import NeuronGroup, Quantity, Subgroup, Synapses, mm, ms, np, um
 from brian2.monitors.spikemonitor import SpikeMonitor
 from brian2.synapses.synapses import SynapticSubgroup
 from brian2.units import Unit, uvolt
-from nptyping import Float, NDArray, Shape
 from scipy import sparse
 from tklfp import TKLFP
 

@@ -12,7 +12,6 @@ import quantities as pq
 from attrs import define, field, fields
 from bidict import bidict
 from brian2 import NeuronGroup, Quantity, SpikeMonitor, mm, ms
-from nptyping import Float, NDArray, Shape, UInt
 
 from cleo.base import NeoExportable
 from cleo.ephys.probes import Signal
@@ -37,7 +36,7 @@ class Spiking(Signal, NeoExportable):
     )
     """Spike times in ms, stored if
     :attr:`~cleo.InterfaceDevice.save_history` on :attr:`~Signal.probe`"""
-    i: NDArray[Shape["*"], UInt] = field(
+    i: UInt[np.ndarray, "n_recorded_spikes"] = field(
         init=False, factory=lambda: np.array([], dtype=np.uint), repr=False
     )
     """Channel (for multi-unit) or neuron (for sorted) indices
@@ -53,7 +52,7 @@ class Spiking(Signal, NeoExportable):
     neuron group indices and the indices the probe uses"""
     _monitors: list[SpikeMonitor] = field(init=False, factory=list, repr=False)
     _mon_spikes_already_seen: list[int] = field(init=False, factory=list, repr=False)
-    _dtct_prob_array: NDArray[Shape["*, *"], Float] = field(
+    _dtct_prob_array: Float[np.ndarray, "n_neurons n_channels"] = field(
         init=False, default=None, repr=False
     )
 
@@ -69,6 +68,12 @@ class Spiking(Signal, NeoExportable):
             self.t = unit_safe_cat([self.t, t])
             t_samp_rep = np.full_like(t, t_samp)
             self.t_samp = unit_safe_cat([self.t_samp, t_samp_rep])
+
+    @property
+    @abstractmethod
+    def n(self):
+        """Number of spike sources"""
+        pass
 
     def connect_to_neuron_group(
         self, neuron_group: NeuronGroup, **kwparams
@@ -128,12 +133,12 @@ class Spiking(Signal, NeoExportable):
     @abstractmethod
     def get_state(
         self,
-    ) -> tuple[NDArray[np.uint], NDArray[float], NDArray[np.uint]]:
+    ) -> tuple[UInt[np.ndarray, "n_spikes"], Quantity, UInt[np.ndarray, "{self.n}"]]:
         """Return spikes since method was last called (i, t, y)
 
         Returns
         -------
-        tuple[NDArray[np.uint], NDArray[float], NDArray[np.uint]]
+        tuple[UInt[np.ndarray, "n_spikes"], Quantity, UInt[np.ndarray, "{self.n}"]]
             (i, t, y) where i is channel (for multi-unit) or neuron (for sorted) spike
             indices, t is spike times, and y is a spike count vector suitable for control-
             theoretic uses---i.e., a 0 for every channel/neuron that hasn't spiked and a 1
@@ -160,7 +165,7 @@ class Spiking(Signal, NeoExportable):
         i_probe_unfilt = np.array([self.i_probe_by_i_ng.get((ng, k), -1) for k in i_ng])
         return i_probe_unfilt[i_probe_unfilt != -1].astype(np.uint)
 
-    def _get_new_spikes(self) -> Tuple[npt.NDArray, npt.NDarray]:
+    def _get_new_spikes(self) -> Tuple[UInt[np.ndarray, "n_spikes"], Quantity]:
         i_probe = np.array([], dtype=np.uint)
         t = ms * np.array([], dtype=float)
         for j in range(len(self._monitors)):
@@ -225,7 +230,7 @@ class MultiUnitSpiking(Spiking):
 
     def get_state(
         self,
-    ) -> tuple[NDArray[np.uint], NDArray[float], NDArray[np.uint]]:
+    ) -> tuple[UInt[np.ndarray, "n_spikes"], Quantity, UInt[np.ndarray, "{self.n}"]]:
         # inherit docstring
         i_probe, t = self._get_new_spikes()
         t_samp = self.probe.sim.network.t
@@ -235,7 +240,7 @@ class MultiUnitSpiking(Spiking):
 
     def _noisily_detect_spikes_per_channel(
         self, i_probe, t
-    ) -> Tuple[NDArray, NDArray, NDArray]:
+    ) -> tuple[UInt[np.ndarray, "n_spikes"], Quantity, UInt[np.ndarray, "{self.n}"]]:
         probs_for_spikes = self._dtct_prob_array[i_probe]
         detected_spikes = rng.random(probs_for_spikes.shape) < probs_for_spikes
         y = np.sum(detected_spikes, axis=0)
@@ -292,7 +297,9 @@ class SortedSpiking(Spiking):
                 (self._dtct_prob_array, neuron_multi_channel_probs)
             )
 
-    def _combine_channel_probs(self, neuron_channel_dtct_probs: NDArray) -> NDArray:
+    def _combine_channel_probs(
+        self, neuron_channel_dtct_probs: np.ndarray
+    ) -> np.ndarray:
         # combine probabilities for each neuron to get just one representing
         # when a spike is detected on at least 1 channel
         # p(at least one detected) = 1 - p(none detected) = 1 - q1*q2*q3...
@@ -300,7 +307,7 @@ class SortedSpiking(Spiking):
 
     def get_state(
         self,
-    ) -> tuple[NDArray[np.uint], NDArray[float], NDArray[np.uint]]:
+    ) -> tuple[UInt[np.ndarray, "n_spikes"], Quantity, UInt[np.ndarray, "{self.n}"]]:
         # inherit docstring
         i_probe, t = self._get_new_spikes()
         i_probe, t = self._noisily_detect_spikes(i_probe, t)
@@ -311,7 +318,7 @@ class SortedSpiking(Spiking):
         self._update_saved_vars(t, i_probe, t_samp)
         return (i_probe, t, y)
 
-    def _noisily_detect_spikes(self, i_probe, t) -> Tuple[NDArray, NDArray]:
+    def _noisily_detect_spikes(self, i_probe, t) -> Tuple[np.ndarray, np.ndarray]:
         # dtct_prob_array: n_nrns x n_channels
         probs_for_spikes = self._dtct_prob_array[i_probe]
         # now n_spks x n_channels
