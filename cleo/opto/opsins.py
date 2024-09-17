@@ -15,18 +15,15 @@ from brian2 import (
 from brian2.units import (
     Quantity,
     amp,
-    cm2,
     mM,
     mm2,
     ms,
-    msiemens,
     mV,
     mwatt,
     nsiemens,
     pcoulomb,
     psiemens,
     second,
-    umeter,
     volt,
 )
 from brian2.units.allunits import radian

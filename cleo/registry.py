@@ -8,7 +8,7 @@ from typing import Tuple
 
 from attrs import define, field
 from brian2 import NeuronGroup, Subgroup, Synapses
-from brian2.units.allunits import joule, kgram, meter, meter2, nmeter, second
+from brian2.units.allunits import joule, kgram, meter, meter2, second
 
 from cleo.coords import coords_from_ng
 from cleo.utilities import brian_safe_name

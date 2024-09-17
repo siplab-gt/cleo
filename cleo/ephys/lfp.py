@@ -9,12 +9,11 @@ from math import ceil
 from numbers import Number
 from typing import Any, Union
 
-import brian2.only as b2
 import neo
 import quantities as pq
 import wslfp
 from attrs import define, field
-from brian2 import NeuronGroup, Quantity, Subgroup, Synapses, mm, ms, np, um
+from brian2 import NeuronGroup, Quantity, Synapses, mm, ms, np, um
 from brian2.monitors.spikemonitor import SpikeMonitor
 from brian2.synapses.synapses import SynapticSubgroup
 from brian2.units import Unit, uvolt
@@ -28,7 +27,6 @@ from cleo.utilities import (
     analog_signal,
     unit_safe_append,
     unit_safe_cat,
-    unit_safe_round,
 )
 
 

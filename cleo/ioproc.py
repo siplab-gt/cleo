@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from abc import abstractmethod
 from collections import deque
-from typing import Any, Tuple
+from typing import Tuple
 
 import numpy as np
 from attrs import define, field, fields

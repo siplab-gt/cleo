@@ -3,11 +3,10 @@ from __future__ import annotations
 
 from abc import abstractmethod
 from datetime import datetime
-from typing import Any, Tuple
+from typing import Tuple
 
 import neo
 import numpy as np
-import numpy.typing as npt
 import quantities as pq
 from attrs import define, field, fields
 from bidict import bidict

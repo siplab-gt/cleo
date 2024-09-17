@@ -1,5 +1,3 @@
-from typing import Any
-
 from attrs import define
 from brian2 import Quantity, np
 from brian2.units import nmeter, um
