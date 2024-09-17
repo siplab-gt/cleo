@@ -135,7 +135,7 @@ class Scope(Recorder):
     """ΔF/F from every call to :meth:`get_state`.
     Shape is (n_samples, n_ROIs). Stored if :attr:`~cleo.InterfaceDevice.save_history`"""
     t: Quantity = field(factory=lambda: ms * [], init=False, repr=False)
-    """Times at which sensor traces are recorded, in ms, stored if
+    """Times at which sensor traces are recorded, with Brian units, stored if
     :attr:`~cleo.InterfaceDevice.save_history`"""
 
     neuron_groups: list[NeuronGroup] = field(factory=list, repr=False, init=False)

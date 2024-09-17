@@ -34,7 +34,7 @@ class Spiking(Signal, NeoExportable):
     t: Quantity = field(
         init=False, factory=lambda: ms * np.array([], dtype=float), repr=False
     )
-    """Spike times in ms, stored if
+    """Spike times with Brian units, stored if
     :attr:`~cleo.InterfaceDevice.save_history` on :attr:`~Signal.probe`"""
     i: UInt[np.ndarray, "n_recorded_spikes"] = field(
         init=False, factory=lambda: np.array([], dtype=np.uint), repr=False
@@ -45,7 +45,7 @@ class Spiking(Signal, NeoExportable):
     t_samp: Quantity = field(
         init=False, factory=lambda: ms * np.array([], dtype=float), repr=False
     )
-    """Sample times in ms when each spike was recorded, stored if
+    """Sample times with Brian units when each spike was recorded, stored if
     :attr:`~cleo.InterfaceDevice.save_history` on :attr:`~Signal.probe`"""
     i_probe_by_i_ng: bidict = field(init=False, factory=bidict, repr=False)
     """(neuron_group, i_ng) keys,  i_probe values. bidict for converting between

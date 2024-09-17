@@ -45,7 +45,7 @@ class LFPSignalBase(Signal, NeoExportable):
     """
 
     t: Quantity = field(init=False, repr=False)
-    """Times at which LFP is recorded, in ms, stored if
+    """Times at which LFP is recorded, with Brian units, stored if
     :attr:`~cleo.InterfaceDevice.save_history` on :attr:`~Signal.probe`"""
     lfp: Quantity = field(init=False, repr=False)
     """Approximated LFP from every call to :meth:`get_state`.
