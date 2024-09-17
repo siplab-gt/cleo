@@ -732,7 +732,7 @@ class SynapseDevice(InterfaceDevice):
             A tuple containing an Equations object
             and a parameter dictionary, constructed from :attr:`~model`
             and :attr:`~params`, respectively, with modified names for use
-            in :attr:`~cleo.opto.OptogeneticIntervention.synapses`
+            in :attr:`synapses`
         """
         model = self.model
 
