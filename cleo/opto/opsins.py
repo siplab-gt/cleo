@@ -111,9 +111,9 @@ class FourStateOpsin(MarkovOpsin):
         Gb = kb*Hq + Gb0 : hertz
 
         fphi = O1 + gamma*O2 : 1
-        fv_times_v_minus_E = v1 * (1 - exp(-(V_VAR_NAME_post - E) / v0)) : volt
+        fv_timesVminusE = v1 * (1 - exp(-(V_VAR_NAME_post - E) / v0)) : volt
 
-        IOPTO_VAR_NAME_post = -g0 * fphi * fv_times_v_minus_E * rho_rel : ampere (summed)
+        IOPTO_VAR_NAME_post = -g0 * fphi * fv_timesVminusE * rho_rel : ampere (summed)
         rho_rel : 1""",
     )
     """fv as described in Evans et al., 2016 can give us problems when we divide by zero.

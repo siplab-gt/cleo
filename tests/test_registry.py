@@ -1,3 +1,4 @@
+import warnings
 import pytest
 from brian2 import Network, NeuronGroup, mm, mm2, ms, mV, mwatt, nmeter, np, umeter
 
@@ -166,7 +167,7 @@ def test_multi_light_opsin(sim_ng1_ng2):
     uv = Light(light_model=fiber473nm(), wavelength=300 * nmeter, name="uv")
     with pytest.warns(
         UserWarning,
-        match="outside the range of the action spectrum data.*extrapolate=False",
+        match="300.0 nm.*outside.*spectrum.*ChR2.*extrapolate=False",
     ):
         sim.inject(uv, ng1)
     # but not when extrapolation enabled
@@ -211,7 +212,11 @@ def test_multi_light_opsin(sim_ng1_ng2):
     # small effect on ng2 (extrapolating action spectrum)
     assert np.all(ng2.v > ng1.v)
     # no cross-talk on ng1
-    assert chr2.epsilon(uv.wavelength) == 0
+    with pytest.warns(
+        UserWarning,
+        match="300.0 nm.*outside.*spectrum.*ChR2.*extrapolate=False",
+    ):
+        assert chr2.epsilon(uv.wavelength) == 0
     assert np.all(ng1.v == -70 * mV)
 
 

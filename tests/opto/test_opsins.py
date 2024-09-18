@@ -3,10 +3,10 @@ from brian2 import (
     Network,
     NeuronGroup,
     meter,
+    mm2,
     ms,
     mV,
     mwatt,
-    mm2,
     namp,
     np,
     pamp,
@@ -257,7 +257,7 @@ def test_opto_syn_var_name_conflict(opsin):
     ng, sim = _prep_markov_opto(
         """
         dHp/dt = 0*Hz : 1  # diff eq
-        dfv_times_v_minus_E/dt = 0*Hz : 1
+        dfv_timesVminusE/dt = 0*Hz : 1
         Ga1 = O1*Hz : hertz  # constant
         O1 : 1
         dv/dt = 0*mV/ms : volt
@@ -266,7 +266,7 @@ def test_opto_syn_var_name_conflict(opsin):
         opsin,
     )
     opto_syn_vars = opsin.synapses[ng.name].equations.names
-    for var in ["Hp", "fv_times_v_minus_E", "Ga1", "O1"]:
+    for var in ["Hp", "fv_timesVminusE", "Ga1", "O1"]:
         assert var not in opto_syn_vars
         assert f"{var}_syn" in opto_syn_vars
     sim.run(0.1 * ms)

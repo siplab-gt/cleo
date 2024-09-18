@@ -1,10 +1,7 @@
-from functools import wraps
-
+import brian2.only as b2
 import matplotlib
-import pytest
-from brian2 import prefs
 
-prefs.codegen.target = "numpy"  # to avoid cython overhead for short tests
+b2.prefs.codegen.target = "numpy"  # to avoid cython overhead for short tests
 matplotlib.use("Agg")  # to avoid GUI backend
 
 

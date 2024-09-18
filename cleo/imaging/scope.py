@@ -160,7 +160,7 @@ class Scope(Recorder):
     @property
     def n(self) -> int:
         """Number of imaged ROIs"""
-        return np.sum(len(i_t) for i_t in self.i_targets_per_injct)
+        return sum(len(i_t) for i_t in self.i_targets_per_injct)
 
     @property
     def sigma_noise(self) -> Float[np.ndarray, "{self.n}"]:

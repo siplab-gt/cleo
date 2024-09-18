@@ -45,6 +45,7 @@ def test_VideoVisualizer():
 
 
 @pytest.mark.slow
+@pytest.mark.filterwarnings("ignore:No artists with labels.*legend")
 def test_plot_sim():
     ng = NeuronGroup(
         1,
