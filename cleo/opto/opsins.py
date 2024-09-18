@@ -65,22 +65,6 @@ class MarkovOpsin(Opsin):
     )
 
 
-@implementation(
-    "cython",
-    """
-    cdef double f_unless_x0(double f, double x, double f_when_x0):
-        if x == 0:
-            return f_when_x0
-        else:
-            return f
-    """,
-)
-@check_units(f=1, x=volt, f_when_0=1, result=1)
-def f_unless_x0(f, x, f_when_x0):
-    f[x == 0] = f_when_x0
-    return f
-
-
 @define(eq=False)
 class FourStateOpsin(MarkovOpsin):
     """4-state model from PyRhO (Evans et al. 2016).
@@ -127,20 +111,16 @@ class FourStateOpsin(MarkovOpsin):
         Gb = kb*Hq + Gb0 : hertz
 
         fphi = O1 + gamma*O2 : 1
-        # v1/v0 when v-E == 0 via l'Hopital's rule
-        fv = f_unless_x0(
-            (1 - exp(-(V_VAR_NAME_post-E)/v0)) / ((V_VAR_NAME_post-E)/v1),
-            V_VAR_NAME_post - E,
-            v1/v0
-        ) : 1
+        fv_times_v_minus_E = v1 * (1 - exp(-(V_VAR_NAME_post - E) / v0)) : volt
 
-        IOPTO_VAR_NAME_post = -g0*fphi*fv*(V_VAR_NAME_post-E)*rho_rel : ampere (summed)
+        IOPTO_VAR_NAME_post = -g0 * fphi * fv_times_v_minus_E * rho_rel : ampere (summed)
         rho_rel : 1""",
     )
-
-    extra_namespace: dict[str, Any] = field(
-        init=False, factory=lambda: {"f_unless_x0": f_unless_x0}
-    )
+    """fv as described in Evans et al., 2016 can give us problems when we divide by zero.
+    Specifically, when v - E = 0, we need to use l'Hopital's rule to find the limit of fv.
+    This is v1/v0. However...to make things simpler, we see that the (v-E) term cancels
+    out with the same term in the I_post term.
+    """
 
     def init_syn_vars(self, opto_syn: Synapses) -> None:
         for varname, value in {"C1": 1, "O1": 0, "O2": 0}.items():
