@@ -1,7 +1,8 @@
 import itertools
 
+import matplotlib.pyplot as plt
 import pytest
-from brian2 import Network, NeuronGroup, mm, ms
+from brian2 import Network, NeuronGroup, mm, mm2, ms, mwatt
 
 import cleo
 from cleo import CLSimulator
@@ -23,7 +24,7 @@ def test_VideoVisualizer():
         reset="v = 0 * volt",
     )
     assign_xyz(ng, 0, 0, 0)
-    light = Light(light_model=fiber473nm(), max_Irr0_mW_per_mm2=20)
+    light = Light(light_model=fiber473nm(), max_value=20 * mwatt / mm2)
     # opsin = chr2_4s()
     probe = Probe([(0, 0, 0.1)] * mm)
 
@@ -44,6 +45,7 @@ def test_VideoVisualizer():
 
 
 @pytest.mark.slow
+@pytest.mark.filterwarnings("ignore:No artists with labels.*legend")
 def test_plot_sim():
     ng = NeuronGroup(
         1,
@@ -53,7 +55,7 @@ def test_plot_sim():
         reset="v = 0 * volt",
     )
     assign_xyz(ng, 0, 0, 0)
-    light = Light(light_model=fiber473nm(), max_Irr0_mW_per_mm2=20)
+    light = Light(light_model=fiber473nm(), max_value=20 * mwatt / mm2)
     # opsin = chr2_4s()
     probe = Probe([(0, 0, 0.1)] * mm)
 
@@ -74,6 +76,7 @@ def test_plot_sim():
             light_kwargs = {"n_points_per_source": n_points}
         else:
             light_kwargs = {}
-        cleo.viz.plot(
+        fig, ax = cleo.viz.plot(
             *ngs, sim=sim_param, devices=[(dev, light_kwargs) for dev in devices]
         )
+        plt.close(fig)

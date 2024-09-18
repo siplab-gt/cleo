@@ -17,12 +17,12 @@ neurons2 = neurons
 
 
 def test_StateVariableSetter(neurons, neurons2):
-    sv_stim = StateVariableSetter(variable_to_ctrl="v", unit=1, default_value=-1)
+    sv_stim = StateVariableSetter(variable_to_ctrl="v", unit=1)
     assert neurons.v == -70
     assert neurons2.v == -70
 
     sv_stim.connect_to_neuron_group(neurons)
-    assert neurons.v == -1
+    assert neurons.v == 0  # default value
     assert neurons2.v == -70
 
     sv_stim.connect_to_neuron_group(neurons2)

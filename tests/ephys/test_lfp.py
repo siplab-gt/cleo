@@ -90,11 +90,11 @@ def test_TKLFPSignal(groups_and_types, signal_positive, rand_seed):
     )
     probe = Probe(contact_coords, signals=[tklfp], save_history=True)
     for group, tklfp_type in groups_and_types:
-        sim.inject(probe, group, tklfp_type=tklfp_type, sample_period_ms=1)
+        sim.inject(probe, group, tklfp_type=tklfp_type, sample_period=1 * ms)
 
     # doesn't specify tklfp_type:
     with pytest.raises(Exception):
-        sim.inject(probe, group, sample_period_ms=1)
+        sim.inject(probe, group, sample_period=1 * ms)
     # doesn't specify sampling period:
     with pytest.raises(Exception):
         sim.inject(probe, group, tklfp_type="inh")
@@ -135,7 +135,7 @@ def test_TKLFPSignal_out_of_range():
     probe = Probe(
         [[0, 0, 0], [5, 5, 5]] * mm, signals=[tklfp]
     )  # contacts at origin and 5,5,5
-    sim.inject(probe, *pgs, tklfp_type="exc", sample_period_ms=1)
+    sim.inject(probe, *pgs, tklfp_type="exc", sample_period=1 * ms)
     sim.run(30 * ms)
     lfp = tklfp.get_state()
     assert lfp.shape == (2,)
@@ -151,7 +151,7 @@ def test_TKLFP_orientation(rand_seed, is_exc):
     n_nrns = 5
     n_elec = 4
     # random network setup and spikes
-    c_mm = 2 * rng.random((n_nrns, 3)) - 1
+    coords = rng.uniform(-1, 1, (n_nrns, 3)) * mm
     orientation = 2 * rng.random((n_nrns, 3)) - 1
     elec_coords = (2 * rng.random((n_elec, 3)) - 1) * mm
     # random spikes during first 40 ms
@@ -160,14 +160,14 @@ def test_TKLFP_orientation(rand_seed, is_exc):
     t_spk = 40 * rng.random((n_spk,)) * ms
     sgg = SpikeGeneratorGroup(n_nrns, i_spk, t_spk)
     sgg._N = n_nrns  # hack for assign_coords to work
-    assign_xyz(sgg, c_mm[:, 0], c_mm[:, 1], c_mm[:, 2])
+    assign_coords(sgg, coords)
 
     # cleo setup
     sim = CLSimulator(Network(sgg))
     tklfp_signal = TKLFPSignal()
     probe = Probe(elec_coords, [tklfp_signal], save_history=True)
     samp_period = 10 * ms
-    sim.set_io_processor(RecordOnlyProcessor(samp_period / ms))  # record every 10 ms
+    sim.set_io_processor(RecordOnlyProcessor(samp_period))  # record every 10 ms
     sim.inject(
         probe, sgg, tklfp_type="exc" if is_exc else "inh", orientation=orientation
     )
@@ -180,14 +180,14 @@ def test_TKLFP_orientation(rand_seed, is_exc):
     orientation_invert = orientation.copy()
     orientation_invert[:, 2] *= -1
     tklfp = TKLFP(
-        c_mm[:, 0],
-        c_mm[:, 1],
-        -c_mm[:, 2],
+        coords[:, 0] / mm,
+        coords[:, 1] / mm,
+        -coords[:, 2] / mm,
         is_exc,
         elec_coords_mm_invert,
         orientation_invert,
     )
-    tklfp_out = tklfp.compute(i_spk, t_spk / ms, sim.io_processor.t_samp_ms)
+    tklfp_out = tklfp.compute(i_spk, t_spk / ms, sim.io_processor.t_samp / ms)
 
     # not super close--why? inverting z axis could introduce some floating point
     # differences. Also, TKLFPSignal ignores spikes with low contributions
@@ -209,9 +209,9 @@ def test_lfp_signal_to_neo(LFPSignal, n_channels, t, regular_samples):
     sig = LFPSignal()
     probe = Probe(np.random.rand(n_channels, 3) * mm, [sig])
     if regular_samples:
-        sig.t_ms = np.arange(t)
+        sig.t = np.arange(t) * ms
     else:
-        sig.t_ms = np.sort(np.random.rand(t) * t)
+        sig.t = np.sort(np.random.rand(t) * t) * ms
     sig.lfp = np.random.rand(t, n_channels)
     neo_sig = sig.to_neo()
 
@@ -237,7 +237,7 @@ def test_lfp_signal_to_neo(LFPSignal, n_channels, t, regular_samples):
 _base_param_options = [
     ("pop_agg", (True, False)),
     ("amp_func", (wslfp.aussel18, wslfp.mazzoni15_pop)),
-    # ("wslfp_kwargs", ({}, {"tau_ampa_ms": 5})),
+    ("wslfp_kwargs", ({}, {"tau_ampa_ms": 5})),
     ("wslfp_kwargs", ({}, {"tau_gaba_ms": 1})),
     ("wslfp_kwargs", ({}, {"alpha": 1})),
     (
@@ -251,6 +251,7 @@ _base_param_options = [
 ]
 
 
+@pytest.mark.slow
 def test_RWSLFPSignalFromSpikes(rand_seed):
     rng = np.random.default_rng(rand_seed)
     b2.seed(rand_seed)
@@ -270,7 +271,7 @@ def test_RWSLFPSignalFromSpikes(rand_seed):
 
     # cleo setup
     sim = CLSimulator(Network(exc, inh, syn_e2e, syn_i2e))
-    sim.set_io_processor(RecordOnlyProcessor(sample_period_ms=10))
+    sim.set_io_processor(RecordOnlyProcessor(sample_period=10 * ms))
 
     def add_rwslfp_sig(
         pop_agg=True,
@@ -341,8 +342,9 @@ def test_RWSLFPSignalFromSpikes(rand_seed):
                 ), f"{param} variation not yielding different results"
 
 
-@pytest.mark.parametrize("samp_period_ms", [1, 1.4])
-def test_RWSLFPSignalFromPSCs(rand_seed, samp_period_ms):
+@pytest.mark.slow
+@pytest.mark.parametrize("samp_period", [1, 1.4] * ms)
+def test_RWSLFPSignalFromPSCs(rand_seed, samp_period):
     rng = np.random.default_rng(rand_seed)
     b2.seed(rand_seed)
     n_exc = 16
@@ -361,7 +363,7 @@ def test_RWSLFPSignalFromPSCs(rand_seed, samp_period_ms):
 
     # cleo setup
     sim = CLSimulator(Network(exc))
-    sim.set_io_processor(RecordOnlyProcessor(samp_period_ms))
+    sim.set_io_processor(RecordOnlyProcessor(samp_period))
 
     def add_rwslfp_sig(
         pop_agg=True,
@@ -424,7 +426,6 @@ def test_psc_buffer():
     t_buf = [1, 2, 4]  # skipped 3 for some reason; should be [2, 3, 4]
     n_src = 4
     I_buf = np.arange(3)[..., None] + np.arange(n_src)
-    print(I_buf)
     t_eval = 2
     with pytest.warns(match="buffer is unexpected"):
         assert np.all(

@@ -11,6 +11,7 @@ from brian2.units.fundamentalunits import get_dimensions
 
 from cleo.utilities import (
     modify_model_with_eqs,
+    rng,
     uniform_cylinder_rθz,
     xyz_from_rθz,
 )
@@ -83,9 +84,9 @@ def assign_coords_rand_rect_prism(
     unit : Unit, optional
         Brian unit to specify scale implied in limits, by default mm
     """
-    x = (xlim[1] - xlim[0]) * np.random.random(len(neuron_group)) + xlim[0]
-    y = (ylim[1] - ylim[0]) * np.random.random(len(neuron_group)) + ylim[0]
-    z = (zlim[1] - zlim[0]) * np.random.random(len(neuron_group)) + zlim[0]
+    x = (xlim[1] - xlim[0]) * rng.random(len(neuron_group)) + xlim[0]
+    y = (ylim[1] - ylim[0]) * rng.random(len(neuron_group)) + ylim[0]
+    z = (zlim[1] - zlim[0]) * rng.random(len(neuron_group)) + zlim[0]
     assign_xyz(neuron_group, x, y, z, unit)
 
 
@@ -114,10 +115,10 @@ def assign_coords_rand_cylinder(
     xyz_start = np.array(xyz_start)
     xyz_end = np.array(xyz_end)
     # sample uniformly over r**2 for equal area
-    rs = np.sqrt(radius**2 * np.random.random(len(neuron_group)))
-    thetas = 2 * np.pi * np.random.random(len(neuron_group))
+    rs = np.sqrt(radius**2 * rng.random(len(neuron_group)))
+    thetas = 2 * np.pi * rng.random(len(neuron_group))
     cyl_length = np.linalg.norm(xyz_end - xyz_start)
-    z_cyls = cyl_length * np.random.random(len(neuron_group))
+    z_cyls = cyl_length * rng.random(len(neuron_group))
 
     xs, ys, zs = xyz_from_rθz(rs, thetas, z_cyls, xyz_start, xyz_end)
 
@@ -196,9 +197,10 @@ def coords_from_xyz(x: Quantity, y: Quantity, z: Quantity) -> Quantity:
     return (
         np.concatenate(
             [
-                np.reshape(x / meter, (*x.shape, 1)),
-                np.reshape(y / meter, (*y.shape, 1)),
-                np.reshape(z / meter, (*z.shape, 1)),
+                # use [:] to work around VariableView.shape getting parent group shape
+                np.reshape(x / meter, (*x[:].shape, 1)),
+                np.reshape(y / meter, (*y[:].shape, 1)),
+                np.reshape(z / meter, (*z[:].shape, 1)),
             ],
             axis=-1,
         )

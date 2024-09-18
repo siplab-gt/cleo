@@ -5,6 +5,7 @@ tmp/*
 **/tmp/*
 # figures from notebooks not saved by default
 notebooks/img/*
+!notebooks/img/orig/
 notebooks/results/*
 docs/tutorials/*.svg
 

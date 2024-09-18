@@ -2,10 +2,10 @@
 import warnings
 from collections.abc import MutableMapping
 
-import brian2 as b2
+import brian2.only as b2
 import neo
 import quantities as pq
-from brian2 import Quantity, np, second
+from brian2 import Quantity, ms, np, second
 from brian2.equations.equations import (
     DIFFERENTIAL_EQUATION,
     PARAMETER,
@@ -15,8 +15,26 @@ from brian2.equations.equations import (
 from brian2.groups.group import get_dtype
 from matplotlib import pyplot as plt
 
-rng = np.random.default_rng()
-"""supposed to be the central random number generator, but not yet used everywhere"""
+rng: np.random.Generator = np.random.default_rng()
+"""A central random number generator.
+
+Seed is set with :func:`cleo.utilities.set_seed`"""
+
+
+def set_seed(rand_seed: int):
+    """Set the seed for the central random number generator
+
+    Parameters
+    ----------
+    rand_seed : int
+        random seed
+    """
+    new_rng = np.random.default_rng(rand_seed)
+    assert (
+        rng.bit_generator.state["bit_generator"]
+        == new_rng.bit_generator.state["bit_generator"]
+    ), "should be same bit generator type (default PCG64)"
+    rng.bit_generator.state = new_rng.bit_generator.state
 
 
 def times_are_regular(times):
@@ -25,17 +43,17 @@ def times_are_regular(times):
     return np.allclose(np.diff(times), times[1] - times[0])
 
 
-def analog_signal(t_ms, values_no_unit, units="") -> neo.core.basesignal.BaseSignal:
-    if times_are_regular(t_ms):
+def analog_signal(t, values_no_unit, units="") -> neo.core.basesignal.BaseSignal:
+    if times_are_regular(t / ms):
         return neo.AnalogSignal(
             values_no_unit,
-            t_start=t_ms[0] * pq.ms,
+            t_start=t[0] / ms * pq.ms,
             units=units,
-            sampling_period=(t_ms[1] - t_ms[0]) * pq.ms,
+            sampling_period=(t[1] - t[0]) / ms * pq.ms,
         )
     else:
         return neo.IrregularlySampledSignal(
-            t_ms * pq.ms,
+            t / ms * pq.ms,
             values_no_unit,
             units=units,
         )
@@ -89,7 +107,9 @@ def xyz_from_rθz(rs, thetas, zs, xyz_start, xyz_end):
 
     cyl_length = np.sqrt(np.sum((xyz_end - xyz_start) ** 2, axis=-1, keepdims=True))
     assert cyl_length.shape in [(m, 1), (1,)]
-    c = (xyz_end - xyz_start) / cyl_length  # unit vector in direction of cylinder
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        c = (xyz_end - xyz_start) / cyl_length  # unit vector in direction of cylinder
     # in case cyl_length is 0, producing nans
     assert c.shape in [(m, 3), (3,)]
     if c.shape == (m, 3):
@@ -220,7 +240,9 @@ def modify_model_with_eqs(neuron_group, eqs_to_add):
                         )
 
 
-def wavelength_to_rgb(wavelength_nm, gamma=0.8) -> tuple[float, float, float]:
+def wavelength_to_rgb(
+    wavelength: Quantity, gamma: float = 0.8
+) -> tuple[float, float, float]:
     """taken from http://www.noah.org/wiki/Wavelength_to_RGB_in_Python
     This converts a given wavelength of light to an
     approximate RGB color value. The wavelength must be given
@@ -230,7 +252,7 @@ def wavelength_to_rgb(wavelength_nm, gamma=0.8) -> tuple[float, float, float]:
     Based on code by Dan Bruton
     http://www.physics.sfasu.edu/astro/color/spectra.html
     """
-    wavelength = wavelength_nm
+    wavelength /= b2.nmeter
     if wavelength < 380:
         wavelength = 380.0
     if wavelength > 750:
@@ -292,7 +314,12 @@ def style_plots_for_docs(dark=True):
         plt.style.use("default")
     plt.rc("savefig", transparent=False)
     plt.rc("axes.spines", top=False, right=False)
-    plt.rc("font", **{"sans-serif": "Open Sans"})
+    plt.rc(
+        "font",
+        **{
+            "sans-serif": "Open Sans, DejaVu Sans, Bitstream Vera Sans, Computer Modern Sans Serif, Lucida Grande, Verdana, Geneva, Lucid, Arial, Helvetica, Avant Garde, sans-serif"
+        },
+    )
 
 
 def style_plots_for_paper(fontscale=5 / 6):
@@ -314,15 +341,36 @@ def style_plots_for_paper(fontscale=5 / 6):
     plt.rc("savefig", transparent=True, bbox="tight", dpi=300)
     plt.rc("svg", fonttype="none")
     plt.rc("axes.spines", top=False, right=False)
-    plt.rc("font", **{"sans-serif": "Open Sans"})
+    plt.rc(
+        "font",
+        **{
+            "sans-serif": "Open Sans, DejaVu Sans, Bitstream Vera Sans, Computer Modern Sans Serif, Lucida Grande, Verdana, Geneva, Lucid, Arial, Helvetica, Avant Garde, sans-serif"
+        },
+    )
 
 
-def unit_safe_append(q1: Quantity, q2: Quantity, axis=0):
+def unit_safe_append(q1: Quantity, q2: Quantity, axis=None):
     if not b2.have_same_dimensions(q1, q2):
-        raise ValueError("Dimensions must match")
+        raise ValueError("Dimensions (units) must match")
     if isinstance(q1, Quantity):
         assert isinstance(q2, Quantity)
         unit = q1.get_best_unit()
         return np.append(q1 / unit, q2 / unit, axis=axis) * unit
     else:
         return np.append(q1, q2, axis=axis)
+
+
+def unit_safe_round(q: Quantity, decimals):
+    unit = q.get_best_unit()
+    return np.round(q / unit, decimals) * unit
+
+
+def unit_safe_cat(quantities):
+    unit = quantities[0].get_best_unit()
+    return np.concatenate([q / unit for q in quantities]) * unit
+
+
+def unit_safe_allclose(q1: Quantity, q2: Quantity):
+    assert b2.have_same_dimensions(q1, q2)
+    unit = q1.get_best_unit()
+    return np.allclose(q1 / unit, q2 / unit)

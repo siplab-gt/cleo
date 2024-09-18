@@ -30,5 +30,6 @@ class StateVariableSetter(Stimulator):
             Value to update variable to, without unit. The unit
             provided on initialization is automatically multiplied.
         """
+        super().update(ctrl_signal)
         for ng in self.neuron_groups:
             setattr(ng, self.variable_to_ctrl, ctrl_signal * self.unit)
