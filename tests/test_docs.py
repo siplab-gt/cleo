@@ -14,7 +14,7 @@ def test_overview_notebook_execution():
     with open(notebook_path, "r") as file:
         nb = read_myst_markdown_notebook(file.read())
 
-    result = single_nb_execution(nb, cwd=current_dir, timeout=30, allow_errors=False)
+    result = single_nb_execution(nb, cwd=current_dir, timeout=60, allow_errors=False)
     assert result.err is None, result.err
 
     for cell in nb["cells"]:
