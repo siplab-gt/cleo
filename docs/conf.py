@@ -64,6 +64,9 @@ autosectionlabel_prefix_document = True
 nb_execution_mode = "cache"
 nb_execution_excludepatterns = ["tutorials/*"]
 nb_execution_timeout = 120
+myst_enable_extensions = [
+    "dollarmath",
+]
 
 # napoleon_custom_sections = "Visualization Keyword Arguments"
 napoleon_custom_sections = [
