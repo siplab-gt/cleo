@@ -294,6 +294,8 @@ class Light(Stimulator):
     wavelength: Quantity = field(default=473 * nmeter, kw_only=True)
     """light wavelength with unit (usually nmeter)"""
 
+    scan_freq : int = field(default=30, kw_only=True)
+    
     @coords.validator
     def _check_coords(self, attribute, value):
         if len(value.shape) != 2 or value.shape[1] != 3:

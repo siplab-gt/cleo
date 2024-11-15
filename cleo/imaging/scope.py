@@ -11,6 +11,7 @@ from nptyping import NDArray
 
 from cleo.base import Recorder
 
+from cleo.registry import DeviceInteractionRegistry, registry_for_sim
 from cleo.imaging.sensors import Sensor
 from cleo.coords import coords_from_ng
 from cleo.utilities import normalize_coords, rng
@@ -83,6 +84,10 @@ def target_neurons_in_plane(
 
     return i_targets, noise_focus_factor[i_targets], coords_on_plane[i_targets]
 
+'''
+def fov_change_observation(instance, attribute, value):
+    instance.Registry.update_fov(value)
+'''
 
 @define(eq=False)
 class Scope(Recorder):
@@ -146,6 +151,7 @@ class Scope(Recorder):
         factory=list, repr=False, init=False
     )
     """relative expression levels of neurons selected from each injection"""
+    Registry: DeviceInteractionRegistry = None
 
     @property
     def n(self) -> int:
@@ -291,6 +297,8 @@ class Scope(Recorder):
         self.sigma_per_injct.append(sigma_noise)
         self.focus_coords_per_injct.append(focus_coords)
         self.rho_rel_per_injct.append(rho_rel)
+        self.Registry = registry_for_sim(self.sim)
+        self.Registry.update_fov(self.img_width)
 
     def i_targets_for_neuron_group(self, neuron_group):
         """can handle multiple injections into same ng"""
