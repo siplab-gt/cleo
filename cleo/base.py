@@ -26,7 +26,7 @@ from matplotlib.artist import Artist
 from mpl_toolkits.mplot3d import Axes3D
 
 import cleo
-from cleo.registry import registry_for_sim
+from cleo.registry import DeviceInteractionRegistry
 from cleo.utilities import add_to_neo_segment, brian_safe_name, rng, unit_safe_append
 
 
@@ -332,6 +332,12 @@ class CLSimulator(NeoExportable):
     recorders: dict[str, Recorder] = field(factory=dict, init=False, repr=False)
     stimulators: dict[str, Stimulator] = field(factory=dict, init=False, repr=False)
     devices: set[InterfaceDevice] = field(factory=set, init=False)
+    registry: DeviceInteractionRegistry = field(init=False, repr=False)
+
+    @registry.default
+    def _default_registry(self):
+        return DeviceInteractionRegistry(self)
+
     _processing_net_op: NetworkOperation = field(default=None, init=False, repr=False)
     _net_store_name: str = field(default="cleo default", init=False, repr=False)
 
@@ -699,8 +705,7 @@ class SynapseDevice(InterfaceDevice):
         self.synapses[neuron_group.name] = syn
         self.brian_objects.add(syn)
 
-        registry = registry_for_sim(self.sim)
-        registry.register(self, neuron_group)
+        self.sim.registry.register(self, neuron_group)
 
     def modify_model_and_params_for_ng(
         self, neuron_group: NeuronGroup, injct_params: dict

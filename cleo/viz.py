@@ -21,7 +21,6 @@ from matplotlib.artist import Artist
 from mpl_toolkits.mplot3d import Axes3D
 
 from cleo.base import CLSimulator, InterfaceDevice
-from cleo.registry import registry_for_sim
 
 _neuron_alpha = 0.2
 
@@ -297,8 +296,7 @@ def plot(
             for dev in sim.devices:
                 for obj in dev.brian_objects:
                     neuron_groups.discard(obj)
-            registry = registry_for_sim(sim)
-            for obj in registry.brian_objects:
+            for obj in sim.registry.brian_objects:
                 neuron_groups.discard(obj)
             neuron_groups = list(neuron_groups)
         if len(devices) == 0:
