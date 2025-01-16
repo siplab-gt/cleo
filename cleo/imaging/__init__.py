@@ -1,4 +1,5 @@
 """Contains Scope and sensors for two-photon microscopy"""
+
 from cleo.imaging.scope import Scope, target_neurons_in_plane
 from cleo.imaging.sensors import (
     GECI,
@@ -23,4 +24,19 @@ from cleo.imaging.sensors import (
     jgcamp7f,
     jgcamp7s,
     ogb_1,
+)
+from cleo.imaging.s2f import (
+    S2FLightDependentGECI,
+    S2FLightIndependentGECI,
+    S2FModel,
+    S2FSensor,
+    jgcamp8f,
+    jgcamp8m,
+    jgcamp8s,
+    jgcamp7f,
+    xcamp_gf,
+    gcamp6s,
+    gcamp6s_tg,
+    gcamp6f,
+    gcamp6f_tg,
 )

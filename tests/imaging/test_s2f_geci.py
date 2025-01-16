@@ -47,14 +47,15 @@ def test_s2f_model(rand_seed):
     s2f_sensor = S2FLightDependentGECI(
         rise=1.0, decay1=2.0, decay2=0.5, r=0.1,
         Fm=1.0, Ca0=0.5, beta=1.0, F0=0.0, sigma_noise=0.01,
-        light_source=None, spectrum=spectrum
+        spectrum=spectrum
     )
 
     sim = CLSimulator(b2.Network(sgg))
-    sim.inject(s2f_sensor, sgg)
+    s2f_model = S2FModel(sensor=s2f_sensor, neuron_group=sgg)
+    sim.inject(s2f_model, sgg)
 
     # Retrieve initial state
-    dFF = s2f_sensor.get_state()[sgg]
+    dFF = s2f_model.get_state()[sgg]
     assert np.shape(dFF) == (n_nrns,)
     assert np.all(dFF == 0)  # Assuming a zero resting state or modify accordingly
 

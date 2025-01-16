@@ -16,10 +16,10 @@ light_independent_params = [
 @pytest.mark.parametrize("params", light_dependent_params)
 def test_s2f_with_light_dependent_sensor(params):
     # Move the import here to avoid circular imports
-    from imaging.s2f import S2F, LightDependentSensor
+    from cleo.imaging.s2f import S2FModel, S2FLightDependentGECI
 
-    sensor = LightDependentSensor(**params)
-    s2f = S2F(sensor)
+    sensor = S2FLightDependentGECI(**params)
+    s2f = S2FModel(sensor)
 
     spike_times = np.array([0, 50, 100])
     ca_times = np.arange(-100, 500)
@@ -33,10 +33,10 @@ def test_s2f_with_light_dependent_sensor(params):
 @pytest.mark.parametrize("params", light_independent_params)
 def test_s2f_with_light_independent_sensor(params):
     # Move the import here to avoid circular imports
-    from imaging.s2f import S2F, LightIndependentSensor
+    from cleo.imaging.s2f import S2FModel, S2FLightIndependentGECI
 
-    sensor = LightIndependentSensor(**params)
-    s2f = S2F(sensor)
+    sensor = S2FLightIndependentGECI(**params)
+    s2f = S2FModel(sensor)
 
     spike_times = np.array([0, 50, 100])
     ca_times = np.arange(-100, 500)

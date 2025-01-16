@@ -3,9 +3,11 @@ from attrs import define, field, fields_dict, asdict
 from brian2 import Synapses, np, Quantity, NeuronGroup, second, umolar, nmolar
 from cleo.base import SynapseDevice
 
+
 @define(eq=False)
 class NAOMiSensor(SynapseDevice):
     """Base class for NAOMi sensors"""
+
     sigma_noise: float = field(kw_only=True)
     dFF_1AP: float = field(kw_only=True)
     location: str = field(kw_only=True)
@@ -31,6 +33,7 @@ class NAOMiSensor(SynapseDevice):
         """Excitation spectrum, alias for :attr:`spectrum`"""
         return self.spectrum
 
+
 @define(eq=False)
 class NAOMiCalciumModel:
     """Base class for how NAOMi GECI computes calcium concentration."""
@@ -38,11 +41,13 @@ class NAOMiCalciumModel:
     on_pre: str = field(default="", init=False)
     model: str
 
+
 @define(eq=False)
 class NAOMiPreexistingCalcium(NAOMiCalciumModel):
     """Calcium concentration is pre-existing in neuron model."""
 
     model: str = field(default="Ca = Ca_pre : mmolar", init=False)
+
 
 @define(eq=False)
 class NAOMiDynamicCalcium(NAOMiCalciumModel):
@@ -65,17 +70,20 @@ class NAOMiDynamicCalcium(NAOMiCalciumModel):
     def init_syn_vars(self, syn: Synapses) -> None:
         syn.Ca = self.Ca_rest
 
+
 @define(eq=False)
 class NAOMiCalBindingActivationModel:
     """Base class for modeling calcium binding/activation in NAOMi."""
 
     model: str
 
+
 @define(eq=False)
 class NAOMiNullBindingActivation(NAOMiCalBindingActivationModel):
     """Doesn't model binding/activation; goes straight from [Ca2+] to ΔF/F."""
 
     model: str = field(default="CaB_active = Ca: mmolar", init=False)
+
 
 @define(eq=False)
 class NAOMiDoubExpCalBindingActivation(NAOMiCalBindingActivationModel):
@@ -105,17 +113,20 @@ class NAOMiDoubExpCalBindingActivation(NAOMiCalBindingActivationModel):
         syn.b = 0
         syn.beta = 0
 
+
 @define(eq=False)
 class NAOMiExcitationModel:
     """Defines exc_factor in NAOMi."""
 
     model: str
 
+
 @define(eq=False)
 class NAOMiNullExcitation(NAOMiExcitationModel):
     """Models excitation as a constant factor in NAOMi."""
 
     model: str = field(default="exc_factor = 1 : 1", init=False)
+
 
 @define(eq=False)
 class NAOMiGECI(NAOMiSensor):
@@ -176,12 +187,15 @@ class NAOMiGECI(NAOMiSensor):
             params.update(to_add)
         return params
 
-def naomi_geci(
-    doub_exp_conv: bool, pre_existing_cal: bool, **kwparams
-) -> NAOMiGECI:
+
+def naomi_geci(doub_exp_conv: bool, pre_existing_cal: bool, **kwparams) -> NAOMiGECI:
     ExcModel = NAOMiNullExcitation
     CalModel = NAOMiPreexistingCalcium if pre_existing_cal else NAOMiDynamicCalcium
-    BAModel = NAOMiDoubExpCalBindingActivation if doub_exp_conv else NAOMiNullBindingActivation
+    BAModel = (
+        NAOMiDoubExpCalBindingActivation
+        if doub_exp_conv
+        else NAOMiNullBindingActivation
+    )
 
     def init_from_kwparams(cls, **more_kwargs):
         kwparams.update(more_kwargs)
@@ -200,6 +214,7 @@ def naomi_geci(
         bind_act_model=init_from_kwparams(BAModel),
         **kwparams,
     )
+
 
 def _create_naomi_geci_fn(
     name,
@@ -272,7 +287,10 @@ def _create_naomi_geci_fn(
 
     globals()[name] = naomi_geci_fn
 
-_create_naomi_geci_fn("gcamp6f_naomi", 290, 2.7, 25.2, 1.24, 0.735, 76.1251, 0.8535, 98.6173)
+
+_create_naomi_geci_fn(
+    "gcamp6f_naomi", 290, 2.7, 25.2, 1.24, 0.735, 76.1251, 0.8535, 98.6173
+)
 _create_naomi_geci_fn("gcamp6s_naomi", 147, 2.45, 27.2, 1, 1, 54.6943, 0.4526, 68.5461)
 _create_naomi_geci_fn(
     "gcamp3_naomi", 287, 2.52, 12, (3.9 / 2.1) / (13.3 / 4.4), 3.9 / 13.3, 0.05, 1, 1
@@ -299,7 +317,7 @@ _create_naomi_geci_fn(
     3,
     15,
     1,
-    extra_doc= "",
+    extra_doc="",
 )
 _create_naomi_geci_fn("jgcamp7f_naomi", 174, 2.3, 30.2, 0.72, 1.71)
 _create_naomi_geci_fn("jgcamp7s_naomi", 68, 2.49, 40.4, 0.33, 4.96)
