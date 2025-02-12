@@ -2,6 +2,7 @@ from __future__ import annotations
 from attrs import define, field, fields_dict, asdict
 from brian2 import Synapses, np, Quantity, NeuronGroup, second, umolar, nmolar
 from cleo.base import SynapseDevice
+from cleo.utilities import brian_safe_name
 
 
 @define(eq=False)
@@ -157,14 +158,12 @@ class NAOMiGECI(NAOMiSensor):
         return {ng_name: syn.dFF for ng_name, syn in self.synapses.items()}
 
     def __attrs_post_init__(self):
-        self.model = "\n".join(
-            [
-                self.cal_model.model,
-                self.bind_act_model.model,
-                self.exc_model.model,
-                self.fluor_model,
-            ]
-        )
+        self.model = "\n".join([
+            self.cal_model.model,
+            self.bind_act_model.model,
+            self.exc_model.model,
+            self.fluor_model,
+        ])
         self.on_pre = self.cal_model.on_pre
 
     def init_syn_vars(self, syn: Synapses) -> None:
@@ -188,7 +187,7 @@ class NAOMiGECI(NAOMiSensor):
         return params
 
 
-def naomi_geci(doub_exp_conv: bool, pre_existing_cal: bool, **kwparams) -> NAOMiGECI:
+def geci_naomi(doub_exp_conv: bool, pre_existing_cal: bool, **kwparams) -> NAOMiGECI:
     ExcModel = NAOMiNullExcitation
     CalModel = NAOMiPreexistingCalcium if pre_existing_cal else NAOMiDynamicCalcium
     BAModel = (
@@ -260,7 +259,7 @@ def _create_naomi_geci_fn(
         tau_on = second / t_on if t_on else None
         tau_off = second / t_off if t_off else None
 
-        return naomi_geci(
+        return geci_naomi(
             doub_exp_conv,
             pre_existing_cal,
             K_d=K_d,
@@ -285,26 +284,14 @@ def _create_naomi_geci_fn(
 
     naomi_geci_fn.__doc__ += "\n\n" + (" " * 8) + extra_doc
 
-    globals()[name] = naomi_geci_fn
+    globals()[brian_safe_name(name.lower())] = naomi_geci_fn
 
 
 _create_naomi_geci_fn(
-    "gcamp6f_naomi", 290, 2.7, 25.2, 1.24, 0.735, 76.1251, 0.8535, 98.6173
-)
-_create_naomi_geci_fn("gcamp6s_naomi", 147, 2.45, 27.2, 1, 1, 54.6943, 0.4526, 68.5461)
-_create_naomi_geci_fn(
-    "gcamp3_naomi", 287, 2.52, 12, (3.9 / 2.1) / (13.3 / 4.4), 3.9 / 13.3, 0.05, 1, 1
+    "GCaMP3_NAOMi", 287, 2.52, 12, (3.9 / 2.1) / (13.3 / 4.4), 3.9 / 13.3, 0.05, 1, 1
 )
 _create_naomi_geci_fn(
-    "ogb1_naomi",
-    250,
-    1,
-    14,
-    1,
-    extra_doc="",
-)
-_create_naomi_geci_fn(
-    "gcamp6rs09_naomi",
+    "GCaMP6-RS09_NAOMi",
     520,
     3.2,
     25,
@@ -312,14 +299,26 @@ _create_naomi_geci_fn(
     extra_doc="",
 )
 _create_naomi_geci_fn(
-    "gcamp6rs06_naomi",
+    "GCaMP6-RS06_NAOMi",
     320,
     3,
     15,
     1,
     extra_doc="",
 )
-_create_naomi_geci_fn("jgcamp7f_naomi", 174, 2.3, 30.2, 0.72, 1.71)
-_create_naomi_geci_fn("jgcamp7s_naomi", 68, 2.49, 40.4, 0.33, 4.96)
-_create_naomi_geci_fn("jgcamp7b_naomi", 82, 3.06, 22.1, 0.25, 4.64)
-_create_naomi_geci_fn("jgcamp7c_naomi", 298, 2.44, 145.6, 0.39, 1.85)
+_create_naomi_geci_fn(
+    "GCaMP6f_NAOMi", 290, 2.7, 25.2, 1.24, 0.735, 76.1251, 0.8535, 98.6173
+)
+_create_naomi_geci_fn("GCaMP6s_NAOMi", 147, 2.45, 27.2, 1, 1, 54.6943, 0.4526, 68.5461)
+_create_naomi_geci_fn("jGCaMP7b_NAOMi", 82, 3.06, 22.1, 0.25, 4.64)
+_create_naomi_geci_fn("jGCaMP7c_NAOMi", 298, 2.44, 145.6, 0.39, 1.85)
+_create_naomi_geci_fn("jGCaMP7f_NAOMi", 174, 2.3, 30.2, 0.72, 1.71)
+_create_naomi_geci_fn("jGCaMP7s_NAOMi", 68, 2.49, 40.4, 0.33, 4.96)
+_create_naomi_geci_fn(
+    "OGB-1_naomi",
+    250,
+    1,
+    14,
+    1,
+    extra_doc="",
+)
