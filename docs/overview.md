@@ -1,4 +1,5 @@
 ---
+file_format: mystnb
 jupytext:
   text_representation:
     format_name: myst
@@ -71,8 +72,8 @@ Perhaps the biggest change you may have to make to an existing model to make it 
 You'll need your model in a Brian {class}`~brian2.core.network.Network` object before you move on. E.g.,:
 
 ```{code-cell} python
-import brian2 as b2
-ng = b2.NeuronGroup( # a simple population of 100 LIF neurons
+import brian2.only as b2
+ng = b2.NeuronGroup( # a simple population of LIF neurons
     500,
     """dv/dt = (-v - 70*mV + (500*Mohm)*Iopto + 2*xi*sqrt(tau_m)*mvolt) / tau_m : volt
     Iopto : amp""",
@@ -98,7 +99,7 @@ cleo.coords.assign_coords_rand_rect_prism(
 
 Once you have a network model, you can construct a {class}`~cleo.CLSimulator` object:
 
-```{code-cell} ipython3
+```{code-cell} python
 sim = cleo.CLSimulator(net)
 ```
 
@@ -112,7 +113,7 @@ The recorder will only record from the neuron groups specified on injection, all
 Some extremely simple implementations (which do little more than wrap Brian monitors) are available in the {mod}`cleo.recorders` module.
 See the {doc}`tutorials/electrodes` and {doc}`tutorials/all_optical` tutorials for more detail on how to record from a simulation more realistically, but here's a quick example of how to record multi-unit spiking activity with an electrode:
 
-```{code-cell} ipython3
+```{code-cell} python
 # configure and inject a 32-channel shank
 coords = cleo.ephys.linear_shank_coords(
     array_length=1*b2.mm, channel_count=32, start_location=(0, 0, 0.2)*b2.mm
@@ -131,7 +132,7 @@ sim.inject(probe, ng)
 Optogenetics (1P and 2P) is the main stimulation modality currently implemented by Cleo.
 This requires injection of both a light source and an opsin---see the {doc}`tutorials/optogenetics` and {doc}`tutorials/all_optical` tutorials for more detail.
 
-```{code-cell} ipython3
+```{code-cell} python
 fiber = cleo.light.Light(
     coords=(0, 0, 0.5)*b2.mm,
     light_model=cleo.light.fiber473nm(),
@@ -160,17 +161,17 @@ If you are only recording, you may want to use the {class}`~cleo.ioproc.RecordOn
 Otherwise you will want to implement the {class}`~cleo.ioproc.LatencyIOProcessor`, which not only takes samples at the specified rate, but processes the data and delivers input to the network after a user-defined delay, emulating the latency inherent in real experiments.
 This is done by creating a subclass and defining the {meth}`~cleo.ioproc.LatencyIOProcessor.process` function:
 
-```{code-cell} ipython3
+```{code-cell} python
 class MyProcessor(cleo.ioproc.LatencyIOProcessor):
-    def process(self, state_dict, sample_time_ms):
+    def process(self, state_dict, t_samp):
         # state_dict contains a {'recorder_name': value} dict of network.
-        i_spikes, t_ms_spikes, y_spikes = state_dict['Probe']['MultiUnitSpiking']
+        i_spikes, t_spikes, y_spikes = state_dict['Probe']['MultiUnitSpiking']
         # on-off control
-        irr0_mW_per_mm2 = 5 if len(i_spikes) < 10 else 0
+        irr0 = 5 if len(i_spikes) < 10 else 0
         # output is a {'stimulator_name': value} dict and output time
-        return {'Light': irr0_mW_per_mm2}, sample_time_ms + 3  # (3 ms delay)
+        return {'Light': irr0 * b2.mwatt / b2.mm2}, t_samp + 3 * b2.ms  # (3 ms delay)
 
-sim.set_io_processor(MyProcessor(sample_period_ms=1))
+sim.set_io_processor(MyProcessor(sample_period=1 * b2.ms))
 ```
 
 The {doc}`tutorials/on_off_ctrl`, {doc}`tutorials/PI_ctrl`, and {doc}`tutorials/lqr_ctrl_ldsctrlest` tutorials give examples of closed-loop control ranging from simple to complex.
@@ -178,13 +179,14 @@ The {doc}`tutorials/on_off_ctrl`, {doc}`tutorials/PI_ctrl`, and {doc}`tutorials/
 ### Visualization
 {func}`cleo.viz.plot` allows you to easily visualize your experimental configuration:
 
-```{code-cell} ipython3
+```{code-cell} python
 :tags: [remove-cell]
 cleo.utilities.style_plots_for_docs()
-b2.prefs.codegen.target = 'numpy'
+b2.prefs.codegen.target = "numpy"
+b2.defaultclock.dt = 0.5 * b2.ms
 ```
 
-```{code-cell} ipython3
+```{code-cell} python
 cleo.viz.plot(ng, colors=['#c500cc'], sim=sim, zlim=(200, 1000))
 ```
 
@@ -193,10 +195,10 @@ Cleo also features some {doc}`video visualization capabilities <tutorials/video_
 
 ### Running experiments
 
-Use {meth}`cleo.CLSimulator.run` function with the desired duration.
-This wrap's Brian's {meth}`brian2.core.network.Network.run` function:
+Use {meth}`~cleo.CLSimulator.run` function with the desired duration.
+This wrap's Brian's {meth}`~brian2.core.network.Network.run` function:
 
-```{code-cell} ipython3
+```{code-cell} python
 :tags: [hide-output]
 sim.run(50 * b2.ms)  # kwargs are passed to Brian's run function
 ```
@@ -204,16 +206,16 @@ sim.run(50 * b2.ms)  # kwargs are passed to Brian's run function
 Use {meth}`~cleo.CLSimulator.reset` to restore the default state (right after initialization/injection) for the network and all devices.
 This could be useful for running a simulation multiple times under different conditions.
 
-To facilitate access to data after the simulation, devices offer a {attr}`cleo.InterfaceDevice.save_history` option on construction, by default `True`.
+To facilitate access to data after the simulation, devices offer a {attr}`~cleo.InterfaceDevice.save_history` option on construction, by default `True`.
 If true, that object will store relevant variables as attributes.
 For example:
 
-```{code-cell} ipython3
+```{code-cell} python
 import matplotlib.pyplot as plt
 fig, (ax1, ax2) = plt.subplots(2, 1, sharex=True)
-ax1.scatter(mua.t_ms, mua.i, marker='.', c='white', s=2)
+ax1.scatter(mua.t / b2.ms, mua.i, marker='.', c='white', s=2)
 ax1.set(ylabel='channel index', title='spikes')
-ax2.step(fiber.t_ms, fiber.values, c='#72b5f2')
+ax2.step(fiber.t / b2.ms, fiber.values, c='#72b5f2')
 ax2.set(xlabel='time (ms)', ylabel='irradiance (mW/mm²)', title='photostimulation')
 ```
 
@@ -270,7 +272,6 @@ Here are some features which are missing but could be useful to add:
 
 -   Electrode microstimulation
 -   A more accurate LFP signal (only usable for morphological neurons) based on the volume conductor forward model as in [LFPy](https://lfpy.readthedocs.io/en/latest/index.html) or [Vertex](https://github.com/haeste/Vertex_2)
--   The [Mazzoni-Lindén LFP approximation](https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1004584) for LIF point-neuron networks
 -   Voltage indicators
 -   An expanded calcium indicator library---currently the parameter set for the full [NAOMi](https://bitbucket.org/adamshch/naomi_sim/src/master/) model is only available for GCaMP6f.
 The [phenomenological S2F model](https://www.nature.com/articles/s41586-023-05828-9) should be easy to implement and fit to data, has parameters for several of the latest and greatest GECIs (jGCaMP7 and jGCaMP8 varieties), and should be cheaper to simulate as well.

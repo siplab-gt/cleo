@@ -25,8 +25,9 @@ from brian2 import (
 from matplotlib.artist import Artist
 from mpl_toolkits.mplot3d import Axes3D
 
+import cleo
 from cleo.registry import registry_for_sim
-from cleo.utilities import add_to_neo_segment, analog_signal, brian_safe_name
+from cleo.utilities import add_to_neo_segment, brian_safe_name, rng, unit_safe_append
 
 
 class NeoExportable(ABC):
@@ -158,20 +159,20 @@ class IOProcessor(ABC):
     class more useful, since delay handling is already defined.
     """
 
-    sample_period_ms: float = 1
+    sample_period: Quantity = 1 * ms
     """Determines how frequently the processor takes samples"""
 
     latest_ctrl_signal: dict = field(factory=dict, init=False, repr=False)
     """The most recent control signal returned by :meth:`get_ctrl_signals`"""
 
     @abstractmethod
-    def is_sampling_now(self, time) -> bool:
+    def is_sampling_now(self, t_now: Quantity) -> bool:
         """Determines whether the processor will take a sample at this timestep.
 
         Parameters
         ----------
-        time : Brian 2 temporal Unit
-            Current timestep.
+        t_now : Quantity
+            Current time.
 
         Returns
         -------
@@ -180,7 +181,7 @@ class IOProcessor(ABC):
         pass
 
     @abstractmethod
-    def put_state(self, state_dict: dict, sample_time_ms: float) -> None:
+    def put_state(self, state_dict: dict, t_samp: Quantity) -> None:
         """Deliver network state to the :class:`IOProcessor`.
 
         Parameters
@@ -188,19 +189,19 @@ class IOProcessor(ABC):
         state_dict : dict
             A dictionary of recorder measurements, as returned by
             :func:`~cleo.CLSimulator.get_state()`
-        sample_time_ms: float
+        t_samp: Quantity
             The current simulation timestep. Essential for simulating
             control latency and for time-varying control.
         """
         pass
 
     @abstractmethod
-    def get_ctrl_signals(self, query_time_ms: float) -> dict:
+    def get_ctrl_signals(self, t_query: Quantity) -> dict:
         """Get per-stimulator control signal from the :class:`~cleo.IOProcessor`.
 
         Parameters
         ----------
-        query_time_ms : float
+        t_query : Quantity
             Current simulation time.
 
         Returns
@@ -210,16 +211,16 @@ class IOProcessor(ABC):
         """
         pass
 
-    def get_stim_values(self, query_time_ms: float) -> dict:
-        ctrl_signals = self.get_ctrl_signals(query_time_ms)
+    def get_stim_values(self, t_query: Quantity) -> dict:
+        ctrl_signals = self.get_ctrl_signals(t_query)
         self.latest_ctrl_signal.update(ctrl_signals)
         stim_value_conversions = self.preprocess_ctrl_signals(
-            self.latest_ctrl_signal, query_time_ms
+            self.latest_ctrl_signal, t_query
         )
         return ctrl_signals | stim_value_conversions
 
     def preprocess_ctrl_signals(
-        self, latest_ctrl_signals: dict, query_time_ms: float
+        self, latest_ctrl_signals: dict, t_query: Quantity
     ) -> dict:
         """Preprocess control signals as needed to control stimulator waveforms between samples.
 
@@ -235,7 +236,7 @@ class IOProcessor(ABC):
 
         Parameters
         ----------
-        query_time_ms : float
+        t_query : float
             Current simulation time.
 
         Returns
@@ -245,13 +246,14 @@ class IOProcessor(ABC):
         """
         return {}
 
-    def get_intersample_ctrl_signal(self, query_time_ms: float) -> dict:
-        """Get per-stimulator control signal between samples. I.e., for implementing
-        a time-varying waveform based on parameters from the last sample.
-        Such parameters will need to be stored in the :class:`~cleo.IOProcessor`."""
-        return {}
+    def _base_reset(self):
+        """Gets called on :meth:`~cleo.CLSimulator.reset`. The user should not implement this,
+        but rather :meth:`~reset`."""
+        pass
 
     def reset(self, **kwargs) -> None:
+        """Gets called on :meth:`~cleo.CLSimulator.reset`. The user should implement this if
+        their processor has a state that needs to be reset."""
         pass
 
 
@@ -269,28 +271,21 @@ class Recorder(InterfaceDevice):
 class Stimulator(InterfaceDevice, NeoExportable):
     """Device for manipulating the network"""
 
-    value: Any = field(init=False, default=None)
+    value: Any = field(init=False, default=0)
     """The current value of the stimulator device"""
-    default_value: Any = 0
-    """The default value of the device---used on initialization and on :meth:`~reset`"""
-    t_ms: list[float] = field(factory=list, init=False, repr=False)
+    t: Quantity = field(factory=lambda: np.array([]) * ms, init=False, repr=False)
     """Times stimulator was updated, stored if :attr:`~cleo.InterfaceDevice.save_history`"""
     values: list[Any] = field(factory=list, init=False, repr=False)
     """Values taken by the stimulator at each :meth:`~update` call, 
     stored if :attr:`~cleo.InterfaceDevice.save_history`"""
 
     def __attrs_post_init__(self):
-        self.value = self.default_value
-        self._init_saved_vars()
+        self.reset()
 
     def _init_saved_vars(self):
         if self.save_history:
-            if self.sim:
-                t0 = self.sim.network.t / ms
-            else:
-                t0 = 0
-            self.t_ms = [t0]
-            self.values = [self.value]
+            self.t = [] * ms
+            self.values = []
 
     def update(self, ctrl_signal) -> None:
         """Set the stimulator value.
@@ -307,16 +302,20 @@ class Stimulator(InterfaceDevice, NeoExportable):
         """
         self.value = ctrl_signal
         if self.save_history:
-            self.t_ms.append(self.sim.network.t / ms)
+            if self.sim:
+                t = self.sim.network.t
+            else:
+                t = 0 * ms
+            self.t = unit_safe_append(self.t, t)
             self.values.append(self.value)
 
     def reset(self, **kwargs) -> None:
         """Reset the stimulator device to a neutral state"""
-        self.value = self.default_value
         self._init_saved_vars()
+        self.update(0)
 
     def to_neo(self):
-        signal = analog_signal(self.t_ms, self.values, "dimensionless")
+        signal = cleo.utilities.analog_signal(self.t, self.values, "dimensionless")
         signal.name = self.name
         signal.description = "Exported from Cleo stimulator device"
         signal.annotate(export_datetime=datetime.datetime.now())
@@ -406,6 +405,32 @@ class CLSimulator(NeoExportable):
         self.devices.add(device)
         return self
 
+    def _remove(self, device: InterfaceDevice) -> CLSimulator:
+        """Remove device and associated Brian objects from the simulation (UNTESTED).
+
+        Parameters
+        ----------
+        device : InterfaceDevice
+            Device to remove
+
+        Returns
+        -------
+        CLSimulator
+            self
+        """
+        for brian_object in device.brian_objects:
+            if brian_object in self.network.objects:
+                self.network.remove(brian_object)
+        if isinstance(device, Recorder):
+            if device.name in self.recorders:
+                del self.recorders[device.name]
+        if isinstance(device, Stimulator):
+            if device.name in self.stimulators:
+                del self.stimulators[device.name]
+        self.devices.remove(device)
+        self.network.store(self._net_store_name)
+        return self
+
     def get_state(self) -> dict:
         """Return current recorder measurements.
 
@@ -461,10 +486,10 @@ class CLSimulator(NeoExportable):
 
         def communicate_with_io_proc(t):
             # assuming no one will have timesteps shorter than nanoseconds...
-            now_ms = round(t / ms, 6)
-            if io_processor.is_sampling_now(now_ms):
-                io_processor.put_state(self.get_state(), now_ms)
-            stim_values = io_processor.get_stim_values(now_ms)
+            t_now = round(t / ms, 6) * ms
+            if io_processor.is_sampling_now(t_now):
+                io_processor.put_state(self.get_state(), t_now)
+            stim_values = io_processor.get_stim_values(t_now)
             self.update_stimulators(stim_values)
 
         # communication should be at every timestep. The IOProcessor
@@ -504,6 +529,7 @@ class CLSimulator(NeoExportable):
         for device in self.devices:
             device.reset(**kwargs)
         if self.io_processor is not None:
+            self.io_processor._base_reset()
             self.io_processor.reset(**kwargs)
 
     def to_neo(self) -> neo.core.Block:
@@ -641,7 +667,7 @@ class SynapseDevice(InterfaceDevice):
             if "i_targets" in kwparams:
                 raise ValueError("p_expression and i_targets are incompatible")
             p_expression = kwparams.get("p_expression", 1)
-            expr_bool = np.random.rand(neuron_group.N) < p_expression
+            expr_bool = rng.random(neuron_group.N) < p_expression
             i_targets = np.where(expr_bool)[0]
         elif "i_targets" in kwparams:
             i_targets = kwparams["i_targets"]
@@ -668,7 +694,8 @@ class SynapseDevice(InterfaceDevice):
 
         # store at the end, after all checks have passed
         self.source_ngs[neuron_group.name] = source_ng
-        self.brian_objects.add(source_ng)
+        if source_ng is not neuron_group:
+            self.brian_objects.add(source_ng)
         self.synapses[neuron_group.name] = syn
         self.brian_objects.add(syn)
 
@@ -705,7 +732,7 @@ class SynapseDevice(InterfaceDevice):
             A tuple containing an Equations object
             and a parameter dictionary, constructed from :attr:`~model`
             and :attr:`~params`, respectively, with modified names for use
-            in :attr:`~cleo.opto.OptogeneticIntervention.synapses`
+            in :attr:`synapses`
         """
         model = self.model
 

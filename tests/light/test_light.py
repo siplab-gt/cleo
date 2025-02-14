@@ -1,10 +1,11 @@
 import neo
 import pytest
 import quantities as pq
-from brian2 import asarray, mm, mm2, mwatt, nmeter, np, um
+from brian2 import Network, NeuronGroup, asarray, mm, mm2, ms, mwatt, nmeter, np, um
 
-from cleo.light import GaussianEllipsoid, Koehler, Light, LightModel, fiber473nm
-from cleo.utilities import normalize_coords
+import cleo
+from cleo.light import GaussianEllipsoid, KoehlerBeam, Light, LightModel, fiber473nm
+from cleo.utilities import normalize_coords, unit_safe_allclose
 
 
 def rand_coords(rows, squeeze, repr_dist=1 * mm):
@@ -111,8 +112,43 @@ def test_coords():
     assert light.coords.shape == (2, 3)
 
 
+@pytest.mark.parametrize("n_coords", [1, 2])
 @pytest.mark.parametrize(
-    "light_model", [fiber473nm(), GaussianEllipsoid(), Koehler(1 * mm)]
+    "values",
+    [
+        (1, 2) * mwatt,
+        (0.5, 1) * mwatt / mm2,
+        (1 * mwatt, 1 * mwatt / mm2),
+    ],
+)
+def test_light_power_irradiance(n_coords, values):
+    area0 = 2 * mm2
+    light = Light(
+        coords=rand_coords(n_coords, False),
+        light_model=KoehlerBeam(radius=np.sqrt(area0 / np.pi)),
+    )
+    for val in values:
+        light.update(val)
+
+    for i_channel in range(n_coords):
+        # 0 automatically intialized
+        assert unit_safe_allclose(light.power[:, i_channel], [0, 1, 2] * mwatt)
+        assert unit_safe_allclose(
+            light.irradiance[:, i_channel], [0, 1, 2] * mwatt / area0
+        )
+
+    # can update with irradiance or power
+    ng = NeuronGroup(1, "v:1")
+    sim = cleo.CLSimulator(Network(ng))
+    sim.inject(light, ng)
+    light.update(1 * mwatt / mm2)
+    assert np.allclose(light.value, 1)
+    light.update(1 * mwatt)
+    assert np.allclose(light.value, 0.5)
+
+
+@pytest.mark.parametrize(
+    "light_model", [fiber473nm(), GaussianEllipsoid(), KoehlerBeam(1 * mm)]
 )
 @pytest.mark.parametrize(
     "m, squeeze_coords, squeeze_dir",
@@ -164,17 +200,27 @@ def test_viz_params(
     assert len(viz_points) == n_to_plot
 
 
+@pytest.mark.parametrize("two_photon", [True, False])
 @pytest.mark.parametrize("squeeze", [True, False])
 @pytest.mark.parametrize("n_light, n_direction", [(1, 1), (4, 1), (4, 4)])
-def test_light_to_neo(n_light, n_direction, squeeze):
+def test_light_to_neo(n_light, n_direction, squeeze, two_photon):
+    light_model_type = GaussianEllipsoid if two_photon else fiber473nm
     light = Light(
         coords=rand_coords(n_light, squeeze),
         direction=rand_coords(n_direction, squeeze, 1),
-        light_model=fiber473nm(),
+        light_model=light_model_type(),
     )
     t = 5
-    light.t_ms = list(range(t))
+    light.t = list(range(t)) * ms
     light.values = np.random.rand(t, n_light)
+    if two_photon:
+        b2_units = mwatt
+        pq_units = pq.mW
+        light_output = light.power
+    else:
+        b2_units = mwatt / mm2
+        pq_units = pq.mW / pq.mm**2
+        light_output = light.irradiance
     sig = light.to_neo()
 
     assert np.all(sig.array_annotations["x"] / pq.mm == light.coords[..., 0] / mm)
@@ -186,9 +232,10 @@ def test_light_to_neo(n_light, n_direction, squeeze):
     assert np.all(sig.array_annotations["direction_z"] == light.direction[..., 2])
 
     assert np.all(sig.array_annotations["i_channel"] == np.arange(light.n))
-    assert np.all(sig.magnitude == light.values)
+    assert np.all(sig / pq_units == light_output / b2_units)
+    assert np.all(sig.times / pq.ms == light.t / ms)
     assert sig.name == light.name
 
 
 if __name__ == "__main__":
-    pytest.main(["-xs", __file__])
+    pytest.main(["-x", __file__])

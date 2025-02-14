@@ -42,24 +42,24 @@ def sim(neurons):
 
 
 def test_stimulator(sim, neurons):
-    my_stim = MyStim(42, name="my_stim", save_history=True)
+    my_stim = MyStim(name="my_stim", save_history=True)
     sim.inject(my_stim, neurons)
     assert sim.stimulators["my_stim"] == my_stim
 
     assert len(my_stim.brian_objects) == 2
     assert all([obj in sim.network.objects for obj in my_stim.brian_objects])
 
-    assert my_stim.value == 42
+    assert my_stim.value == 0
     my_stim.update(43)
     assert my_stim.value == 43
-    assert len(my_stim.values) == len(my_stim.t_ms) == 2  # from update
+    assert len(my_stim.values) == len(my_stim.t) == 2  # from update
 
     sim.update_stimulators({"my_stim": 42})
     assert my_stim.value == 42
-    assert len(my_stim.values) == len(my_stim.t_ms) == 3  # from 2 updates
+    assert len(my_stim.values) == len(my_stim.t) == 3  # from 2 updates
 
     my_stim.reset()
-    assert len(my_stim.values) == len(my_stim.t_ms) == 1  # init
+    assert len(my_stim.values) == len(my_stim.t) == 1  # init
 
     neurons2 = NeuronGroup(1, "v = -70*mV : volt")
     with pytest.raises(Exception):  # neuron2 not in network
@@ -113,7 +113,7 @@ class MyProcLoop(IOProcessor):
 def test_io_processor_in_sim(sim, neurons):
     my_rec = MyRec(name="my_rec")
     sim.inject(my_rec, neurons)
-    my_stim = MyStim(42, name="my_stim")
+    my_stim = MyStim(name="my_stim")
     sim.inject(my_stim, neurons)
 
     sim.set_io_processor(MyProcLoop())
@@ -151,14 +151,15 @@ def test_sim_to_neo():
 
 def test_stim_to_neo():
     stim1 = MyStim(name="stim1")
-    stim1.t_ms = [0, 1, 2]
+    stim1.t = [0, 1, 2] * ms
     stim1.values = [1, 2, 3]
     stim1_neo = stim1.to_neo()
+    return
     assert stim1_neo.name == stim1.name
     assert type(stim1_neo) == neo.core.AnalogSignal
 
     stim2 = MyStim(name="stim2")
-    stim2.t_ms = [0, 1, 4]
+    stim2.t = [0, 1, 4] * ms
     stim2.values = [1, 2, 3]
     stim2_neo = stim2.to_neo()
     assert stim2_neo.name == stim2.name

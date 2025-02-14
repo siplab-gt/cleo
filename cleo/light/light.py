@@ -4,7 +4,7 @@ from __future__ import annotations
 import datetime
 import warnings
 from abc import ABC, abstractmethod
-from typing import Any, Union
+from typing import Any
 
 import matplotlib as mpl
 import quantities as pq
@@ -22,10 +22,10 @@ from brian2.units import (
     nmeter,
     um,
 )
+from jaxtyping import Float
 from matplotlib import colors
 from matplotlib.artist import Artist
 from matplotlib.collections import PathCollection
-from nptyping import NDArray
 
 from cleo.base import CLSimulator
 from cleo.coords import coords_from_xyz
@@ -48,26 +48,32 @@ class LightModel(ABC):
     def transmittance(
         self,
         source_coords: Quantity,
-        source_direction: NDArray[(Any, 3), Any],
+        source_direction: Float[np.ndarray, "*sources 3"],
         target_coords: Quantity,
-    ) -> NDArray[(Any, Any), float]:
-        """Output must be between 0 and 1 with shape (n_sources, n_targets)."""
+    ) -> Float[np.ndarray, "*sources n_targets"]:
+        """Output must be between 0 and 1 with shape (\\*sources, n_targets)."""
         pass
 
     @abstractmethod
     def viz_params(
         self,
         coords: Quantity,
-        direction: NDArray[(Any, 3), Any],
+        direction: Float[np.ndarray, "*sources 3"],
         T_threshold: float,
         n_points_per_source: int = None,
         **kwargs,
-    ) -> tuple[NDArray[(Any, Any, 3), Any], float, float]:
+    ) -> tuple[Quantity, Quantity, float]:
         """Returns info needed for visualization.
-        Output is ((m, n_points_per_source, 3) viz_points array, markersize_um, intensity_scale).
+        Output is ((\\*sources, n_points_per_source, 3) viz_points array, markersize, intensity_scale).
 
-        For best-looking results, implementations should scale `markersize_um` and `intensity_scale`.
+        For best-looking results, implementations should scale `markersize` and `intensity_scale`.
         """
+        pass
+
+    @property
+    @abstractmethod
+    def area0(self) -> Quantity:
+        """The area of the light source(s), used to convert between power and irradiance."""
         pass
 
     def _get_rz_for_xyz(self, source_coords, source_direction, target_coords):
@@ -129,12 +135,16 @@ class OpticFiber(LightModel):
     def transmittance(
         self,
         source_coords: Quantity,
-        source_dir_uvec: NDArray[(Any, 3), Any],
+        source_dir_uvec: Float[np.ndarray, "*sources 3"],
         target_coords: Quantity,
-    ) -> NDArray[(Any, Any), float]:
+    ) -> Float[np.ndarray, "*sources n_targets"]:
         assert np.allclose(np.linalg.norm(source_dir_uvec, axis=-1), 1)
         r, z = self._get_rz_for_xyz(source_coords, source_dir_uvec, target_coords)
         return self._Foutz12_transmittance(r, z)
+
+    @property
+    def area0(self) -> Quantity:
+        return np.pi * self.R0**2
 
     def _Foutz12_transmittance(self, r, z, scatter=True, spread=True, gaussian=True):
         """Foutz et al. 2012 transmittance model: Gaussian cone with Kubelka-Munk propagation.
@@ -173,7 +183,7 @@ class OpticFiber(LightModel):
     def viz_params(
         self,
         coords: Quantity,
-        direction: NDArray[(Any, 3), Any],
+        direction: Float[np.ndarray, "*sources 3"],
         T_threshold: float,
         n_points_per_source: int = 4000,
         **kwargs,
@@ -185,9 +195,9 @@ class OpticFiber(LightModel):
         x, y, z = xyz_from_rθz(r, theta, zc, coords, end)
         density_factor = 3
         cyl_vol = np.pi * r_thresh**2 * zc_thresh
-        markersize_um = (cyl_vol / n_points_per_source * density_factor) ** (1 / 3) / um
+        markersize = (cyl_vol / n_points_per_source * density_factor) ** (1 / 3)
         intensity_scale = 1.5 * (4e3 / n_points_per_source) ** (1 / 3)
-        return coords_from_xyz(x, y, z), markersize_um, intensity_scale
+        return coords_from_xyz(x, y, z), markersize, intensity_scale
 
     def _find_rz_thresholds(self, thresh):
         """find r and z thresholds for visualization purposes"""
@@ -229,7 +239,7 @@ def fiber473nm(
 
 
 @define
-class Koehler(LightModel):
+class KoehlerBeam(LightModel):
     """Even illumination over a circular area, with no scattering."""
 
     radius: Quantity
@@ -255,9 +265,21 @@ class Koehler(LightModel):
         x, y, z = xyz_from_rθz(r, theta, zc, coords, end)
         density_factor = 2
         cyl_vol = np.pi * self.radius**2 * self.zmax
-        markersize_um = (cyl_vol / n_points_per_source * density_factor) ** (1 / 3) / um
+        markersize = (cyl_vol / n_points_per_source * density_factor) ** (1 / 3)
         intensity_scale = (1 / n_points_per_source) ** (1 / 3)
-        return coords_from_xyz(x, y, z), markersize_um, intensity_scale
+        return coords_from_xyz(x, y, z), markersize, intensity_scale
+
+    @property
+    def area0(self) -> Quantity:
+        return np.pi * self.radius**2
+
+
+def _is_power(q: Quantity) -> bool:
+    return q.has_same_dimensions(mwatt)
+
+
+def _is_irr(q: Quantity) -> bool:
+    return q.has_same_dimensions(mwatt / mm2)
 
 
 @define(eq=False)
@@ -304,7 +326,7 @@ class Light(Stimulator):
                 "coordinates for n contact locations."
             )
 
-    direction: NDArray[(Any, 3), Any] = field(
+    direction: Float[np.ndarray, "*sources 3"] = field(
         default=(0, 0, 1), converter=normalize_coords
     )
     """(x, y, z) vector specifying direction in which light
@@ -312,28 +334,22 @@ class Light(Stimulator):
     
     Will be converted to unit magnitude."""
 
-    max_Irr0_mW_per_mm2: float = field(default=None, kw_only=True)
-    """The maximum irradiance the light source can emit.
+    max_value: Quantity = field(default=None, kw_only=True)
+    """The maximum value (power or irradiance) the light source can emit.
     
     Usually determined by hardware in a real experiment."""
 
-    max_Irr0_mW_per_mm2_viz: float = field(default=None, kw_only=True)
-    """Maximum irradiance for visualization purposes. 
+    max_value_viz: Quantity = field(default=None, kw_only=True)
+    """Maximum value (power or irradiance) for visualization purposes. 
     
     i.e., the level at or above which the light appears maximally bright.
     Only relevant in video visualization.
     """
 
-    default_value: NDArray[(Any,), float] = field(kw_only=True, repr=False)
-
-    @default_value.default
-    def _default_default(self):
-        return np.zeros(self.n)
-
     @property
     def color(self):
         """Color of light"""
-        return wavelength_to_rgb(self.wavelength / nmeter)
+        return wavelength_to_rgb(self.wavelength)
 
     def transmittance(self, target_coords) -> np.ndarray:
         """Returns :attr:`light_model` transmittance given light's coords and direction."""
@@ -365,8 +381,30 @@ class Light(Stimulator):
     @property
     def source(self) -> Subgroup:
         """Returns the "neuron(s)" representing the light source(s)."""
+        if self.sim is None:
+            return None
         registry = registry_for_sim(self.sim)
         return registry.source_for_light(self)
+
+    @property
+    def irradiance(self) -> Quantity:
+        """Returns history of light irradiance with units."""
+        return self.values * mwatt / mm2
+
+    @property
+    def irradiance_(self) -> Quantity:
+        """Returns history of light irradiance without units (/(mwatt/mm2))."""
+        return self.irradiance / (mwatt / mm2)
+
+    @property
+    def power(self) -> Quantity:
+        """Returns history of light power with units."""
+        return self.irradiance * self.light_model.area0
+
+    @property
+    def power_(self) -> Quantity:
+        """Returns history of light power without units (/mwatt)."""
+        return self.power / mwatt
 
     def add_self_to_plot(self, ax, axis_scale_unit, **kwargs) -> list[PathCollection]:
         # show light with point field, assigning r and z coordinates
@@ -378,7 +416,7 @@ class Light(Stimulator):
             kwargs["n_points_per_source"] = kwargs.pop("n_points")
         T_threshold = kwargs.pop("T_threshold", 1e-3)
 
-        viz_points, markersize_um, intensity_scale = self.light_model.viz_params(
+        viz_points, markersize, intensity_scale = self.light_model.viz_params(
             self.coords,
             self.direction,
             T_threshold,
@@ -394,7 +432,7 @@ class Light(Stimulator):
         pt_per_in = 72
         biggest_dim_pt = biggest_dim_pixels / dpi * pt_per_in
 
-        biggest_dim_um = (
+        biggest_dim = (
             max(
                 [
                     ax.get_xlim()[1] - ax.get_xlim()[0],
@@ -403,10 +441,9 @@ class Light(Stimulator):
                 ]
             )
             * axis_scale_unit
-            / um
         )
 
-        markersize_pt = markersize_um / biggest_dim_um * biggest_dim_pt
+        markersize_pt = markersize / biggest_dim * biggest_dim_pt
         markerarea = markersize_pt**2
 
         T = self.light_model.transmittance(self.coords, self.direction, viz_points)
@@ -436,8 +473,8 @@ class Light(Stimulator):
                 point_cloud.set_rasterized(kwargs.get("rasterized", True))
             point_clouds.append(point_cloud)
 
-        handles = ax.get_legend().legendHandles
-        c = wavelength_to_rgb(self.wavelength / nmeter)
+        handles = ax.get_legend().legend_handles
+        c = wavelength_to_rgb(self.wavelength)
         opto_patch = mpl.patches.Patch(color=c, label=self.name)
         handles.append(opto_patch)
         ax.legend(handles=handles)
@@ -447,24 +484,25 @@ class Light(Stimulator):
     def update_artists(
         self, artists: list[Artist], value, *args, **kwargs
     ) -> list[Artist]:
+        value *= mwatt / mm2
         assert len(artists) == self.n
-        if self.max_Irr0_mW_per_mm2_viz is not None:
-            max_Irr0 = self.max_Irr0_mW_per_mm2_viz
-        elif self.max_Irr0_mW_per_mm2 is not None:
-            max_Irr0 = self.max_Irr0_mW_per_mm2
+        if self.max_value_viz is not None:
+            max_val = self.max_value_viz
+        elif self.max_value is not None:
+            max_val = self.max_value
         else:
             raise Exception(
-                f"Light'{self.name}' needs max_Irr0_mW_per_mm2_viz "
-                "or max_Irr0_mW_per_mm2 "
-                "set to visualize light intensity."
+                f"Light'{self.name}' needs max_value_viz "
+                "or max_value set to visualize light intensity."
             )
+        max_val = self._val_same_unit_as(max_val, value)
 
         updated_artists = []
         for point_cloud, source_value in zip(artists, value):
             prev_value = getattr(point_cloud, "_prev_value", None)
             if source_value != prev_value:
                 intensity = (
-                    source_value / max_Irr0 if source_value <= max_Irr0 else max_Irr0
+                    source_value / max_val if source_value <= max_val else max_val
                 )
                 point_cloud.set_cmap(self._alpha_cmap_for_wavelength(intensity))
                 updated_artists.append(point_cloud)
@@ -472,42 +510,74 @@ class Light(Stimulator):
 
         return updated_artists
 
-    def update(self, value: Union[float, np.ndarray]) -> None:
-        """Set the light intensity, in mW/mm2 (without unit) for 1P
-        excitation or laser power (mW) for 2P excitation (GaussianEllipsoid light model).
-
-        Parameters
-        ----------
-        Irr0_mW_per_mm2 : float
-            Desired light intensity for light source
-        """
-        if type(value) != np.ndarray:
-            value = np.array(value).reshape((-1,))
-        if value.shape not in [(), (1,), (self.n,)]:
+    def _preprocess_value(self, value: Quantity) -> Quantity:
+        """ensures value is a 1D, n-length Quantity of proper units"""
+        if isinstance(value, (int, float)) and value == 0:
+            value = 0 * mwatt / mm2
+        elif not isinstance(value, Quantity):
+            raise ValueError(
+                f"Input to light must be a Quantity. Got {type(value)} instead."
+            )
+        if np.shape(value) not in [(), (1,), (self.n,)]:
             raise ValueError(
                 f"Input to light must be a scalar or an array of"
                 f" length {self.n}. Got {value.shape} instead."
             )
-        if type(self.light_model) == "GaussianEllipsoid":
-            # 10 microns, on upper end of what's used as spot size in Ronzitti et al., 2017
-            # Irr0 = P / spot_area, as in Ronzitti et al., 2017
-            cell_radius = 0.010  # mm
-            cell_area = np.pi * cell_radius**2
-            Irr0_mW_per_mm2 = value / cell_area
+        if len(np.shape(value)) == 0:
+            unit = value.get_best_unit()
+            value = np.broadcast_to(value / unit, (self.n,)) * unit
+        if not (_is_power(value) or _is_irr(value)):
+            raise ValueError(
+                f"Input to light must be in units of power or irradiance."
+                f" Got {value.dim} instead."
+            )
+        return value
+
+    def _val_same_unit_as(self, value: Quantity, target: Quantity) -> Quantity:
+        if value.has_same_dimensions(target):
+            return value
+        elif _is_power(value) and _is_irr(target):
+            return value / self.light_model.area0
+        elif _is_irr(value) and _is_power(target):
+            return value * self.light_model.area0
         else:
-            Irr0_mW_per_mm2 = value
-        if np.any(Irr0_mW_per_mm2 < 0):
-            warnings.warn(f"{self.name}: negative light intensity Irr0 clipped to 0")
-            Irr0_mW_per_mm2[Irr0_mW_per_mm2 < 0] = 0
-        if self.max_Irr0_mW_per_mm2 is not None:
-            Irr0_mW_per_mm2[
-                Irr0_mW_per_mm2 > self.max_Irr0_mW_per_mm2
-            ] = self.max_Irr0_mW_per_mm2
-        super(Light, self).update(Irr0_mW_per_mm2)
-        self.source.Irr0 = Irr0_mW_per_mm2 * mwatt / mm2
+            raise ValueError(
+                f"value and target must both be power or irradiance. "
+                f"Got {value.dim} and {target.dim} instead."
+            )
+
+    def update(self, value: Quantity) -> None:
+        """Set the light power or irradiance. The units of the input value
+        determine which.
+
+        Parameters
+        ----------
+        value : Quantity
+            The light irradiance (mW/mm^2) or power (mW). If a scalar, it will be
+            broadcast to all sources. If an array, it must be the same shape
+            as the number of sources.
+        """
+        value = self._preprocess_value(value)
+        if np.any(value < 0):
+            warnings.warn(f"{self.name}: negative light value clipped to 0")
+            value[value < 0] = 0
+        if self.max_value is not None:
+            max_val = self._val_same_unit_as(self.max_value, value)
+            value[value > max_val] = max_val
+
+        if _is_power(value):
+            irr0 = value / self.light_model.area0
+        else:
+            assert _is_irr(value)
+            irr0 = value
+
+        # values are stored as irradiance with mW/mm2 stripped
+        super(Light, self).update(irr0 / (mwatt / mm2))
+        if self.source is not None:
+            self.source.Irr0 = irr0
 
     def _alpha_cmap_for_wavelength(self, intensity):
-        c = wavelength_to_rgb(self.wavelength / nmeter)
+        c = wavelength_to_rgb(self.wavelength)
         c_dimmest = (*c, 0)
         alpha_max = 0.6
         alpha_brightest = alpha_max * intensity
@@ -520,7 +590,13 @@ class Light(Stimulator):
         )
 
     def to_neo(self):
-        signal = analog_signal(self.t_ms, self.values, "mW/mm**2")
+        if type(self.light_model).__name__ == "GaussianEllipsoid":
+            values = self.power_
+            unit = "mW"
+        else:
+            values = self.irradiance_
+            unit = "mW/mm**2"
+        signal = analog_signal(self.t, values, unit)
         signal.name = self.name
         signal.description = "Exported from Cleo Light device"
         signal.annotate(export_datetime=datetime.datetime.now())

@@ -15,17 +15,15 @@ from brian2 import (
 from brian2.units import (
     Quantity,
     amp,
-    cm2,
     mM,
     mm2,
     ms,
-    msiemens,
     mV,
+    mwatt,
     nsiemens,
     pcoulomb,
     psiemens,
     second,
-    umeter,
     volt,
 )
 from brian2.units.allunits import radian
@@ -65,22 +63,6 @@ class MarkovOpsin(Opsin):
         factory=lambda: [("Iopto", amp), ("v", volt)],
         init=False,
     )
-
-
-@implementation(
-    "cython",
-    """
-    cdef double f_unless_x0(double f, double x, double f_when_x0):
-        if x == 0:
-            return f_when_x0
-        else:
-            return f
-    """,
-)
-@check_units(f=1, x=volt, f_when_0=1, result=1)
-def f_unless_x0(f, x, f_when_x0):
-    f[x == 0] = f_when_x0
-    return f
 
 
 @define(eq=False)
@@ -129,20 +111,16 @@ class FourStateOpsin(MarkovOpsin):
         Gb = kb*Hq + Gb0 : hertz
 
         fphi = O1 + gamma*O2 : 1
-        # v1/v0 when v-E == 0 via l'Hopital's rule
-        fv = f_unless_x0(
-            (1 - exp(-(V_VAR_NAME_post-E)/v0)) / ((V_VAR_NAME_post-E)/v1),
-            V_VAR_NAME_post - E,
-            v1/v0
-        ) : 1
+        fv_timesVminusE = v1 * (1 - exp(-(V_VAR_NAME_post - E) / v0)) : volt
 
-        IOPTO_VAR_NAME_post = -g0*fphi*fv*(V_VAR_NAME_post-E)*rho_rel : ampere (summed)
+        IOPTO_VAR_NAME_post = -g0 * fphi * fv_timesVminusE * rho_rel : ampere (summed)
         rho_rel : 1""",
     )
-
-    extra_namespace: dict[str, Any] = field(
-        init=False, factory=lambda: {"f_unless_x0": f_unless_x0}
-    )
+    """fv as described in Evans et al., 2016 can give us problems when we divide by zero.
+    Specifically, when v - E = 0, we need to use l'Hopital's rule to find the limit of fv.
+    This is v1/v0. However...to make things simpler, we see that the (v-E) term cancels
+    out with the same term in the I_post term.
+    """
 
     def init_syn_vars(self, opto_syn: Synapses) -> None:
         for varname, value in {"C1": 1, "O1": 0, "O2": 0}.items():
@@ -275,14 +253,13 @@ class ProportionalCurrentOpsin(Opsin):
 
     I_per_Irr: Quantity = field(kw_only=True)
     """ How much current (in amps or unitless, depending on neuron model)
-    to deliver per mW/mm2.
+    to deliver (must include per unit irradiance).
     """
     # would be IOPTO_UNIT but that throws off Equation parsing
     model: str = field(
         init=False,
         default="""
-            IOPTO_VAR_NAME_post = I_per_Irr / (mwatt / mm2) 
-                * Irr_pre * rho_rel : IOPTO_UNIT (summed)
+            IOPTO_VAR_NAME_post = I_per_Irr * Irr_pre * rho_rel : IOPTO_UNIT (summed)
             rho_rel : 1
         """,
     )
@@ -290,8 +267,9 @@ class ProportionalCurrentOpsin(Opsin):
     required_vars: list[Tuple[str, Unit]] = field(factory=list, init=False)
 
     def __attrs_post_init__(self):
-        if isinstance(self.I_per_Irr, Quantity):
-            Iopto_unit = get_unit(self.I_per_Irr.dim)
+        I_per_mW_per_mm2 = self.I_per_Irr * (mwatt / mm2)
+        if isinstance(I_per_mW_per_mm2, Quantity):
+            Iopto_unit = get_unit(I_per_mW_per_mm2.dim)
         else:
             Iopto_unit = radian
         self.per_ng_unit_replacements = [("IOPTO_UNIT", Iopto_unit.name)]

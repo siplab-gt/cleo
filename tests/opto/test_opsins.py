@@ -3,6 +3,7 @@ from brian2 import (
     Network,
     NeuronGroup,
     meter,
+    mm2,
     ms,
     mV,
     mwatt,
@@ -207,7 +208,8 @@ def test_opto_reset(opsin, neurons, neurons2):
 def _prep_simple_opsin(ng_model, gain):
     ng = NeuronGroup(1, ng_model)
     assign_coords_grid_rect_prism(ng, (0, 0), (0, 0), (0, 0), shape=(1, 1, 1))
-    opsin = ProportionalCurrentOpsin(I_per_Irr=gain)
+    with pytest.warns(UserWarning, match="No spectrum provided.*Assuming ε = 1"):
+        opsin = ProportionalCurrentOpsin(I_per_Irr=gain)
     sim = CLSimulator(Network(ng))
     sim.inject(opsin, ng)
     return ng, opsin, sim
@@ -218,12 +220,12 @@ def test_simple_opsin_unitless():
     ng_model = "dv/dt = (-v + Iopto) / (10*ms) : 1"
     # since Iopto not in model
     with pytest.raises(BrianObjectException):
-        ng, opsin, sim = _prep_simple_opsin(ng_model, 1)
+        ng, opsin, sim = _prep_simple_opsin(ng_model, 1 / (mwatt / mm2))
 
     ng_model += "\n Iopto : 1"
-    ng, opsin, sim = _prep_simple_opsin(ng_model, 1)
+    ng, opsin, sim = _prep_simple_opsin(ng_model, 1 / (mwatt / mm2))
 
-    opsin.source_ngs[ng.name].Irr = 1 * mwatt / meter**2
+    opsin.source_ngs[ng.name].Irr = 1 * mwatt / mm2
     sim.run(1 * ms)
     assert ng.v > 0
 
@@ -233,11 +235,11 @@ def test_simple_opsin_amps():
     ng_model = "dv/dt = (-v + 50*Mohm * Iopto) / (10*ms) : volt"
     # since Iopto not in model
     with pytest.raises(BrianObjectException):
-        ng, opsin, sim = _prep_simple_opsin(ng_model, 1 * namp)
+        ng, opsin, sim = _prep_simple_opsin(ng_model, 1 * namp / (mwatt / mm2))
 
     ng_model += "\n Iopto : ampere"
-    ng, opsin, sim = _prep_simple_opsin(ng_model, 1 * namp)
-    opsin.source_ngs[ng.name].Irr = 1 * mwatt / meter**2
+    ng, opsin, sim = _prep_simple_opsin(ng_model, 1 * namp / (mwatt / mm2))
+    opsin.source_ngs[ng.name].Irr = 1 * mwatt / mm2
     sim.run(1 * ms)
     assert ng.v > 0
 
@@ -255,7 +257,7 @@ def test_opto_syn_var_name_conflict(opsin):
     ng, sim = _prep_markov_opto(
         """
         dHp/dt = 0*Hz : 1  # diff eq
-        dfv/dt = 0*Hz : 1
+        dfv_timesVminusE/dt = 0*Hz : 1
         Ga1 = O1*Hz : hertz  # constant
         O1 : 1
         dv/dt = 0*mV/ms : volt
@@ -264,8 +266,8 @@ def test_opto_syn_var_name_conflict(opsin):
         opsin,
     )
     opto_syn_vars = opsin.synapses[ng.name].equations.names
-    for var in ["Hp", "fv", "Ga1", "O1"]:
-        assert not var in opto_syn_vars
+    for var in ["Hp", "fv_timesVminusE", "Ga1", "O1"]:
+        assert var not in opto_syn_vars
         assert f"{var}_syn" in opto_syn_vars
     sim.run(0.1 * ms)
 

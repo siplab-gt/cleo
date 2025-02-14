@@ -21,3 +21,4 @@ from cleo.base import (
     Stimulator,
     SynapseDevice,
 )
+from cleo.ioproc import LatencyIOProcessor

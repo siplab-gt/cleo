@@ -1,15 +1,16 @@
-from brian2 import np, um, NeuronGroup, Network, meter
 import pytest
+import quantities as pq
+from brian2 import Network, NeuronGroup, meter, ms, np, um
 
 import cleo
+from cleo.coords import assign_coords_rand_rect_prism, assign_xyz
 from cleo.imaging import (
     Scope,
+    Sensor,
     # UniformGaussianNoise,
     gcamp6f,
     target_neurons_in_plane,
-    Sensor,
 )
-from cleo.coords import assign_xyz, assign_coords_rand_rect_prism
 
 
 def test_scope():
@@ -121,6 +122,42 @@ def test_target_neurons_in_plane(rand_seed):
     assert len(i_targets_membrane) == len(i_targets)  # since 0 is cutoff
 
     # TODO: random rotations
+
+
+@pytest.mark.parametrize("regular", [True, False])
+def test_scope_to_neo(regular):
+    scope = Scope(
+        focus_depth=200 * um,
+        img_width=500 * um,
+        sensor=gcamp6f(),
+    )
+    scope.t = [1, 2, 3, 4 + regular * 0.1] * ms
+    scope.dFF = [[0, 1, 2], [2, 3, 4], [4, 5, 6], [9, 8, 7]]
+
+    sig = scope.to_neo()
+    assert np.all(sig.times / pq.ms == scope.t / ms)
+    assert np.all(sig == scope.dFF)
+
+    assert sig.annotations["sensor"] == scope.sensor.name
+    assert np.all(sig.annotations["scope_direction"] == scope.direction)
+    assert np.all(sig.annotations["scope_location"] == scope.location)
+    assert sig.annotations["focus_depth"] / pq.um == scope.focus_depth / um
+    assert sig.annotations["img_width"] / pq.um == scope.img_width / um
+
+    for key in ["dFF_1AP", "x", "y", "z", "i_roi"]:
+        assert key not in sig.array_annotations
+
+    scope.i_targets_per_injct = [[0, 1], [2]]
+    scope.focus_coords_per_injct = [[[1, 2, 3], [4, 5, 6]] * um, [[7, 8, 9]] * um]
+    scope.rho_rel_per_injct = [[0.9, 0.8], [0.7]]
+    sig = scope.to_neo()
+
+    print(sig.array_annotations)
+    assert np.all(sig.array_annotations["dFF_1AP"] == scope.dFF_1AP)
+    assert np.all(sig.array_annotations["x"] / pq.um == scope.focus_coords[:, 0] / um)
+    assert np.all(sig.array_annotations["y"] / pq.um == scope.focus_coords[:, 1] / um)
+    assert np.all(sig.array_annotations["z"] / pq.um == scope.focus_coords[:, 2] / um)
+    assert np.all(sig.array_annotations["i_roi"] == np.arange(scope.n))
 
 
 if __name__ == "__main__":

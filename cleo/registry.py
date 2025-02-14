@@ -7,9 +7,8 @@ from __future__ import annotations
 from typing import Tuple
 
 from attrs import define, field
-from brian2 import NeuronGroup, Subgroup, Synapses
-from brian2 import defaultclock
-from brian2.units.allunits import joule, kgram, meter, meter2, nmeter, second
+from brian2 import NeuronGroup, Subgroup, Synapses, defaultclock
+from brian2.units.allunits import joule, kgram, meter, meter2, second
 from numpy import pi
 
 from cleo.coords import coords_from_ng
@@ -107,7 +106,7 @@ class DeviceInteractionRegistry:
         ValueError
             if the connection has already been made
         """
-        epsilon = ldd.epsilon(light.wavelength / nmeter)
+        epsilon = ldd.epsilon(light.wavelength)
         if epsilon == 0:
             return
 
