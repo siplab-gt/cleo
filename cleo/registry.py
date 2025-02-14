@@ -7,11 +7,14 @@ from __future__ import annotations
 from typing import Tuple
 
 from attrs import define, field
-from brian2 import NeuronGroup, Subgroup, Synapses
+from brian2 import NeuronGroup, Subgroup, Synapses, defaultclock
 from brian2.units.allunits import joule, kgram, meter, meter2, second
+from numpy import pi
 
 from cleo.coords import coords_from_ng
 from cleo.utilities import brian_safe_name
+
+import warnings
 
 
 @define(repr=False)
@@ -46,11 +49,21 @@ class DeviceInteractionRegistry:
     """Set of (light, light-dependent device, neuron group) tuples representing
     previously created connections."""
 
+    raster_fov: int = field(default=500 * 1e-6 * meter, kw_only=True)
+
+    raster_enable: int = field(default=0, kw_only=True)
+
     light_prop_model = """
         T : 1
+        scale : 1
         epsilon : 1
         Ephoton : joule
-        Irr_post = epsilon * T * Irr0_pre : watt/meter**2 (summed)
+        raster_enable : 1
+        scan_period : second
+        raster_dwell_time: second
+        Irr_norm = epsilon * T * Irr0_pre : watt/meter**2 
+        Irr_raster = epsilon * T * Irr0_pre * int(((t + scan_period * (i/N)) % (scan_period)) < (raster_dwell_time * scale * 10)) / (scale * 10): watt/meter**2 
+        Irr_post = Irr_norm * (1 - raster_enable) + Irr_raster * raster_enable : watt/meter**2 (summed)
         phi_post = Irr_post / Ephoton : 1/second/meter**2 (summed)
     """
     """Model used in light propagation synapses"""
@@ -104,6 +117,10 @@ class DeviceInteractionRegistry:
         i_source = self.subgroup_idx_for_light[light]
         light_prop_syn.epsilon[i_source, :] = epsilon
         light_prop_syn.T[i_source, :] = light.transmittance(coords_from_ng(ng)).ravel()
+        light_prop_syn.scan_period = second / light.scan_freq
+        light_prop_syn.raster_dwell_time = (pi * 10 ** -10 * meter2)/ (pi*(self.raster_fov/2)**2) * second / light.scan_freq
+        light_prop_syn.scale = 1 + (defaultclock.dt > light_prop_syn.raster_dwell_time).astype(int) * (defaultclock.dt / (light_prop_syn.raster_dwell_time) - 1)
+        light_prop_syn.raster_enable = self.raster_enable
         # fmt: off
         # Ephoton = h*c/lambda
         light_prop_syn.Ephoton[i_source, :] = (
@@ -195,6 +212,15 @@ class DeviceInteractionRegistry:
         """Returns the subgroup representing the given light source"""
         i = self.subgroup_idx_for_light[light]
         return self.light_source_ng[i]
+    
+    def update_fov(self, new_fov: float):
+        self.raster_enable = 1
+        def custom_warning_format(message, category, filename, lineno, line=None):
+            return f"{category.__name__}: {message}\n"
+        warnings.formatwarning = custom_warning_format
+        if self.raster_fov != new_fov:
+            self.raster_fov = new_fov
+            warnings.warn("Warning: cleo currently supports use of single scanning fov in simulation, the latest update parameter will be used", UserWarning)
 
 
 registries: dict["CLSimulator", DeviceInteractionRegistry] = {}
