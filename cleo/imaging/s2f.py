@@ -1,4 +1,7 @@
-from brian2 import np, NeuronGroup, ms, nmeter
+import sympy
+import warnings
+
+from brian2 import np, NeuronGroup, ms, second, nmeter, Quantity
 from brian2.monitors import SpikeMonitor
 from attrs import define, field, fields_dict
 
@@ -10,19 +13,47 @@ from cleo.coords import coords_from_ng
 
 @define(eq=False, slots=False)
 class S2FGECI(SynapseDevice):
-    rise: float = field(kw_only=True)
-    decay1: float = field(kw_only=True)
-    decay2: float = field(kw_only=True, default=0)
+    rise: Quantity = field(kw_only=True)
+    decay1: Quantity = field(kw_only=True)
+    decay2: Quantity = field(kw_only=True, default=0 * ms)
     r: float = field(kw_only=True, default=0)
     Fm: float = field(kw_only=True, default=1.0)
     Ca0: float = field(kw_only=True, default=0.0)
     beta: float = field(kw_only=True, default=1.0)
     F0: float = field(kw_only=True, default=0.0)
     sigma_noise: float = field(kw_only=True, default=0.0)
+    threshold: float = field(kw_only=True, default=1e-3)
     spike_monitors: dict[NeuronGroup, SpikeMonitor] = field(factory=dict, init=False)
     i_targets: dict[str, np.ndarray] = field(factory=dict, init=False)
     dFF_1AP: float = field(default=None, kw_only=True)
     location: str = field(default="cytoplasm", init=False)
+    ignore_time: Quantity = field(init=False)
+
+    def _find_ignore_time(self) -> Quantity:
+        t_k = sympy.Symbol("t_k")
+
+        expr = (
+            sympy.exp(t_k / (self.decay1 / second))
+            + self.r * sympy.exp(t_k / (self.decay2 / second))
+        ) * (1 - sympy.exp(t_k / (self.rise / second))) - self.threshold
+
+        try:
+            sol = sympy.nsolve(expr, t_k, -2)
+        except RecursionError as e:
+            warnings.warn(
+                f"S2FGECI._find_ignore_time failed: {e}. This likely means that rise, decay1, or decay2 units were not set. Defaulting to 15 ms for spike ignore time."
+            )
+            sol = -15e-3
+        except ValueError as e:
+            warnings.warn(
+                f"S2FGECI._find_ignore_time failed: {e}. Check the values of rise, decay1, decay2, and r. Defaulting to 15 ms for spike ignore time."
+            )
+            sol = -15e-3
+
+        return -float(sol) * second
+
+    def __attrs_post_init__(self):
+        self.ignore_time = self._find_ignore_time()
 
     @location.validator
     def _check_location(self, attribute, value):
@@ -31,11 +62,42 @@ class S2FGECI(SynapseDevice):
                 f"Indicator location must be 'cytoplasm' or 'membrane', not {value}"
             )
 
+    def connect_to_neuron_group(self, neuron_group: NeuronGroup, **kwargs):
+        """
+        Connects a neuron group to the S2F model by setting up a SpikeMonitor.
+
+        Parameters:
+        - neuron_group: The NeuronGroup to monitor for spikes.
+        """
+        # Create a SpikeMonitor for the neuron group
+        spike_monitor = SpikeMonitor(neuron_group)
+
+        # Store the SpikeMonitor in a dictionary keyed by the neuron group's name
+        self.spike_monitors[neuron_group.name] = spike_monitor
+        self.source_ngs[neuron_group.name] = neuron_group
+        if neuron_group.name in self.i_targets:
+            self.i_targets[neuron_group.name] = np.append(
+                self.i_targets[neuron_group.name],
+                kwargs.get("i_targets", []),
+            )
+        else:
+            self.i_targets[neuron_group.name] = kwargs.get(
+                "i_targets", np.arange(neuron_group.N)
+            )
+
+        # Add the SpikeMonitor to the simulation's objects if necessary
+        # This ensures the monitor is updated during the simulation
+        if hasattr(self, "brian_objects"):
+            self.brian_objects.add(spike_monitor)
+
     def spike_to_calcium(self, spike_times):
+        calcium_response = np.zeros_like(spike_times)
         t_diffs = self.sim.network.t - spike_times
-        calcium_response = (
-            self.r * np.exp(-t_diffs / self.decay1) + np.exp(-t_diffs / self.decay2)
-        ) * (1 - np.exp(-t_diffs / self.rise))
+        ignored_indices = t_diffs <= self.ignore_time
+        calcium_response[ignored_indices] = (
+            np.exp(-t_diffs[ignored_indices] / self.decay1)
+            + self.r * np.exp(-t_diffs[ignored_indices] / self.decay2)
+        ) * (1 - np.exp(-t_diffs[ignored_indices] / self.rise))
 
         calcium_response += np.random.normal(
             0, self.sigma_noise, size=calcium_response.shape
@@ -44,41 +106,6 @@ class S2FGECI(SynapseDevice):
 
     def sigmoid_response(self, ca_trace):
         return self.Fm / (1 + np.exp(-self.beta * (ca_trace - self.Ca0))) + self.F0
-
-    def connect_to_neuron_group(self, neuron_group: NeuronGroup, **kwargs):
-        """
-        Connects a neuron group to the S2F model by setting up a SpikeMonitor.
-
-        Parameters:
-        - neuron_group: The NeuronGroup to monitor for spikes.
-        """
-        try:
-            # Create a SpikeMonitor for the neuron group
-            spike_monitor = SpikeMonitor(neuron_group)
-
-            # Store the SpikeMonitor in a dictionary keyed by the neuron group's name
-            self.spike_monitors[neuron_group.name] = spike_monitor
-            self.source_ngs[neuron_group.name] = neuron_group
-            if neuron_group.name in self.i_targets:
-                self.i_targets[neuron_group.name] = np.append(
-                    self.i_targets[neuron_group.name],
-                    kwargs.get("i_targets", []),
-                )
-            else:
-                self.i_targets[neuron_group.name] = kwargs.get(
-                    "i_targets", np.arange(neuron_group.N)
-                )
-
-            # Add the SpikeMonitor to the simulation's objects if necessary
-            # This ensures the monitor is updated during the simulation
-            if hasattr(self, "brian_objects"):
-                self.brian_objects.add(spike_monitor)
-
-            # Log the successful connection
-            print(f"Connected neuron group '{neuron_group.name}' with SpikeMonitor.")
-        except Exception as e:
-            # Log any errors encountered during setup
-            print(f"Error connecting neuron group '{neuron_group.name}': {e}")
 
     def get_response(self, ng_name):
         target_spike_indices = np.isin(
@@ -192,7 +219,7 @@ def _create_s2f_geci_fn(
 
 # Define specific S2F GECI functions based on the chart
 _create_s2f_geci_fn(
-    "jGCaMP8f_s2f",
+    "jGCaMP8f_S2F",
     1.85 * ms,
     34.07 * ms,
     263.70 * ms,
@@ -204,7 +231,7 @@ _create_s2f_geci_fn(
     0.03,
 )
 _create_s2f_geci_fn(
-    "jGCaMP8m_s2f",
+    "jGCaMP8m_S2F",
     2.46 * ms,
     41.64 * ms,
     245.80 * ms,
@@ -216,7 +243,7 @@ _create_s2f_geci_fn(
     0.03,
 )
 _create_s2f_geci_fn(
-    "jGCaMP8s_s2f",
+    "jGCaMP8s_S2F",
     5.65 * ms,
     86.26 * ms,
     465.45 * ms,
@@ -228,7 +255,7 @@ _create_s2f_geci_fn(
     0.03,
 )
 _create_s2f_geci_fn(
-    "jGCaMP7f_s2f",
+    "jGCaMP7f_S2F",
     16.21 * ms,
     95.27 * ms,
     398.22 * ms,
@@ -240,7 +267,7 @@ _create_s2f_geci_fn(
     0.03,
 )
 _create_s2f_geci_fn(
-    "XCaMP_gf_s2f",
+    "XCaMP-Gf_S2F",
     13.93 * ms,
     99.38 * ms,
     312.85 * ms,
@@ -252,7 +279,7 @@ _create_s2f_geci_fn(
     0.03,
 )
 _create_s2f_geci_fn(
-    "GCaMP6s_s2f",
+    "GCaMP6s_S2F",
     50.81 * ms,
     1702.21 * ms,
     0.00 * ms,
@@ -264,7 +291,7 @@ _create_s2f_geci_fn(
     0.03,
 )
 _create_s2f_geci_fn(
-    "GCaMP6s_tg_s2f",
+    "GCaMP6s-TG_S2F",
     133.01 * ms,
     1262.78 * ms,
     0.00 * ms,
@@ -276,7 +303,7 @@ _create_s2f_geci_fn(
     0.03,
 )
 _create_s2f_geci_fn(
-    "GCaMP6f_s2f",
+    "GCaMP6f_S2F",
     9.98 * ms,
     682.58 * ms,
     0.00 * ms,
@@ -288,7 +315,7 @@ _create_s2f_geci_fn(
     0.03,
 )
 _create_s2f_geci_fn(
-    "GCaMP6f_tg_s2f",
+    "GCaMP6f-TG_S2F",
     20.82 * ms,
     629.74 * ms,
     0.00 * ms,
