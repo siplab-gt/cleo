@@ -13,6 +13,8 @@ from cleo.coords import coords_from_ng
 
 @define(eq=False, slots=False)
 class S2FGECI(SynapseDevice):
+    """Base class for S2F GECI models"""
+
     rise: Quantity = field(kw_only=True)
     decay1: Quantity = field(kw_only=True)
     decay2: Quantity = field(kw_only=True, default=0 * ms)
@@ -30,6 +32,7 @@ class S2FGECI(SynapseDevice):
     ignore_time: Quantity = field(init=False)
 
     def _find_ignore_time(self) -> Quantity:
+        """Calculates time before old spikes become insignificant to save computation."""
         t_k = sympy.Symbol("t_k")
 
         expr = (
@@ -91,6 +94,7 @@ class S2FGECI(SynapseDevice):
             self.brian_objects.add(spike_monitor)
 
     def spike_to_calcium(self, spike_times):
+        """Converts spike times to calcium response using the S2F model."""
         calcium_response = np.zeros_like(spike_times)
         t_diffs = self.sim.network.t - spike_times
         ignored_indices = t_diffs <= self.ignore_time
@@ -105,9 +109,11 @@ class S2FGECI(SynapseDevice):
         return np.maximum(calcium_response, 0)
 
     def sigmoid_response(self, ca_trace):
+        """Applies a sigmoidal transformation to the calcium trace."""
         return self.Fm / (1 + np.exp(-self.beta * (ca_trace - self.Ca0))) + self.F0
 
     def get_response(self, ng_name):
+        """Computes calcium traces and sum over time"""
         target_spike_indices = np.isin(
             self.spike_monitors[ng_name].i, self.i_targets[ng_name]
         )
@@ -127,6 +133,8 @@ class S2FGECI(SynapseDevice):
 
 @define(eq=False, slots=False)
 class S2FLightDependentGECI(S2FGECI, LightDependent):
+    """S2F GECI model with light-dependent adjustments"""
+
     spectrum: list[tuple[float, float]] = field(kw_only=True)
 
     def get_response(self, ng_name):
@@ -147,19 +155,11 @@ def geci_s2f(name: str, light_dependent: bool = False, **kwparams) -> S2FGECI:
         Name of the GECI model
     light_dependent : bool
         Whether the indicator is light-dependent
-    **kwparams
-        Additional keyword parameters for S2F model including:
-        - tau_c1, tau_c2: calcium time constants
-        - w1, w2: calcium response weights
-        - k, n, baseline: sigmoid parameters
-        - spectrum: [(wavelength, extinction_coefficient)] for light-dependent indicators
-        - sigma_noise: noise standard deviation
-        - dFF_1AP: ΔF/F for 1 AP
 
     Returns
     -------
     S2FGECI
-        A (LightDependent)S2FGECI model with specified parameters
+        A S2F(LightDependent)GECI model with specified parameters
     """
     GECIClass = S2FLightDependentGECI if light_dependent else S2FGECI
 
