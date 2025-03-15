@@ -195,15 +195,3 @@ class DeviceInteractionRegistry:
         """Returns the subgroup representing the given light source"""
         i = self.subgroup_idx_for_light[light]
         return self.light_source_ng[i]
-
-
-registries: dict["CLSimulator", DeviceInteractionRegistry] = {}
-"""Maps simulator to its registry"""
-
-
-def registry_for_sim(sim: "CLSimulator") -> DeviceInteractionRegistry:
-    """Returns the registry for the given simulator"""
-    assert sim is not None
-    if sim not in registries:
-        registries[sim] = DeviceInteractionRegistry(sim)
-    return registries[sim]

@@ -1,4 +1,5 @@
 import warnings
+
 import pytest
 from brian2 import Network, NeuronGroup, mm, mm2, ms, mV, mwatt, nmeter, np, umeter
 
@@ -6,7 +7,6 @@ from cleo import CLSimulator
 from cleo.coords import assign_coords_grid_rect_prism
 from cleo.light import Light, fiber473nm
 from cleo.opto import Opsin, chr2_4s, vfchrimson_4s
-from cleo.registry import registry_for_sim
 
 
 @pytest.fixture

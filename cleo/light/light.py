@@ -29,7 +29,6 @@ from matplotlib.collections import PathCollection
 
 from cleo.base import CLSimulator
 from cleo.coords import coords_from_xyz
-from cleo.registry import registry_for_sim
 from cleo.stimulators import Stimulator
 from cleo.utilities import (
     analog_signal,
@@ -356,14 +355,13 @@ class Light(Stimulator):
         )
 
     def init_for_simulator(self, sim: CLSimulator) -> None:
-        registry = registry_for_sim(sim)
-        registry.init_register_light(self)
+        sim.registry.init_register_light(self)
         self.reset()
 
     def connect_to_neuron_group(
         self, neuron_group: NeuronGroup, **kwparams: Any
     ) -> None:
-        registry = registry_for_sim(self.sim)
+        registry = self.sim.registry
         if self in registry.lights_for_ng.get(neuron_group, set()):
             raise ValueError(
                 f"Light {self} already connected to neuron group {neuron_group}"
@@ -381,8 +379,7 @@ class Light(Stimulator):
         """Returns the "neuron(s)" representing the light source(s)."""
         if self.sim is None:
             return None
-        registry = registry_for_sim(self.sim)
-        return registry.source_for_light(self)
+        return self.sim.registry.source_for_light(self)
 
     @property
     def irradiance(self) -> Quantity:

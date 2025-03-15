@@ -21,7 +21,6 @@ from matplotlib.artist import Artist
 from mpl_toolkits.mplot3d import Axes3D
 
 from cleo.base import CLSimulator, InterfaceDevice
-from cleo.registry import registry_for_sim
 
 _neuron_alpha = 0.2
 
@@ -208,9 +207,10 @@ def _plot(
             kwargs["color"] = colors[i]
         kwargs.update(scatterargs)
         neuron_artists.append(ax.scatter(*xyz, **kwargs))
-        ax.set_xlabel(f"x [{axis_scale_unit._dispname}]")
-        ax.set_ylabel(f"y [{axis_scale_unit._dispname}]")
-        ax.set_zlabel(f"z [{axis_scale_unit._dispname}]")
+        ax.tick_params(axis="both", pad=-1)
+        ax.set_xlabel(f"x ({axis_scale_unit._dispname})", labelpad=-5)
+        ax.set_ylabel(f"y ({axis_scale_unit._dispname})", labelpad=-5)
+        ax.set_zlabel(f"z ({axis_scale_unit._dispname})", labelpad=-3)
 
     xlim = ax.get_xlim() if xlim is None else xlim
     ylim = ax.get_ylim() if ylim is None else ylim
@@ -250,7 +250,7 @@ def plot(
     scatterargs: dict = {},
     sim: CLSimulator = None,
     **figargs: Any,
-) -> None:
+) -> Tuple[plt.Figure, plt.Axes]:
     """Visualize neurons and interface devices
 
     Parameters
@@ -296,8 +296,7 @@ def plot(
             for dev in sim.devices:
                 for obj in dev.brian_objects:
                     neuron_groups.discard(obj)
-            registry = registry_for_sim(sim)
-            for obj in registry.brian_objects:
+            for obj in sim.registry.brian_objects:
                 neuron_groups.discard(obj)
             neuron_groups = list(neuron_groups)
         if len(devices) == 0:
