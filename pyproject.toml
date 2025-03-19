@@ -41,10 +41,11 @@ furo = "^2024.01.29"
 nbdev = "^2.3.12"
 elephant = "^0.13.0"
 seaborn = "^0.13.0"
-ruff = "^0.1.2"
+ruff = ">=0.1.15"
 
 [tool.poetry.group.dev.dependencies]
 pytest-xdist = "^3.5.0"
+marimo = "^0.11.20"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
