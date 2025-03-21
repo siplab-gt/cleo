@@ -11,7 +11,10 @@
 #     "pandas==2.2.3",
 #     "seaborn==0.13.2",
 #     "setuptools==77.0.1",
+#     "watchdog==6.0.0",
 # ]
+# [tool.marimo.runtime]
+# watcher_on_save = "autorun"
 # ///
 
 import marimo
@@ -39,11 +42,11 @@ def _(mo):
 def _(interp_figs, mo, plt):
     import matplotlib.image as mpimg
 
-    # Read the image
+    # plotting like this since since markdown can only display images
+    # in a public/ folder
     img = mpimg.imread("img/orig/foutz12_4.jpg")
-
-    # Display the image
     plt.imshow(img)
+    plt.gca().set(xticks=[], yticks=[])
     mo.hstack([plt.gcf(), mo.vstack(interp_figs)])
     return img, mpimg
 
@@ -56,30 +59,55 @@ def _(mo):
 
 @app.cell(hide_code=True)
 def _():
+    import bayes_opt as bo
+    import brian2 as b2
     import matplotlib
     import matplotlib.pyplot as plt
-    import seaborn as sns
     import pandas as pd
-    from brian2 import np
-    import brian2 as b2
-    import cleo
-    import bayes_opt as bo
+    import seaborn as sns
+    from brian2 import mm2, ms, mV, mwatt, namp, np
+    from opto_val import adex, lif
 
-    from opto_val import lif, adex
+    import cleo
 
     b2.prefs.codegen.target = "numpy"
     b2.defaultclock.dt = 0.2 * b2.ms
     cleo.utilities.style_plots_for_paper()
-    return adex, b2, bo, cleo, lif, matplotlib, np, pd, plt, sns
+    return (
+        adex,
+        b2,
+        bo,
+        cleo,
+        lif,
+        mV,
+        matplotlib,
+        mm2,
+        ms,
+        mwatt,
+        namp,
+        np,
+        pd,
+        plt,
+        sns,
+    )
 
 
 @app.cell
-def _(np):
+def _(ms, np):
     rho_rel_conds = [1, 1, 1, 1.5, 0.75]
     Irr_factor_conds = [1.4, 1.2, 1, 1.2, 1.2]
     n_rates = 20
+    pulse_width = 5 * ms
     pulse_rates = np.linspace(0.1, 200, n_rates)
-    return Irr_factor_conds, n_rates, pulse_rates, rho_rel_conds
+    sim_len_s = 0.4
+    return (
+        Irr_factor_conds,
+        n_rates,
+        pulse_rates,
+        pulse_width,
+        rho_rel_conds,
+        sim_len_s,
+    )
 
 
 @app.cell
@@ -110,7 +138,6 @@ def _(foutz12_data_combined, np, pd, pulse_rates):
             ),
         }
 
-
     interp_rates = (
         foutz12_data_combined.groupby(["rho_rel", "Irr0/Irr0_thres"])
         .apply(_interp_group, include_groups=False)
@@ -122,17 +149,20 @@ def _(foutz12_data_combined, np, pd, pulse_rates):
 
 @app.cell
 def _(interp_rates, pd, plot_fr_2panel):
-    _interp_rates_df = interp_rates.apply(pd.Series.explode).reset_index()
-    _interp_rates_df["name"] = "MCHH_Markov"
-    _interp_rates_df
+    interp_rates_tidy = interp_rates.apply(pd.Series.explode).reset_index()
+    interp_rates_tidy["name"] = "MCHH_Markov"
+    interp_rates_tidy = interp_rates_tidy.astype(
+        {"pulse_rate": float, "firing_rate": float}
+    )
+    interp_rates_tidy
     interp_figs = plot_fr_2panel(
-        _interp_rates_df,
+        interp_rates_tidy,
         palette1="blend:#df87e1,#8000b4",
         palette2="blend:#69fff8,#36827F",
         figheight=2,
         figwidth=2,
     )
-    return (interp_figs,)
+    return interp_figs, interp_rates_tidy
 
 
 @app.cell(hide_code=True)
@@ -156,37 +186,84 @@ def _(mo):
         "AdEx_Markov",
     ]
     run_checkboxes = mo.ui.dictionary(
-        {
-            model_str: mo.ui.checkbox(False, label=model_str)
-            for model_str in model_types
-        }
+        {model_str: mo.ui.checkbox(False, label=model_str) for model_str in model_types}
     )
-    mo.vstack([
-        '(Re-)run simulations?',
-        run_checkboxes.hstack(justify="space-around")
-    ])
+    mo.vstack(["(Re-)run simulations?", run_checkboxes.hstack(justify="space-around")])
     return model_types, run_checkboxes
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(
+        r"""Initial param settings to probe [from Neuronal Dynamics](https://neuronaldynamics.epfl.ch/online/Ch6.S2.html#:~:text=Table%C2%A06.1%3A%20Exemplar%20parameters):"""
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(pd):
+    _data = {
+        "Type": [
+            "Tonic",
+            "Adapting",
+            "Init. burst",
+            "Bursting",
+            "Irregular",
+            "Transient",
+            "Delayed",
+        ],
+        # needs to be in alphabetical order for bayes_opt, apparently
+        "a": [0.0, 0.0, 0.5, -0.5, -0.5, 1.0, -1.0],
+        "b": [60, 5.0, 7.0, 7.0, 7.0, 10, 10],
+        "tau_m": [20, 20, 5.0, 5.0, 9.9, 10, 5.0],
+        "tau_w": [30.0, 100, 100, 100, 100, 100, 100],
+        "v_reset": [-55, -55, -51, -46, -46, -60, -60],
+    }
+
+    # Creating the DataFrame
+    ndx_params = pd.DataFrame(_data)
+    ndx_params
+    return (ndx_params,)
+
+
+@app.cell
+def _():
+    return
+
+
+@app.cell
+def _():
+    debug = True
+
+    def dprint(*args, **kwargs):
+        if debug:
+            print(*args, **kwargs)
+    return debug, dprint
 
 
 @app.cell
 def _(
-    AdEx,
     Irr_factor_conds,
+    adex,
     b2,
-    bayes_opt,
+    bo,
     cleo,
-    foutz12_data_combined,
-    interp_rates,
+    debug,
+    dprint,
+    interp_rates_tidy,
     lif,
-    model_types,
+    mo,
     n_rates,
+    ndx_params,
     np,
     pd,
+    plt,
     pulse_rates,
-    rates_data_path,
+    pulse_width,
     rho_rel_conds,
-    run_checkboxes,
+    sim_len_s,
 ):
+    @mo.persistent_cache
     def optimal_rates(model_str):
         neuron_type, opsin_type = model_str.split("_")
         # neurons are divided into 5 segments for 5 different Irr/rho settings
@@ -197,9 +274,9 @@ def _(
             NG = lif
             params2opt = ["tau_m", "v_reset"]
         elif neuron_type == "AdEx":
-            NG = AdEx
+            NG = adex
             params2opt = ["tau_m", "a", "tau_w", "b", "v_reset"]
-        ng = NG(n, f"{neuron_type}_{opsin_type}")
+        ng = NG(n, model_str)
         cleo.coords.assign_coords(ng, [0, 0, 0] * b2.mm)
         spmon = b2.SpikeMonitor(ng, record=True)
         if opsin_type == "simple":
@@ -214,39 +291,132 @@ def _(
         sim.inject(opsin, ng, rho_rel=rho_rel)
 
         opsin_ng = opsin.source_ngs[ng.name]
+        dprint(opsin.synapses[ng.name].equations)
+        dprint(opsin.synapses[ng.name].rho_rel)
         cleo.utilities.modify_model_with_eqs(
             opsin_ng,
             """Irr_factor : 1
             pulse_rate : hertz""",
         )
-        print(opsin_ng.equations)
+        dprint(opsin_ng.equations)
 
         # modify phi by Irr_factor
         opsin_ng.Irr_factor = np.repeat(Irr_factor_conds, n_rates)
-        print(opsin_ng.Irr_factor)
+        dprint(opsin_ng.Irr_factor)
 
         opsin_ng.pulse_rate = np.tile(pulse_rates, 5) * b2.Hz
-        print(opsin_ng.pulse_rate)
+        dprint(opsin_ng.pulse_rate)
         # set up opsin run_regularly for different rates
-        opsin.source_ngs[ng.name].run_regularly(
-            "phi = phi_thresh * Irr_factor * int((t % (1 / pulse_rate)) < 5*ms)",
+        opsin_ng.run_regularly(
+            "phi = phi_thresh * Irr_factor * int((t % (1 / pulse_rate)) < pulse_width)",
             dt=b2.defaultclock.dt,
         )
+        sim.network.store()
 
-        while bayes_opt:
-            # params2opt = ...  # Bayesian update
-            print(f"{params2opt=}")
-            phi_thresh = (
-                ...
-            )  # use just first neuron of the 3rd segment (rho_rel = Irr ratio = 1)
-            # sim routine
-            rates_df = ...  # process from spike monitor
-            mse = np.linalg.norm(rates_df - interp_rates)
-            print(f"{mse=}")
+        @mo.cache
+        def tune_phi_thresh(tau_m, precision=1e10):
+            """include tau_m and R in args for caching purposes"""
+            i2record = (
+                2 * n_rates
+            )  # should be neuron with Irr_ratio = rho_rel = 1 and low pulse rate
+            search_min, search_max = (1e14, 1e20)
+            while (
+                search_max - search_min > precision
+            ):  # get down to {precision} mW/mm2 margin
+                phi_curr = (search_min + search_max) / 2
+                opsin_ng.namespace["phi_thresh"] = phi_curr / b2.mm2 / b2.second
+                sim.run(pulse_width)
+                sim.run(2 * pulse_width)  # wait 10 ms to make sure only 1 spike
+                # state monitor plots show phi is as expected
+                if spmon.count[i2record] > 0:  # spiked
+                    search_max = phi_curr
+                else:
+                    search_min = phi_curr
+                sim.network.restore()
+            dprint(f"phi_thresh={phi_curr} / mm2 / s")
+            return phi_curr / b2.mm2 / b2.second
 
-        return rates_df, params2opt
+        def simulate_rates(params):
+            # add units to params
+            for name, unit in [
+                ("tau_m", b2.ms),
+                ("a", b2.nsiemens),
+                ("tau_w", b2.ms),
+                ("b", b2.pamp),
+                ("v_reset", b2.mV),
+            ]:
+                if name in params:
+                    params[name] *= unit
+
+            ng.namespace |= params
+            tune_phi_thresh(params["tau_m"])
+            sim.run(sim_len_s * b2.second)
+
+            rates = pd.DataFrame(
+                {
+                    # need to multiply by 1 to go from Brian VariableView to plain numpy array
+                    "rho_rel": opsin.synapses[ng.name].rho_rel * 1,
+                    "Irr0/Irr0_thres": opsin_ng.Irr_factor * 1,
+                    "pulse_rate": opsin_ng.pulse_rate / b2.Hz,
+                    "firing_rate": spmon.count / sim_len_s,
+                    "name": model_str,
+                }
+            )
+            if debug:
+                plt.plot(spmon.t, spmon.i, ".")
+                plt.show()
+            # dprint(rates)
+            sim.network.restore()
+            return rates
+
+        def eval_params(**params):
+            rates = simulate_rates(params)
+            merged_df = interp_rates_tidy.merge(
+                rates, on=["pulse_rate", "Irr0/Irr0_thres", "rho_rel"]
+            )
+            assert len(merged_df) == len(rates) == len(interp_rates_tidy)
+            return -(
+                (merged_df["firing_rate_x"] - merged_df["firing_rate_y"]) ** 2
+            ).sum()
+
+        optimizer = bo.BayesianOptimization(
+            f=eval_params,
+            pbounds={
+                "tau_m": (0, 50),  # ms
+                "a": (-5, 5),  # * b2.nsiemens,
+                "tau_w": (0, 200),  # * b2.ms,
+                "b": (0, 200),  # * b2.pamp,
+                "v_reset": (-90, -30),  # * b2.mV,
+            },
+            verbose=2,
+            random_state=16320829,
+        )
+
+        # probe from Neuronal Dynamics preset values
+        for index, row in ndx_params.iterrows():
+            del row["Type"]
+            optimizer.probe(
+                params=row,
+                lazy=True,
+            )
+        optimizer.maximize(init_points=0, n_iter=7)
+
+        best_rates = simulate_rates(optimizer.max["params"])
+
+        dprint(f"{optimizer.max=}")
+        return best_rates, optimizer.max["params"]
+    return (optimal_rates,)
 
 
+@app.cell
+def _(
+    foutz12_data_combined,
+    model_types,
+    optimal_rates,
+    pd,
+    rates_data_path,
+    run_checkboxes,
+):
     results_dfs = []
     for model_str in model_types:
         if run_checkboxes[model_str].value:
@@ -262,7 +432,7 @@ def _(
                 print(f"skipping {model_str}")
     combined_data = pd.concat(results_dfs + [foutz12_data_combined])
     combined_data
-    return combined_data, model_str, optimal_rates, results_dfs
+    return combined_data, model_str, results_dfs
 
 
 @app.cell(hide_code=True)
@@ -285,7 +455,9 @@ def _():
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""Next we load the original data for comparison. First, from the top panel, showing data for different irradiance levels.""")
+    mo.md(
+        r"""Next we load the original data for comparison. First, from the top panel, showing data for different irradiance levels."""
+    )
     return
 
 
@@ -363,7 +535,6 @@ def _():
 
     # rerun_sim = prompt_rerun_button.value
 
-
     # class PulseController(cleo.ioproc.LatencyIOProcessor):
     #     def process(self, state, t_samp_ms):
     #         t = t_samp_ms * ms
@@ -375,7 +546,6 @@ def _():
     #         for _ng, fiber in fibers.items():
     #             out[fiber.name] = stim_on * Irr0_thres[_ng.name]
     #         return (out, t_samp_ms)
-
 
     # ctrl = PulseController(sample_period=defaultclock.dt)
     # sim.set_io_processor(ctrl)
@@ -406,13 +576,13 @@ def _():
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""## Plotting""")
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(pulse_rates, sns):
     def plot_fr_2panel(data, palette1, palette2, **figargs):
         kwargs = {
@@ -455,33 +625,26 @@ def _(pulse_rates, sns):
 
 
 @app.cell
-def _(combined_data, plot_fr_2panel):
+def _(combined_data, mo, plot_fr_2panel):
     g_irr_main, g_exp_main = plot_fr_2panel(
-        combined_data[~combined_data.name.str.contains("LIF_Markov|AdEx_simple", regex=True)],
+        combined_data[
+            ~combined_data.name.str.contains("LIF_Markov|AdEx_simple", regex=True)
+        ],
         palette1="blend:#df87e1,#8000b4",
         palette2="blend:#69fff8,#36827F",
     )
     g_irr_main.fig.savefig("img/fig/opto_pr_fr_irr.svg", bbox_inches="tight")
     g_exp_main.fig.savefig("img/fig/opto_pr_fr_exp.svg", bbox_inches="tight")
+    mo.hstack([g_irr_main, g_exp_main])
     return g_exp_main, g_irr_main
-
-
-@app.cell
-def _(g_irr_main):
-    g_irr_main
-    return
-
-
-@app.cell
-def _(g_exp_main):
-    g_exp_main
-    return
 
 
 @app.cell
 def _(combined_data, mo, plot_fr_2panel):
     g_irr_supp, g_exp_supp = plot_fr_2panel(
-        combined_data[combined_data.name.str.contains("LIF_Markov|AdEx_simple", regex=True)],
+        combined_data[
+            combined_data.name.str.contains("LIF_Markov|AdEx_simple", regex=True)
+        ],
         palette1="blend:#df87e1,#8000b4",
         palette2="blend:#69fff8,#36827F",
     )
@@ -511,7 +674,6 @@ def _():
     #     "Delta_T": 2 * mV,
     # }
 
-
     # def lif(n, name="LIF"):
     #     ng = NeuronGroup(
     #         n,
@@ -527,7 +689,6 @@ def _():
     #     ng.v = neuron_params["E_L"]
     #     return ng
 
-
     # def adex(n, name="AdEx"):
     #     ng = NeuronGroup(
     #         n,
@@ -542,14 +703,12 @@ def _():
     #     ng.v = neuron_params["E_L"]
     #     return ng
 
-
     # def Iopto_gain_from_factor(factor):
     #     return (
     #         factor
     #         * (neuron_params["theta"] - neuron_params["E_L"])
     #         / (neuron_params["R"])
     #     )
-
 
     # def get_Irr0_thres(
     #     pulse_widths,
