@@ -8,6 +8,10 @@ notebooks/img/*
 !notebooks/img/orig/
 notebooks/results/*
 docs/tutorials/*.svg
+# marimo (except Jupyter snapshots)
+notebooks/__marimo__/
+!notebooks/__marimo__/*.ipynb
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
