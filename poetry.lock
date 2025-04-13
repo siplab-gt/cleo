@@ -1334,13 +1334,13 @@ files = [
 
 [[package]]
 name = "marimo"
-version = "0.11.28"
+version = "0.12.8"
 description = "A library for making reactive notebooks and apps"
 optional = false
 python-versions = ">=3.9"
 files = [
-    {file = "marimo-0.11.28-py3-none-any.whl", hash = "sha256:e0b347ae0298e578b361b29cd95c1f52e9a1b147ddee213530d6e117f0fd1898"},
-    {file = "marimo-0.11.28.tar.gz", hash = "sha256:ab5783ebd36157877b524985e29ca483c2c50e9b77e8ce5f29924af41377eaf6"},
+    {file = "marimo-0.12.8-py3-none-any.whl", hash = "sha256:b4724d224d4bd9dffa4251d1b659a531c7419fe7eb6dea416763845094983f50"},
+    {file = "marimo-0.12.8.tar.gz", hash = "sha256:d2d627924a32c73a9491f84e4358df8c83bbe0d4d35d38112f3020b1be32aef1"},
 ]
 
 [package.dependencies]
