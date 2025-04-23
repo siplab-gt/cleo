@@ -37,7 +37,7 @@ def lif(n, name="LIF"):
         Iopto: amp
         """,
         threshold="v>=theta",
-        reset="v=E_L",
+        reset="v=v_reset",
         refractory=2 * ms,
         namespace=neuron_params,
         name=name,
