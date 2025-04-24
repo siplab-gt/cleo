@@ -228,12 +228,12 @@ def _(mo):
 @app.cell
 def _(b2, expt_setup, mo, n_rates, pulse_width, reset):
     @mo.cache
-    def find_phi_thresh(tau_m, model_name, precision=1e12):
+    def find_phi_thresh(tau_m_ms, model_name, precision=1e12):
         """tau_m and the model should be the only things determining the threshold,
         since all other relevant parameters are kept constant"""
         expt = expt_setup(model_name)
         reset(expt)
-        expt.ng.namespace["tau_m"] = tau_m * b2.ms
+        expt.ng.namespace["tau_m"] = tau_m_ms * b2.ms
 
         search_min, search_max = (1e14, 1e19)
         while (
@@ -262,7 +262,7 @@ def _():
     def dprint(*args, **kwargs):
         if debug:
             print(*args, **kwargs)
-    return debug, dprint
+    return (debug,)
 
 
 @app.cell
@@ -317,7 +317,6 @@ def _(
     adex,
     b2,
     cleo,
-    dprint,
     lif,
     n_rates,
     np,
@@ -353,21 +352,21 @@ def _(
 
         opsin_ng = opsin.source_ngs[ng.name]
         opsin_syn = opsin.synapses[ng.name]
-        dprint("opsin_syn.equations", opsin_syn.equations, sep="\n")
-        dprint(opsin_syn.rho_rel)
+        # dprint("opsin_syn.equations", opsin_syn.equations, sep="\n")
+        # dprint(opsin_syn.rho_rel)
         cleo.utilities.modify_model_with_eqs(
             opsin_ng,
             """Irr_factor : 1
             pulse_rate : hertz""",
         )
-        dprint(opsin_ng.equations)
+        # dprint(opsin_ng.equations)
 
         # modify phi by Irr_factor
         opsin_ng.Irr_factor = np.repeat(Irr_factor_conds, n_rates)
-        dprint(opsin_ng.Irr_factor)
+        # dprint(opsin_ng.Irr_factor)
 
         opsin_ng.pulse_rate = np.tile(pulse_rates, 5) * b2.Hz
-        dprint(opsin_ng.pulse_rate)
+        # dprint(opsin_ng.pulse_rate)
         # set up opsin run_regularly for different rates
         opsin_ng.run_regularly(
             "phi = phi_thresh * Irr_factor * int((t % (1 / pulse_rate)) < pulse_width)",
@@ -388,7 +387,7 @@ def _(
 
 
 @app.cell
-def _(Experiment, b2, debug, dprint, find_phi_thresh, pd, plt, sim_len_s):
+def _(Experiment, b2, debug, find_phi_thresh, pd, plt, sim_len_s):
     def simulate_rates(params, expt: Experiment, sim_len=sim_len_s * b2.second):
         # add units to params
         for name, unit in [
@@ -399,15 +398,15 @@ def _(Experiment, b2, debug, dprint, find_phi_thresh, pd, plt, sim_len_s):
             ("v_reset", b2.mV),
         ]:
             if name in params:
-                params[name] *= unit
+                expt.ng.namespace[name] = params[name] * unit
 
-        expt.ng.namespace |= params
+        # dprint(f"{expt.ng.namespace=}")
         expt.opsin_ng.namespace["phi_thresh"] = find_phi_thresh(
-            params["tau_m"] / b2.ms, expt.model_name
+            params["tau_m"], expt.model_name
         )
         expt.sim.run(sim_len)
 
-        dprint("spmon.count:", expt.spmon.count)
+        # dprint("spmon.count:", expt.spmon.count)
         rates = pd.DataFrame(
             {
                 # need to multiply by 1 to go from Brian VariableView to plain numpy array
@@ -475,6 +474,7 @@ def _(
 
         def eval_params_opt(**params):
             reset(expt)
+            # dprint(params)
             rates = simulate_rates(params, expt)
             merged_df = interp_rates_tidy.merge(
                 rates, on=["pulse_rate", "Irr0/Irr0_thres", "rho_rel"]
@@ -502,14 +502,45 @@ def _(
         # probe from Neuronal Dynamics preset values
         for index, row in ndx_params.iterrows():
             row = {k: row[k] for k in expt.params2opt}
+            optimizer.probe(row)
+        if model_name == "AdEx":
+            # suggest best AdEx param sets
             optimizer.probe(
-                params=row,
-                lazy=True,
+                {
+                    "tau_m": 33.1,
+                    "a": -3.78,
+                    "tau_w": 52.5,
+                    "b": 55.6,
+                    "v_reset": -44.3,
+                }
             )
-        # suggest best AdEx param set
-        optimizer.probe(
-            {"tau_m": 18.8, "a": -1.34, "tau_w": 8.51, "b": 28.8, "v_reset": -89.8}
-        )
+            optimizer.probe(
+                {
+                    "tau_m": 32,
+                    "a": -4.67,
+                    "tau_w": 24.9,
+                    "b": 40.7,
+                    "v_reset": -63.8,
+                }
+            )
+            optimizer.probe(
+                {
+                    "tau_m": 30.7,
+                    "a": -4.47,
+                    "tau_w": 115,
+                    "b": 22.2,
+                    "v_reset": -59.0,
+                }
+            )
+            optimizer.probe(
+                {
+                    "tau_m": 33.5,
+                    "a": -5.00,
+                    "tau_w": 69.2,
+                    "b": 30.5,
+                    "v_reset": -56.4,
+                }
+            )
         # optimizer.maximize(init_points=3, n_iter=10)
         optimizer.maximize(
             init_points=20, n_iter=200
@@ -519,7 +550,6 @@ def _(
         return optimizer
 
 
-    @mo.cache
     def optimal_params(model_name):
         optimizer = optimize(model_name)
         return optimizer.max["params"]
@@ -534,7 +564,7 @@ def _(
 
 @app.cell
 def _(optimal_params):
-    optimal_params('AdEx_Markov')
+    optimal_params("AdEx_Markov")
     return
 
 
@@ -564,13 +594,7 @@ def _(
     combined_data = pd.concat(results_dfs + [foutz12_data_combined])
     optimized_params = pd.concat(_params_dfs)
     combined_data
-    return combined_data, optimized_params
-
-
-@app.cell
-def _(optimized_params):
-    optimized_params
-    return
+    return (combined_data,)
 
 
 @app.cell
@@ -584,6 +608,15 @@ def _(np, optimize, pd, run_checkboxes):
     if run_checkboxes["AdEx_Markov"].value:
         _opt_history = opt_table("AdEx_Markov")
     _opt_history
+    return (opt_table,)
+
+
+@app.cell
+def _(model_types, opt_table, run_checkboxes):
+    for _model_name in model_types:
+        if run_checkboxes[_model_name].value:
+            _df = opt_table(_model_name).sort_values(by='target', ascending=False)
+            _df.to_csv(f'data/{_model_name}_opt_history.csv')
     return
 
 
@@ -798,7 +831,7 @@ def _(pulse_rates, sns):
                 bbox_to_anchor=(0.5, 0),
                 ncol=3,
             )
-            g.fig.set_figwidth(3.0)
+            g.fig.set_figwidth(3.4)
             g.fig.set_figheight(1.5)
             g.fig.tight_layout()
             g.fig.set(**figargs)
