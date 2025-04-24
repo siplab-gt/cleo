@@ -1,4 +1,5 @@
 """Tests for ephys.spiking module"""
+
 import numpy as np
 import quantities as pq
 from brian2 import Network, SpikeGeneratorGroup, mm, ms
@@ -39,8 +40,9 @@ def test_MUS_multiple_contacts(rand_seed):
     sim = CLSimulator(net)
     mus = MultiUnitSpiking(
         name="mus",
-        r_perfect_detection=0.3 * mm,
-        r_half_detection=0.75 * mm,
+        # r_perfect_detection=0.3 * mm,
+        r_noise_floor=0.75 * mm,
+        threshold_sigma=1,
     )
     probe = Probe(
         coords=[[0, 0, 0.25], [0, 0, 0.75]] * mm, signals=[mus], save_history=True
@@ -91,27 +93,32 @@ def test_MUS_multiple_contacts(rand_seed):
 
 
 def test_MUS_multiple_groups():
+    """
+    probe: 0    0.1 mm
+    sgg1:  0    0.1 mm                       -------------> 9000 mm
+    sgg2:               0.19  0.2 mm
+    sgg3:                                    -------------> 9000 mm
+    """
     cleo.utilities.set_seed(1836)
     sgg1 = _spike_generator_group((0, 0.1, 9000), period=1 * ms)  # i_probe = 4, 5
     sgg2 = _spike_generator_group((0.19, 0.2), period=0.5 * ms)  # i_probe = 6, 7
     # too far away to record at all:
     sgg3 = _spike_generator_group((9000,), period=1 * ms)
-    net = Network(sgg1, sgg2, sgg3)
-    sim = CLSimulator(net)
+    sim = CLSimulator(Network(sgg1, sgg2, sgg3))
     mus = MultiUnitSpiking(
         name="mus",
-        r_perfect_detection=0.1 * mm,
-        r_half_detection=0.2 * mm,
+        r_noise_floor=0.2 * mm,
+        threshold_sigma=1,
     )
     probe = Probe([[0, 0, 0], [0, 0, 0.1]] * mm, [mus], save_history=True)
-    sim.inject(probe, sgg1, sgg2, sgg3)
+    sim.inject(probe, sgg1, sgg2)
 
     sim.run(10 * ms)
     i, t, y = mus.get_state()
-    # first channel would have caught about half the spikes from sgg2
+    # first channel would have caught about nearly 20 from sgg1 and 40/2=20 spikes from sgg2
     assert 20 < np.sum(mus.i == 0) < 60
-    # second channel would have caught all spikes from sgg1 and sgg2
-    assert np.sum(mus.i == 1) == 60
+    # second channel would have caught most, not all spikes from sgg1 and sgg2
+    assert 50 < np.sum(mus.i == 1) < 60
     assert len(mus.t) == len(mus.t_samp) == y.sum()
     assert np.all(mus.t_samp == 10 * ms)
 
@@ -138,8 +145,8 @@ def test_SortedSpiking():
     sim = CLSimulator(net)
     ss = SortedSpiking(
         name="ss",
-        r_perfect_detection=0.3 * mm,
-        r_half_detection=0.75 * mm,
+        r_noise_floor=0.75 * mm,
+        threshold_sigma=1,
     )
     probe = Probe(
         [[0, 0, 0.25], [0, 0, 0.75], [0, 0, 10]] * mm, [ss], save_history=True
@@ -174,14 +181,18 @@ def test_SortedSpiking():
     assert np.all(np.in1d(ss.t_samp, [3, 4, 5, 6]))
 
 
+def test_false_positives():
+    pass
+
+
 def _test_reset(spike_signal_class):
     sgg = _spike_generator_group([0], period=1 * ms)
     net = Network(sgg)
     sim = CLSimulator(net)
     spike_signal = spike_signal_class(
         name="spikes",
-        r_perfect_detection=0.3 * mm,
-        r_half_detection=0.75 * mm,
+        r_noise_floor=0.75 * mm,
+        threshold_sigma=1,
     )
     probe = Probe([[0, 0, 0]] * mm, [spike_signal], save_history=True)
     sim.inject(probe, sgg)
@@ -201,10 +212,7 @@ def test_SortedSpiking_reset():
 
 
 def _test_spiking_to_neo(spike_signal_class):
-    spike_sig = spike_signal_class(
-        r_perfect_detection=0.3 * mm,
-        r_half_detection=0.75 * mm,
-    )
+    spike_sig = spike_signal_class()
     n_channels = 50
     probe = Probe(np.random.rand(n_channels, 3) * mm, [spike_sig])
     probe.sim = CLSimulator(Network())

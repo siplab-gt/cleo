@@ -30,15 +30,10 @@ def _(mo):
     return
 
 
-@app.cell
-def _(sampled_cells):
-    sampled_cells.to_pandas()
-    return
-
-
 @app.cell(hide_code=True)
 def _():
     import marimo as mo
+
     return (mo,)
 
 
@@ -59,7 +54,15 @@ def _(mo):
         - `spike_amplitude_cv`: The coefficient of variation of spike amplitudes, i.e., $\sigma_A/\mu_A$.
             - Can't find any good cited values. From randomly chosen mouse neurons in the [Allen Cell Type data](https://celltypes.brain-map.org/), it looks like 0-0.15 is a typical range, with the median around 0.05. See [below](#estimating-amplitude-cv-from-data). 
         - `r0`: A small distance added to $r$ before computing the amplitude to avoid division by 0 for the power law decay. It also makes some physical sense as the minimum distance from the current source it is possible to place an electrode, 5 μm being reasonable as the radius of a typical soma.
-        - `amp_decay_power`: The power with which the amplitude decays, i.e., $A'(r) = r^{- \texttt{amp\_decay\_power}}$, where $A'(r)$ is the unshifted, unscaled amplitude function.
+        - `amp_decay_power`: The power with which the amplitude decays, i.e., $A'(r) = r^{- \texttt{amp\_decay\_power}}$, where $A'(r)$ is the unshifted, unscaled amplitude function. There are the values we get from [Pettersen et al. (2008)](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC2186261/):
+            - pyramidal
+                - ≤ 60 μm: 2
+                - 60-200 μm: 2.5
+                - 500-1000 μm: 2
+            - stellate
+                - ≤ 60 μm: 2
+                - 60-100 μm: 3
+                - 100-200 μm: 2
 
         Putting these parameters together, the final form of the amplitude function is
 
@@ -101,16 +104,13 @@ def _(params):
     import numpy as np
     from scipy.stats import norm
 
-
     def spike_amp_unscaled(r):
         return r ** -params["amp_decay_power"]
-
 
     def spike_amplitude(radius):
         return spike_amp_unscaled(radius + params["r0"]) / spike_amp_unscaled(
             params["r_noise_floor"] + params["r0"]
         )
-
 
     rr = np.linspace(5, 300, 100)
     _amp = spike_amplitude(rr)
@@ -200,9 +200,9 @@ def _(mo):
 @app.cell
 def _():
     import polars as pl
+    from allensdk.api.queries.cell_types_api import CellTypesApi
     from allensdk.core.cell_types_cache import CellTypesCache
     from allensdk.ephys.ephys_extractor import EphysSweepFeatureExtractor
-    from allensdk.api.queries.cell_types_api import CellTypesApi
 
     # Instantiate the CellTypesCache instance.  The manifest_file argument
     # tells it where to store the manifest, which is a JSON file that tracks
@@ -259,6 +259,7 @@ def _(ctc, pl):
         print(f"{cell_id=}")
         print(f"{sweep_number=}")
         return sweep_number
+
     return (get_sweep_for_cell,)
 
 
@@ -305,7 +306,6 @@ def _(
         # using threshold to peak as amplitude
         amp = v_spk - v_thresh
         return np.std(amp) / np.abs(np.mean(amp))
-
 
     # estimate_cv(464212183, 102)
     cvs = []

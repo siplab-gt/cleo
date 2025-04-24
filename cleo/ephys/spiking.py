@@ -1,16 +1,19 @@
-"""Contains multi-unit and sorted spiking signals"""
+"""Contains multi-unit and sorted spiking signals."""
+
 from __future__ import annotations
 
 from abc import abstractmethod
 from datetime import datetime
-from typing import Tuple
+from typing import Callable, Tuple
 
 import neo
 import numpy as np
 import quantities as pq
 from attrs import define, field, fields
 from bidict import bidict
-from brian2 import NeuronGroup, Quantity, SpikeMonitor, mm, ms
+from brian2 import NeuronGroup, Quantity, SpikeMonitor, mm, ms, um
+from jaxtyping import Bool, Float, UInt
+from scipy.stats import norm
 
 from cleo.base import NeoExportable
 from cleo.ephys.probes import Signal
@@ -19,17 +22,38 @@ from cleo.utilities import rng, unit_safe_cat
 
 @define(eq=False)
 class Spiking(Signal, NeoExportable):
-    """Base class for probabilistically detecting spikes"""
+    """Base class for probabilistically detecting spikes.
 
-    r_perfect_detection: Quantity
-    """Radius (with Brian unit) within which all spikes
-    are detected"""
-    r_half_detection: Quantity
-    """Radius (with Brian unit) within which half of all spikes
-    are detected"""
+    See `notebooks/spike_detection.py` for an interactive explanation of the methods
+    and parameters involved."""
+
+    r_noise_floor: Quantity = 80 * um
+    """Radius (with Brian unit) at which the measured spike amplitude
+    equals the background noise standard deviation. 
+    i.e., `spike_amplitude(r_noise_floor) = sigma_noise = 1`"""
+    threshold_sigma: int = 4
+    """Spike detection threshold, as a multiple of sigma_noise. 
+    Values in real experiments typically range from 3 to 6."""
+    spike_amplitude_cv: float = 0.05
+    """Coefficient of variation of the spike amplitude, i.e., `|sigma_amp/mu_amp|`. 
+    From what we have seen in Allen Cell Types data, this ranges from 0 to 0.2, 
+    but is most often very low."""
+    r0: Quantity = 5 * um
+    """A small distance added to r before computing the amplitude to avoid division
+    by 0 for the power law decay. 
+    
+    It also makes some physical sense as the minimum distance from the current source
+    it is possible to place an electrode, 5 μm being reasonable as the radius of a typical soma."""
     cutoff_probability: float = 0.01
     """Spike detection probability below which neurons will not be
     considered. For computational efficiency."""
+    eap_decay_fn: Callable[[Quantity], float] = lambda r: r**-2
+    """The function describing the decay of the measured extracellular action potential
+    amplitude. By default 1/r^2.
+    
+    This inverse square decay is a good approximation in accordance with the detailed
+    simulations by `Pettersen et al. (2008) <https://www.ncbi.nlm.nih.gov/pmc/articles/PMC2186261/>`_,
+    though they find the exponent ranges from 2 to 3 depending on the cell type and distance. """
     t: Quantity = field(
         init=False, factory=lambda: ms * np.array([], dtype=float), repr=False
     )
@@ -51,7 +75,10 @@ class Spiking(Signal, NeoExportable):
     neuron group indices and the indices the probe uses"""
     _monitors: list[SpikeMonitor] = field(init=False, factory=list, repr=False)
     _mon_spikes_already_seen: list[int] = field(init=False, factory=list, repr=False)
-    _dtct_prob_array: Float[np.ndarray, "n_neurons n_channels"] = field(
+    _mu_eap: Float[np.ndarray, "n_neurons n_channels"] = field(
+        init=False, default=None, repr=False
+    )
+    _sigma_eap: Float[np.ndarray, "n_neurons n_channels"] = field(
         init=False, default=None, repr=False
     )
 
@@ -74,26 +101,30 @@ class Spiking(Signal, NeoExportable):
         """Number of spike sources"""
         pass
 
-    def connect_to_neuron_group(
-        self, neuron_group: NeuronGroup, **kwparams
-    ) -> np.ndarray:
+    @property
+    def n_channels(self) -> int:
+        """Number of channels on probe"""
+        return self.probe.n
+
+    def mean_eap_amplitude(self, r: Quantity) -> float:
+        """The mean extracellular action potential amplitude, as a multiple
+        of background noise standard deviation."""
+        return self.eap_decay_fn(r + self.r0) / self.eap_decay_fn(
+            self.r0 + self.r_noise_floor
+        )
+
+    def connect_to_neuron_group(self, neuron_group: NeuronGroup, **kwparams):
         """Configure signal to record from specified neuron group
 
         Parameters
         ----------
         neuron_group : NeuronGroup
             Neuron group to record from
-
-        Returns
-        -------
-        np.ndarray
-            num_neurons_to_consider x num_channels array of spike
-            detection probabilities, for use in subclasses
         """
         super(Spiking, self).connect_to_neuron_group(neuron_group, **kwparams)
         # could support separate detection probabilities per group using kwparams
         # n_neurons X n_channels X 3
-        dist2 = np.zeros((len(neuron_group), self.probe.n))
+        dist2 = np.zeros((len(neuron_group), self.n_channels))
         for dim in ["x", "y", "z"]:
             dim_ng, dim_probe = np.meshgrid(
                 getattr(neuron_group, dim),
@@ -103,8 +134,12 @@ class Spiking(Signal, NeoExportable):
             # proactively strip units to avoid numpy maybe doing so
             dist2 += (dim_ng / mm - dim_probe / mm) ** 2
         distances = np.sqrt(dist2) * mm
+        mu_eap = self.mean_eap_amplitude(distances)
+        # 1 from baseline noise, mu * cv from spike amp variability
+        sigma_eap = 1 + mu_eap * self.spike_amplitude_cv
+        probs = norm.sf(self.threshold_sigma, loc=mu_eap, scale=sigma_eap)
+        assert probs.shape == (len(neuron_group), self.n_channels)
         # probs is n_neurons by n_channels
-        probs = self._detection_prob_for_distance(distances)
         # cut off to get indices of neurons to monitor
         # [0] since nonzero returns tuple of array per axis
         i_ng_to_keep = np.nonzero(np.all(probs > self.cutoff_probability, axis=1))[0]
@@ -126,8 +161,15 @@ class Spiking(Signal, NeoExportable):
                 }
             )
 
-        # return neuron-channel detection probabilities array for use in subclass
-        return probs[i_ng_to_keep]
+        # store neuron-channel mean and stdev of EAPs to use in subclasses
+        if self._mu_eap is None:
+            self._mu_eap = mu_eap[i_ng_to_keep]
+            self._sigma_eap = sigma_eap[i_ng_to_keep]
+        else:
+            self._mu_eap = np.concatenate((self._mu_eap, mu_eap[i_ng_to_keep]), axis=0)
+            self._sigma_eap = np.concatenate(
+                (self._sigma_eap, sigma_eap[i_ng_to_keep]), axis=0
+            )
 
     @abstractmethod
     def get_state(
@@ -144,19 +186,6 @@ class Spiking(Signal, NeoExportable):
             for a single spike.
         """
         pass
-
-    def _detection_prob_for_distance(self, r: Quantity) -> float:
-        # p(d) = h/(r-c)
-        a = self.r_perfect_detection
-        b = self.r_half_detection
-        # solving for p(a) = 1 and p(b) = .5 yields:
-        c = 2 * a - b
-        h = b - a
-        with np.errstate(divide="ignore"):
-            decaying_p = h / (r - c)
-        decaying_p[decaying_p == np.inf] = 1  # to fix NaNs caused by /0
-        p = 1 * (r <= a) + decaying_p * (r > a)
-        return p
 
     def _i_ng_to_i_probe(self, i_ng, monitor):
         ng = monitor.source
@@ -176,6 +205,25 @@ class Spiking(Signal, NeoExportable):
             self._mon_spikes_already_seen[j] = mon.num_spikes
 
         return i_probe, t
+
+    def _noisily_detect_spikes(
+        self, i_probe, t
+    ) -> Tuple[Bool[np.ndarray, "n_spikes {self.n_channels}"], Quantity]:
+        n_spks = len(i_probe)
+        # mu and sigma arrays: n_nrns x n_channels
+        mu_eap_for_spikes = self._mu_eap[i_probe]
+        sigma_eap_for_spikes = self._sigma_eap[i_probe]
+        assert (
+            mu_eap_for_spikes.shape
+            == sigma_eap_for_spikes.shape
+            == (n_spks, self.n_channels)
+        )
+        spike_amps = rng.standard_normal(n_spks)
+        measured_eaps = (
+            spike_amps[:, np.newaxis] * sigma_eap_for_spikes + mu_eap_for_spikes
+        )
+        spk_per_chan_dtct = measured_eaps > self.threshold_sigma
+        return spk_per_chan_dtct, t
 
     def reset(self, **kwargs) -> None:
         # crucial that this be called after network restore
@@ -209,44 +257,19 @@ class MultiUnitSpiking(Spiking):
         """Number of channels on probe"""
         return self.probe.n
 
-    def connect_to_neuron_group(self, neuron_group: NeuronGroup, **kwparams) -> None:
-        """Configure signal to record from specified neuron group
-
-        Parameters
-        ----------
-        neuron_group : NeuronGroup
-            group to record from
-        """
-        neuron_channel_dtct_probs = super(
-            MultiUnitSpiking, self
-        ).connect_to_neuron_group(neuron_group, **kwparams)
-        if self._dtct_prob_array is None:
-            self._dtct_prob_array = neuron_channel_dtct_probs
-        else:
-            self._dtct_prob_array = np.concatenate(
-                (self._dtct_prob_array, neuron_channel_dtct_probs), axis=0
-            )
-
     def get_state(
         self,
     ) -> tuple[UInt[np.ndarray, "n_spikes"], Quantity, UInt[np.ndarray, "{self.n}"]]:
         # inherit docstring
-        i_probe, t = self._get_new_spikes()
         t_samp = self.probe.sim.network.t
-        i_c, t, y = self._noisily_detect_spikes_per_channel(i_probe, t)
-        self._update_saved_vars(t, i_c, t_samp)
-        return (i_c, t, y)
-
-    def _noisily_detect_spikes_per_channel(
-        self, i_probe, t
-    ) -> tuple[UInt[np.ndarray, "n_spikes"], Quantity, UInt[np.ndarray, "{self.n}"]]:
-        probs_for_spikes = self._dtct_prob_array[i_probe]
-        detected_spikes = rng.random(probs_for_spikes.shape) < probs_for_spikes
-        y = np.sum(detected_spikes, axis=0)
+        i_probe, t = self._get_new_spikes()
+        spk_per_chan_dtct, t = self._noisily_detect_spikes(i_probe, t)
         # ⬇ nonzero gives row, column indices of each nonzero element
-        i_spike_detected, i_c_detected = detected_spikes.nonzero()
-        t_detected = t[i_spike_detected]
-        return i_c_detected, t_detected, y
+        i_spk_detected, i_chan_detected = spk_per_chan_dtct.nonzero()
+        t_detected = t[i_spk_detected]
+        y = np.sum(spk_per_chan_dtct, axis=0)
+        self._update_saved_vars(t_detected, i_chan_detected, t_samp)
+        return i_chan_detected, t_detected, y
 
     def to_neo(self) -> neo.Group:
         group = super(MultiUnitSpiking, self).to_neo()
@@ -275,54 +298,20 @@ class SortedSpiking(Spiking):
         """Number of recorded neurons"""
         return len(self.i_probe_by_i_ng)
 
-    def connect_to_neuron_group(self, neuron_group: NeuronGroup, **kwparams) -> None:
-        """Configure sorted spiking signal to record from given neuron group
-
-        Parameters
-        ----------
-        neuron_group : NeuronGroup
-            group to record from
-        """
-        neuron_channel_dtct_probs = super(SortedSpiking, self).connect_to_neuron_group(
-            neuron_group, **kwparams
-        )
-        neuron_multi_channel_probs = self._combine_channel_probs(
-            neuron_channel_dtct_probs
-        )
-        if self._dtct_prob_array is None:
-            self._dtct_prob_array = neuron_multi_channel_probs
-        else:
-            self._dtct_prob_array = np.concatenate(
-                (self._dtct_prob_array, neuron_multi_channel_probs)
-            )
-
-    def _combine_channel_probs(
-        self, neuron_channel_dtct_probs: np.ndarray
-    ) -> np.ndarray:
-        # combine probabilities for each neuron to get just one representing
-        # when a spike is detected on at least 1 channel
-        # p(at least one detected) = 1 - p(none detected) = 1 - q1*q2*q3...
-        return 1 - np.prod(1 - neuron_channel_dtct_probs, axis=1)
-
     def get_state(
         self,
     ) -> tuple[UInt[np.ndarray, "n_spikes"], Quantity, UInt[np.ndarray, "{self.n}"]]:
         # inherit docstring
-        i_probe, t = self._get_new_spikes()
-        i_probe, t = self._noisily_detect_spikes(i_probe, t)
-        y = np.bincount(i_probe.astype(int))
+
+        t_samp = self.probe.sim.network.t
+        i_nrn_probe, t = self._get_new_spikes()
+        spk_per_chan_dtct, t = self._noisily_detect_spikes(i_nrn_probe, t)
+        # get spikes detected on any channel
+        spk_detected_any_channel = spk_per_chan_dtct.sum(axis=1) > 0
+        i_nrn_probe_detected = i_nrn_probe[spk_detected_any_channel]
+        t_detected = t[spk_detected_any_channel]
+        y = np.bincount(i_nrn_probe_detected.astype(int))
         # include 0s for upper indices not seen:
         y = np.concatenate([y, np.zeros(len(self.i_probe_by_i_ng) - len(y))])
-        t_samp = self.probe.sim.network.t / ms
-        self._update_saved_vars(t, i_probe, t_samp)
-        return (i_probe, t, y)
-
-    def _noisily_detect_spikes(self, i_probe, t) -> Tuple[np.ndarray, np.ndarray]:
-        # dtct_prob_array: n_nrns x n_channels
-        probs_for_spikes = self._dtct_prob_array[i_probe]
-        # now n_spks x n_channels
-        detected_spikes = rng.random(probs_for_spikes.shape) < probs_for_spikes
-        i_spike_detected = detected_spikes.nonzero()
-        i_probe_out = i_probe[i_spike_detected]
-        t_out = t[i_spike_detected]
-        return i_probe_out, t_out
+        self._update_saved_vars(t_detected, i_nrn_probe_detected, t_samp)
+        return i_nrn_probe_detected, t_detected, y
