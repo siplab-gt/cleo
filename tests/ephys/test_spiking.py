@@ -1,17 +1,18 @@
 """Tests for ephys.spiking module"""
 
 import numpy as np
+import pytest
 import quantities as pq
-from brian2 import Network, SpikeGeneratorGroup, mm, ms
+from brian2 import Network, SpikeGeneratorGroup, mm, ms, um
 
 import cleo
 import cleo.utilities
 from cleo import CLSimulator
-from cleo.ephys import MultiUnitSpiking, Probe, SortedSpiking
+from cleo.ephys import MultiUnitSpiking, Probe, SortedSpiking, Spiking
 from cleo.ioproc import RecordOnlyProcessor
 
 
-def _spike_generator_group(z_coords_mm, indices=None, times_ms=None, **kwparams):
+def spike_generator_group(z_coords_mm, indices=None, times_ms=None, **kwparams):
     N = len(z_coords_mm)
     if indices is None:
         indices = range(N)
@@ -35,7 +36,7 @@ def test_MUS_multiple_contacts(rand_seed):
     indices = [0, 0, 0, 1, 1, 2, 0, 1, 2] + [0] * 10 + [2] * 10
     times = [0.9, 2.1, 3.5, 3.5, 4.1, 4.9, 5.1, 5.3, 5.5]
     times.extend(np.linspace(6.1, 10.9, 20))
-    sgg = _spike_generator_group((0, 0.5, 1), indices, times)
+    sgg = spike_generator_group((0, 0.5, 1), indices, times)
     net = Network(sgg)
     sim = CLSimulator(net)
     mus = MultiUnitSpiking(
@@ -92,18 +93,18 @@ def test_MUS_multiple_contacts(rand_seed):
     assert len(mus.i) == len(mus.t) == len(mus.t_samp)
 
 
-def test_MUS_multiple_groups():
+def test_MUS_multiple_groups(rand_seed):
     """
     probe: 0    0.1 mm
     sgg1:  0    0.1 mm                       -------------> 9000 mm
     sgg2:               0.19  0.2 mm
     sgg3:                                    -------------> 9000 mm
     """
-    cleo.utilities.set_seed(1836)
-    sgg1 = _spike_generator_group((0, 0.1, 9000), period=1 * ms)  # i_probe = 4, 5
-    sgg2 = _spike_generator_group((0.19, 0.2), period=0.5 * ms)  # i_probe = 6, 7
+    cleo.utilities.set_seed(rand_seed)
+    sgg1 = spike_generator_group((0, 0.1, 9000), period=1 * ms)  # i_probe = 4, 5
+    sgg2 = spike_generator_group((0.19, 0.2), period=0.5 * ms)  # i_probe = 6, 7
     # too far away to record at all:
-    sgg3 = _spike_generator_group((9000,), period=1 * ms)
+    sgg3 = spike_generator_group((9000,), period=1 * ms)
     sim = CLSimulator(Network(sgg1, sgg2, sgg3))
     mus = MultiUnitSpiking(
         name="mus",
@@ -127,10 +128,10 @@ def test_MUS_reset():
     _test_reset(MultiUnitSpiking)
 
 
-def test_SortedSpiking():
-    cleo.utilities.set_seed(1918)
+def test_SortedSpiking(rand_seed):
+    cleo.utilities.set_seed(rand_seed)
     # sgg0 neurons at i_eg 0 and 1 are in range, but have no spikes
-    sgg0 = _spike_generator_group((0.1, 777, 0.3), indices=[], times_ms=[])
+    sgg0 = spike_generator_group((0.1, 777, 0.3), indices=[], times_ms=[])
     # raster of test spikes: each character is 1-ms bin
     #        i_ng, i_eg, distance
     # | || |  <- 0, 2, 0mm     contact at .25mm
@@ -140,7 +141,7 @@ def test_SortedSpiking():
     #     ||  <- 4, 5, 1mm
     indices = [0, 0, 0, 1, 1, 4, 0, 1, 4, 2, 2, 2, 2, 2, 2]
     times = [0.9, 2.1, 3.5, 3.5, 4.1, 4.9, 5.1, 5.3, 5.5, 0, 1, 2, 3, 4, 5]
-    sgg1 = _spike_generator_group((0, 0.5, 100, -0.1, 1), indices, times)
+    sgg1 = spike_generator_group((0, 0.5, 100, -0.1, 1), indices, times)
     net = Network(sgg0, sgg1)
     sim = CLSimulator(net)
     ss = SortedSpiking(
@@ -153,6 +154,9 @@ def test_SortedSpiking():
     )
     # injecting sgg0 before sgg1 needed to predict i_eg
     sim.inject(probe, sgg0, sgg1)
+
+    i, t, y = sim.get_state()["Probe"]["ss"]
+    assert len(i) == len(t) == y.sum() == 0
 
     sim.run(3 * ms)  # 3 ms
     i, t, y = sim.get_state()["Probe"]["ss"]
@@ -181,12 +185,95 @@ def test_SortedSpiking():
     assert np.all(np.in1d(ss.t_samp, [3, 4, 5, 6]))
 
 
-def test_false_positives():
-    pass
+def test_false_positives(rand_seed):
+    cleo.utilities.set_seed(rand_seed)
+    # SS and MUS, different sigmas
+    ss1 = SortedSpiking(threshold_sigma=2, name="ss1")
+    ss2 = SortedSpiking(threshold_sigma=4, name="ss2")
+    mus1 = MultiUnitSpiking(threshold_sigma=2, name="mus1")
+    mus2 = MultiUnitSpiking(threshold_sigma=4, name="mus2")
+    sgg = spike_generator_group((0, 0.1, 9000), period=0.5 * ms)  # i_probe = 4, 5
+    sim = CLSimulator(Network(sgg))
+    probe = Probe(
+        [[0, 0, 50], [10, 20, 99], [-1, -2, 1000]] * um, [ss1, ss2, mus1, mus2]
+    )
+    sim.inject(probe, sgg)
+    sim.run(20 * ms)
+    probe.get_state()
+
+    assert len(ss1.t) > len(ss2.t), (
+        f"Lower threshold should catch more spikes ({len(ss1.t)=} !> {len(ss2.t)=})"
+    )
+    assert len(mus1.t) > len(mus2.t), (
+        f"Lower threshold should catch more spikes ({len(mus1.t)=} !> {len(mus2.t)=})"
+    )
+    assert len(mus1.t) > len(ss1.t), (
+        f"MultiUnitSpiking should report more spikes than SortedSpiking ({len(mus1.t)=} !> {len(ss1.t)=})"
+    )
+    assert len(mus2.t) > len(ss2.t), (
+        f"MultiUnitSpiking should report more spikes than SortedSpiking ({len(mus2.t)=} !> {len(ss2.t)=})"
+    )
+
+    def num_fp(spiking):
+        """at least a lower bound, doesn't include those on spike schedules"""
+        return np.sum(spiking.t / ms % 0.5 != 0)
+
+    assert num_fp(ss1) == num_fp(ss2) == 0, (
+        f"SortedSpiking should not have false positives. {num_fp(ss1)=}, {num_fp(ss2)=}"
+    )
+    assert num_fp(mus1) > num_fp(mus2), (
+        f"Lower threshold should produce more false positives. {num_fp(mus1)=} !> {num_fp(mus2)=}"
+    )
+    assert num_fp(mus2) > 0, (
+        f"MultiUnitSpiking should produce false positives. {num_fp(mus2)=} !> 0"
+    )
+
+
+@pytest.mark.parametrize("SpikingType", [SortedSpiking, MultiUnitSpiking])
+def test_r_noise_floor(SpikingType, rand_seed):
+    cleo.utilities.set_seed(rand_seed)
+    s1 = SpikingType(r_noise_floor=80 * um, name="s1")
+    s2 = SpikingType(r_noise_floor=180 * um, name="s2")
+    sgg = spike_generator_group((0, 0.1, 9000), period=0.5 * ms)  # i_probe = 4, 5
+    sim = CLSimulator(Network(sgg))
+    probe = Probe([[0, 0, 50], [10, 20, 99], [-1, -2, 1000]] * um, [s1, s2])
+    sim.inject(probe, sgg)
+    sim.run(20 * ms)
+    assert len(s2.t) > len(s1.t), (
+        f"Larger r_noise_floor should catch more spikes ({len(s2.t)=} !> {len(s1.t)=})"
+    )
+
+
+@pytest.mark.parametrize("SpikingType", [SortedSpiking, MultiUnitSpiking])
+def test_spike_amplitude_cv(SpikingType, rand_seed):
+    cleo.utilities.set_seed(rand_seed)
+    s_low_cv = SpikingType(spike_amplitude_cv=0.03, threshold_sigma=4, name="s_low_cv")
+    s_hi_cv = SpikingType(spike_amplitude_cv=0.3, threshold_sigma=4, name="s_hi_cv")
+    sgg = spike_generator_group((0, 0.1, 9000), period=0.1 * ms)  # i_probe = 4, 5
+    sim = CLSimulator(Network(sgg))
+    probe = Probe([[0, 0, 20], [10, 5, 99], [-1, -2, 1000]] * um, [s_low_cv, s_hi_cv])
+    sim.inject(probe, sgg)
+    for sig in [s_low_cv, s_hi_cv]:
+        assert len(sig.i_probe_by_i_ng) == 2, (
+            f"Probe should be picking up 2 neurons, but got {len(sig.i_probe_by_i_ng)}"
+        )
+    sim.run(10 * ms)
+    for sig in [s_low_cv, s_hi_cv]:
+        i, t, y = sig.get_state()
+        assert len(y) == sig.n, f"y should have length {sig.n=}, but got {len(y)}"
+
+    assert np.sum(s_hi_cv.i == 0) < np.sum(s_low_cv.i == 0), (
+        "Higher spike_amplitude_cv should catch fewer threshold-proximal spikes"
+        f"({np.sum(s_hi_cv.i == 0)=} !< {np.sum(s_low_cv.i == 0)=})"
+    )
+    assert np.sum(s_hi_cv.i == 1) > np.sum(s_low_cv.i == 0), (
+        "Higher spike_amplitude_cv should catch more threshold-distal spikes"
+        f"({np.sum(s_hi_cv.i == 0)=} !< {np.sum(s_low_cv.i == 0)=})"
+    )
 
 
 def _test_reset(spike_signal_class):
-    sgg = _spike_generator_group([0], period=1 * ms)
+    sgg = spike_generator_group([0], period=1 * ms)
     net = Network(sgg)
     sim = CLSimulator(net)
     spike_signal = spike_signal_class(
