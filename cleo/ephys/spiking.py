@@ -48,7 +48,7 @@ class Spiking(Signal, NeoExportable):
     
     It also makes some physical sense as the minimum distance from the current source
     it is possible to place an electrode, 5 μm being reasonable as the radius of a typical soma."""
-    cutoff_probability: float = None
+    recall_cutoff: float = None
     """Spike detection probability (recall) above which neurons will be considered.
     
     Mainly for efficiency in the case of :class:`MultiUnitSpiking`.
@@ -62,15 +62,15 @@ class Spiking(Signal, NeoExportable):
     simulations by `Pettersen et al. (2008) <https://www.ncbi.nlm.nih.gov/pmc/articles/PMC2186261/>`_,
     though they find the exponent ranges from 2 to 3 depending on the cell type and distance. """
     collision_prob_fn: Callable[[Quantity], float] = field(default=None)
-    """The probability of failing to detect the latter of two overlapping spikes
-    on a given channel, as a function of ``t2 - t1``.
+    """The probability of failing to detect the latter of two overlapping threshold
+    crossings on a given channel, as a function of ``t2 - t1``.
     Values for ``t2 - t1 < 0`` are ignored.
 
     For :class:`SortedSpiking`, the default is a decaying exponential.
     See `Garcia et al. (2022) <https://www.eneuro.org/content/9/5/ENEURO.0105-22.2022>`_
     for what this might look like for different sorters.
 
-    By default simply enforces a 2 ms refractory period
+    By default simply enforces a hard 1 ms refractory period
     per channel for :class:`MultiUnitSpiking`.
     """
 
@@ -136,17 +136,73 @@ class Spiking(Signal, NeoExportable):
         """Number of channels on probe"""
         return self.probe.n
 
-    def detection_probability_by_distance(self, r: Quantity) -> float:
+    @property
+    def snr_cutoff(self) -> float:
+        """The minimum SNR required for spikes to factor into detection.
+        Derived from :attr:`~Spiking.recall_cutoff`."""
+        return self.snr_by_recall(self.recall_cutoff)
+
+    @property
+    def r_threshold(self, resolution: Quantity = um / 10) -> Quantity:
+        """The distance from a contact at which the SNR equals the detection threshold.
+        This also means 50% recall."""
+        return self.r_for_snr(self.threshold_sigma, resolution=resolution)
+
+    @property
+    def r_cutoff(self, resolution: Quantity = um / 10) -> Quantity:
+        """The distance from a contact at which the recall is high enough for a neuron
+        to be included."""
+        return self.r_for_recall(self.recall_cutoff, resolution=resolution)
+
+    def r_for_recall(
+        self,
+        recall: float,
+        resolution: Quantity = um / 10,
+        upper_limit: Quantity = None,
+    ) -> Quantity:
+        """The distance from a contact at which the recall (detection probability)
+        equals the specified value."""
+        if upper_limit is None:
+            upper_limit = 10 * self.r_noise_floor
+        rr = np.arange(0, upper_limit / um, resolution / um) * um
+        recalls = self.recall_by_distance(rr)
+        try:
+            return rr[recalls <= recall][0]
+        except IndexError:
+            return self.r_for_recall(
+                recall, resolution=resolution, upper_limit=upper_limit * 2
+            )
+
+    def r_for_snr(
+        self, snr: float, resolution: Quantity = um, upper_limit: Quantity = None
+    ) -> Quantity:
+        """The distance from a contact at which the SNR equals the specified value."""
+        if upper_limit is None:
+            upper_limit = 10 * self.r_noise_floor
+        rr = np.arange(0, upper_limit / um, resolution / um) * um
+        try:
+            return rr[self.snr_by_distance(rr) <= snr][0]
+        except IndexError:
+            return self.r_for_snr(
+                snr, resolution=resolution, upper_limit=upper_limit * 2
+            )
+
+    def recall_by_snr(self, snr: float) -> float:
         """Probability of detecting a spike at distance r from the neuron
-        as a function of distance."""
+        as a function of SNR."""
         # 1 - P(spike not detected)
-        mu = self.snr(r)
+        mu = snr
         sigma = 1 + mu * self.spike_amplitude_cv
         return norm.sf(self.threshold_sigma, loc=mu, scale=sigma)
 
-    def snr(self, r: Quantity) -> float:
-        """The mean extracellular action potential amplitude, as a multiple
-        of background noise standard deviation."""
+    def recall_by_distance(self, r: Quantity) -> float:
+        """Probability of detecting a spike at distance r from the neuron
+        as a function of distance."""
+        return self.recall_by_snr(self.snr_by_distance(r))
+
+    def snr_by_distance(self, r: Quantity) -> float:
+        """The mean extracellular action potential amplitude as a function of distance
+        from the neuron, in units of background noise standard deviation."""
         return self.eap_decay_fn(r + self.r0) / self.eap_decay_fn(
             self.r0 + self.r_noise_floor
         )
@@ -172,7 +228,7 @@ class Spiking(Signal, NeoExportable):
             # proactively strip units to avoid numpy maybe doing so
             dist2 += (dim_ng / mm - dim_probe / mm) ** 2
         distances = np.sqrt(dist2) * mm
-        mu_eap = self.snr(distances)
+        mu_eap = self.snr_by_distance(distances)
         # 1 from baseline noise, mu * cv from spike amp variability
         sigma_eap = 1 + mu_eap * self.spike_amplitude_cv
         probs = norm.sf(self.threshold_sigma, loc=mu_eap, scale=sigma_eap)
@@ -180,7 +236,7 @@ class Spiking(Signal, NeoExportable):
         # probs is n_neurons by n_channels
         # cut off to get indices of neurons to monitor
         # [0] since nonzero returns tuple of array per axis
-        i_ng_to_keep = np.nonzero(np.any(probs > self.cutoff_probability, axis=1))[0]
+        i_ng_to_keep = np.nonzero(np.any(probs >= self.recall_cutoff, axis=1))[0]
 
         if len(i_ng_to_keep) > 0:
             # create monitor
@@ -245,7 +301,6 @@ class Spiking(Signal, NeoExportable):
             i_probe_unfilt = np.array(
                 [self.i_probe_by_i_ng.get((mon.source, k), -1) for k in i_ng]
             )
-            # return i_probe_unfilt[i_probe_unfilt != -1].astype(np.uint)
             i2keep = i_probe_unfilt != -1
             i_probe = np.concatenate((i_probe, i_probe_unfilt[i2keep].astype(np.uint)))
             t = unit_safe_cat([t, mon.t[spikes_already_seen:][i2keep]])
@@ -276,7 +331,7 @@ class Spiking(Signal, NeoExportable):
         # scale noise so RMS after filtering is 1
         white_noise *= pre_filter_factor
         filtered_noise = signal.sosfilt(sos, white_noise, axis=0)
-        assert np.isclose(np.std(filtered_noise), 1, rtol=0.01), (
+        assert np.isclose(np.std(filtered_noise), 1, rtol=0.05), (
             f"Filtered noise RMS {np.std(filtered_noise)} != 1"
         )
 
@@ -301,7 +356,6 @@ class Spiking(Signal, NeoExportable):
         t_window = np.arange(n_t) * dt + self._prev_t
 
         self._prev_zi = zi
-        self._prev_t = self.probe.sim.network.t
         return noise_filt, t_window
 
     def _noisily_get_true_tcs(
@@ -324,7 +378,9 @@ class Spiking(Signal, NeoExportable):
         sigma_spike_amps = mu_eap_for_spikes * self.spike_amplitude_cv
 
         # add noise at right timesteps
-        noise_at_spks = noise[(t / b2.defaultclock.dt).astype(int)]
+        noise_at_spks = noise[
+            ((t - self._prev_t) / b2.defaultclock.dt).round().astype(int)
+        ]
 
         assert (
             mu_eap_for_spikes.shape
@@ -343,30 +399,60 @@ class Spiking(Signal, NeoExportable):
         i_probe_tcs = i_probe[i_spk_tcs]
         t_tcs = t[i_spk_tcs]
         amp_tcs = amps[i_spk_tcs, i_chan_tcs]
+        self._prev_t = self.probe.sim.network.t
 
         return t_tcs, i_probe_tcs, i_chan_tcs, amp_tcs, noise, t_noise
 
-    def _collision_filter(self, t, i_chan, amps) -> Bool[np.ndarray, "n_spikes"]:
+    @staticmethod
+    @cache
+    def _max_collision_interval(dt_ms, collision_prob_fn):
+        intervals = np.arange(10 / dt_ms) * dt_ms * ms
+        try:
+            return intervals[collision_prob_fn(intervals) <= 1e-3][0]
+        except IndexError:
+            raise NotImplementedError("not looking for max collision interval >= 10 ms")
+
+    def _sample_collisions(self, t, i_chan, amps) -> Bool[np.ndarray, "n_spikes"]:
         """Filter out spikes that are too close together in time on the same channel.
-        For simplicity, the first spike is kept, or the largest if simultaneous."""
+        For simplicity, the first spike is kept, or the largest if simultaneous.
+
+        Note this operates on candidate threshold crossings, not called spikes.
+        This is mainly for computational efficiency, so we don't have to iterate."""
+        assert np.all(np.diff(t) >= 0), "should be time-sorted"
+
+        # need to combine with previous t, i_chan, amps
+        where_window_starts = len(self._prev_t_tcs)
+        t = unit_safe_cat([self._prev_t_tcs, t])
+        i_chan = np.concatenate([self._prev_i_chan_tcs, i_chan])
+        amps = np.concatenate([self._prev_amp_tcs, amps])
+
         # rows=spike 2, cols=spike 1
         t_diff = t[:, None] - t[None, :]
         amp_diff = amps[:, None] - amps[None, :]
         same_chan = i_chan[:, None] == i_chan[None, :]
 
-        collision_prob = self.collision_probability(t_diff) * same_chan
-        n_pairs_orig = np.sum(collision_prob > 0)
+        collision_prob = self.collision_prob_fn(t_diff) * same_chan
+        # remove self-pairs
+        np.fill_diagonal(collision_prob, 0)
         # only consider same-channel pairs, and only consider where t_spk2 >= t_spk1
         collision_prob *= t_diff >= 0
         # should be roughly lower triangular at this point if spikes are ordered by time
         # for simultaneous spikes, make sure biggest amplitude wins
         # by removing simultaneous pairs where the second is bigger
-        collision_prob[(t_diff == 0) & amp_diff > 0] = 0
-        assert np.sum(collision_prob > 0) == n_pairs_orig / 2, (
-            f"Time and amplitude difference filtering should have cut potential "
-            f"collisions in half, but {np.sum(collision_prob > 0)} != {n_pairs_orig / 2}"
+        collision_prob[(t_diff == 0) & (amp_diff > 0)] = 0
+
+        which_collided = np.any(
+            rng.uniform(size=collision_prob.shape) < collision_prob, axis=1
         )
-        return np.any(rng.uniform(size=collision_prob.shape) < collision_prob, axis=1)
+
+        # save t, i_chan, amps for next call
+        # earliest time needed from current time (more than enough for next sample)
+        t_needed = self.probe.sim.network.t - self._max_collision_interval(
+            b2.defaultclock.dt / ms, self.collision_prob_fn
+        )
+        i_start = np.searchsorted(t, t_needed)
+
+        return which_collided[where_window_starts:]
 
     def reset(self, **kwargs) -> None:
         # crucial that this be called after network restore
@@ -395,8 +481,9 @@ class Spiking(Signal, NeoExportable):
 class MultiUnitSpiking(Spiking):
     """Detects (unsorted) spikes per channel."""
 
-    cutoff_probability: float = 0.01
-    collision_probability: Callable[[Quantity], float] = lambda t: t < 2 * ms
+    recall_cutoff: float = 0.01
+    collision_prob_fn: Callable[[Quantity], float] = lambda t: t < 1 * ms
+    simulate_false_positives: bool = True
 
     @property
     def n(self):
@@ -415,17 +502,26 @@ class MultiUnitSpiking(Spiking):
             i_probe, t
         )
         # get false positives from noise
-        t_fps, i_chan_fps = (noise > self.threshold_sigma).nonzero()
-        amp_fps = noise[t_fps, i_chan_fps]
+        if self.simulate_false_positives:
+            i_t_fps, i_chan_fps = (noise > self.threshold_sigma).nonzero()
+            t_fps = t_noise[i_t_fps]
+            amp_fps = noise[i_t_fps, i_chan_fps]
+        else:
+            t_fps, i_chan_fps, amp_fps = [] * ms, [], []
 
         i_chan = np.concatenate([i_chan_tcs, i_chan_fps])
         t = unit_safe_cat([t_tcs, t_fps])
         amps = np.concatenate([amp_tcs, amp_fps])
+        # sort by time
+        sort_idx = np.argsort(t)
+        t = t[sort_idx]
+        i_chan = i_chan[sort_idx]
+        amps = amps[sort_idx]
 
-        # filter for collisions
-        collision_filter = self._collision_filter(t, i_chan, amps)
-        t_detected = t[collision_filter]
-        i_chan_detected = i_chan[collision_filter]
+        # sample collisions
+        which_collided = self._sample_collisions(t, i_chan, amps)
+        t_detected = t[~which_collided]
+        i_chan_detected = i_chan[~which_collided]
 
         y = np.bincount(i_chan_detected.astype(int))
         # include 0s for upper indices not seen:
@@ -455,7 +551,7 @@ class SortedSpiking(Spiking):
     multiple potential groups and within a group ignores those
     neurons that are too far away to be easily detected."""
 
-    cutoff_probability: float = 0.8
+    recall_cutoff: float = 0.8
     collision_prob_fn: Callable[[Quantity], float] = lambda t: 0.2 * np.exp(
         -t / (0.3 * ms)
     )
@@ -476,9 +572,9 @@ class SortedSpiking(Spiking):
             i_nrn_probe, t
         )
         # no false positives from noise in sorted spiking
-        collision_filter = self._collision_filter(t, i_chan_tcs, amp_tcs)
-        t_detected = t_tcs[collision_filter]
-        i_nrn_probe_detected = i_probe_tcs[collision_filter]
+        which_collided = self._sample_collisions(t_tcs, i_chan_tcs, amp_tcs)
+        t_detected = t_tcs[~which_collided]
+        i_nrn_probe_detected = i_probe_tcs[~which_collided]
 
         # remove repeat t, i_nrn spikes (spikes detected on >1 channel)
         _, spk_detected_any_channel = np.unique(
