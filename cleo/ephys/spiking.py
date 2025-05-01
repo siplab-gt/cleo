@@ -340,8 +340,10 @@ class Spiking(Signal, NeoExportable):
     def _generate_noise(self) -> tuple[Float[np.ndarray, "n_t n_channels"], Quantity]:
         """generate noise in spiking band"""
         dt = b2.defaultclock.dt
+        n_t = int(round((self.probe.sim.network.t - self._prev_t) / dt))
+        t_window = np.arange(n_t) * dt + self._prev_t
+
         sos, pre_filter_factor = self._prep_noise(dt / b2.second)
-        n_t = int((self.probe.sim.network.t - self._prev_t) / dt)
         if n_t <= 0:
             return np.zeros((0, self.n_channels)), [] * ms
         # generate white noise
@@ -353,7 +355,6 @@ class Spiking(Signal, NeoExportable):
         noise_filt, zi = signal.sosfilt(sos, white_noise, axis=0, zi=self._prev_zi)
         # I assume we won't have spikes at the current timestep here
         # since Cleo's NetworkOperation is scheduled for start of timestep
-        t_window = np.arange(n_t) * dt + self._prev_t
 
         self._prev_zi = zi
         return noise_filt, t_window
@@ -407,10 +408,11 @@ class Spiking(Signal, NeoExportable):
     @cache
     def _max_collision_interval(dt_ms, collision_prob_fn):
         intervals = np.arange(10 / dt_ms) * dt_ms * ms
-        try:
-            return intervals[collision_prob_fn(intervals) <= 1e-3][0]
-        except IndexError:
+        i = np.searchsorted(-collision_prob_fn(intervals).astype(float), -1e-3)
+        if i == len(intervals):
             raise NotImplementedError("not looking for max collision interval >= 10 ms")
+        else:
+            return intervals[i]
 
     def _sample_collisions(self, t, i_chan, amps) -> Bool[np.ndarray, "n_spikes"]:
         """Filter out spikes that are too close together in time on the same channel.
@@ -421,10 +423,13 @@ class Spiking(Signal, NeoExportable):
         assert np.all(np.diff(t) >= 0), "should be time-sorted"
 
         # need to combine with previous t, i_chan, amps
-        where_window_starts = len(self._prev_t_tcs)
-        t = unit_safe_cat([self._prev_t_tcs, t])
-        i_chan = np.concatenate([self._prev_i_chan_tcs, i_chan])
-        amps = np.concatenate([self._prev_amp_tcs, amps])
+        try:
+            where_window_starts = len(self._prev_t_tcs)
+            t = unit_safe_cat([self._prev_t_tcs, t])
+            i_chan = np.concatenate([self._prev_i_chan_tcs, i_chan])
+            amps = np.concatenate([self._prev_amp_tcs, amps])
+        except AttributeError:
+            where_window_starts = 0
 
         # rows=spike 2, cols=spike 1
         t_diff = t[:, None] - t[None, :]
@@ -450,7 +455,11 @@ class Spiking(Signal, NeoExportable):
         t_needed = self.probe.sim.network.t - self._max_collision_interval(
             b2.defaultclock.dt / ms, self.collision_prob_fn
         )
-        i_start = np.searchsorted(t, t_needed)
+        # TODO: use searchsorted elsewhere
+        i_oldest_needed = max(np.searchsorted(t, t_needed) - 1, 0)
+        self._prev_t_tcs = t[i_oldest_needed:]
+        self._prev_i_chan_tcs = i_chan[i_oldest_needed:]
+        self._prev_amp_tcs = amps[i_oldest_needed:]
 
         return which_collided[where_window_starts:]
 

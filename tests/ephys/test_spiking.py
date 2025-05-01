@@ -1,15 +1,14 @@
 """Tests for ephys.spiking module"""
 
 import brian2.only as b2
+import cleo
+import cleo.utilities
 import numpy as np
 import pytest
 import quantities as pq
 from brian2 import Network, SpikeGeneratorGroup, mm, ms, um
-
-import cleo
-import cleo.utilities
 from cleo import CLSimulator
-from cleo.ephys import MultiUnitSpiking, Probe, SortedSpiking, Spiking
+from cleo.ephys import MultiUnitSpiking, Probe, SortedSpiking
 from cleo.ioproc import RecordOnlyProcessor
 
 
@@ -19,6 +18,10 @@ def reset_dt():
     yield
     # reset to default for other tests
     b2.defaultclock.dt = 0.1 * ms
+
+
+def no_collision(t2mt1):
+    return np.zeros(t2mt1.shape)
 
 
 def spike_generator_group(z_coords, indices=None, times_ms=None, **kwparams):
@@ -55,7 +58,7 @@ def test_MUS_multiple_contacts(rand_seed):
         # r_perfect_detection=0.3 * mm,
         r_noise_floor=0.75 * mm,
         threshold_sigma=1,
-        collision_prob_fn=lambda t: 0,
+        collision_prob_fn=no_collision,
         simulate_false_positives=False,
     )
     probe = Probe(
@@ -116,7 +119,7 @@ def test_MUS_multiple_groups(rand_seed):
     cleo.utilities.set_seed(rand_seed)
     mus = MultiUnitSpiking(
         name="mus",
-        collision_prob_fn=lambda t: 0,
+        collision_prob_fn=no_collision,
         simulate_false_positives=False,
     )
     r_thresh_mm = mus.r_threshold / mm
@@ -166,7 +169,7 @@ def test_SortedSpiking(rand_seed):
         name="ss",
         r_noise_floor=0.75 * mm,
         threshold_sigma=1,
-        collision_prob_fn=lambda t: 0,
+        collision_prob_fn=no_collision,
     )
     probe = Probe(
         [[0, 0, 0.25], [0, 0, 0.75], [0, 0, 10]] * mm, [ss], save_history=True
@@ -210,13 +213,13 @@ def test_false_positives(rand_seed, dt, reset_dt):
     assert b2.defaultclock.dt == 0.1 * ms
     b2.defaultclock.dt = dt * ms
     # SS and MUS, different sigmas
-    ss1 = SortedSpiking(threshold_sigma=1.5, name="ss1", collision_prob_fn=lambda t: 0)
-    ss2 = SortedSpiking(threshold_sigma=2.5, name="ss2", collision_prob_fn=lambda t: 0)
+    ss1 = SortedSpiking(threshold_sigma=1.5, name="ss1", collision_prob_fn=no_collision)
+    ss2 = SortedSpiking(threshold_sigma=2.5, name="ss2", collision_prob_fn=no_collision)
     mus1 = MultiUnitSpiking(
-        threshold_sigma=1.5, name="mus1", collision_prob_fn=lambda t: 0
+        threshold_sigma=1.5, name="mus1", collision_prob_fn=no_collision
     )
     mus2 = MultiUnitSpiking(
-        threshold_sigma=2.5, name="mus2", collision_prob_fn=lambda t: 0
+        threshold_sigma=2.5, name="mus2", collision_prob_fn=no_collision
     )
     sgg = spike_generator_group((0, 0.1, 9000) * mm, period=1 * ms)
     sim = CLSimulator(Network(sgg))
@@ -257,8 +260,8 @@ def test_false_positives(rand_seed, dt, reset_dt):
 @pytest.mark.parametrize("SpikingType", [SortedSpiking, MultiUnitSpiking])
 def test_r_noise_floor(SpikingType, rand_seed):
     cleo.utilities.set_seed(rand_seed)
-    s1 = SpikingType(r_noise_floor=80 * um, name="s1", collision_prob_fn=lambda t: 0)
-    s2 = SpikingType(r_noise_floor=180 * um, name="s2", collision_prob_fn=lambda t: 0)
+    s1 = SpikingType(r_noise_floor=80 * um, name="s1", collision_prob_fn=no_collision)
+    s2 = SpikingType(r_noise_floor=180 * um, name="s2", collision_prob_fn=no_collision)
     sgg = spike_generator_group((0, 0.1, 9000) * mm, period=0.5 * ms)  # i_probe = 4, 5
     sim = CLSimulator(Network(sgg))
     probe = Probe([[0, 0, 50], [10, 20, 99], [-1, -2, 1000]] * um, [s1, s2])
@@ -276,14 +279,14 @@ def test_spike_amplitude_cv(SpikingType, rand_seed):
     s_low_cv = SpikingType(
         spike_amplitude_cv=0.01,
         name="s_low_cv",
-        collision_prob_fn=lambda t: 0,
-        cutoff_probability=0.1,
+        collision_prob_fn=no_collision,
+        recall_cutoff=0.1,
     )
     s_hi_cv = SpikingType(
         spike_amplitude_cv=0.5,
         name="s_hi_cv",
-        collision_prob_fn=lambda t: 0,
-        cutoff_probability=0.1,
+        collision_prob_fn=no_collision,
+        recall_cutoff=0.1,
     )
     r_thresh_um = s_low_cv.r_threshold / um
     if SpikingType == SortedSpiking:
@@ -326,7 +329,10 @@ def _test_reset(spike_signal_class):
         name="spikes",
         r_noise_floor=0.75 * mm,
         threshold_sigma=1,
+        collision_prob_fn=no_collision,
     )
+    if spike_signal_class == MultiUnitSpiking:
+        spike_signal.simulate_false_positives = False
     probe = Probe([[0, 0, 0]] * mm, [spike_signal], save_history=True)
     sim.inject(probe, sgg)
     sim.set_io_processor(RecordOnlyProcessor(sample_period=1 * ms))
@@ -349,7 +355,9 @@ def test_collision(dt, reset_dt, rand_seed):
     cleo.utilities.set_seed(rand_seed)
     assert b2.defaultclock.dt == 0.1 * ms
     b2.defaultclock.dt = dt * ms
-    mus = MultiUnitSpiking(simulate_false_positives=False)
+    mus = MultiUnitSpiking(
+        simulate_false_positives=False, collision_prob_fn=lambda t: t < 2 * ms
+    )
     ss = SortedSpiking()
     ss_hi = SortedSpiking(
         name="high", collision_prob_fn=lambda t: ss.collision_prob_fn(t) * 3
@@ -360,7 +368,7 @@ def test_collision(dt, reset_dt, rand_seed):
 
     sgg = spike_generator_group(
         # get 2 neurons with recall above cutoff threshold
-        [ss.r_for_recall(0.98), ss.r_for_recall(0.82), ss.r_for_recall(0.001)],
+        [ss.r_for_recall(0.999), ss.r_for_recall(0.82), ss.r_for_recall(0.001)],
         period=1 * ms,
     )
     assert np.all(sgg.z[:2] < ss.r_cutoff)
@@ -387,12 +395,12 @@ def test_collision(dt, reset_dt, rand_seed):
     )
 
     # MUS can't catch spikes within 2 ms refractory period
-    assert np.sum(np.diff(mus.t) < 1 * ms) == 0, (
+    assert np.sum(np.diff(mus.t) < 2 * ms) == 0, (
         "MUS should not catch any spikes within 1 ms of each other"
     )
-    # assert len(mus.t) == 1, (
-    #     "MUS' hard refractory period should catch only the first spike of a burst"
-    # )
+    assert len(mus.t) == 1, (
+        "MUS' hard refractory period should catch only the first spike of a burst"
+    )
 
     assert len(ss.t) > len(ss_hi.t), (
         "a higher collision probability should catch fewer spikes"
@@ -416,6 +424,10 @@ def test_collision(dt, reset_dt, rand_seed):
     assert len(i) == len(t) == y.sum() == 0, (
         "spikes from previous sample should cause collision"
     )
+    mus.collision_prob_fn = lambda t: t == 0 * ms
+    sim.run(10 * ms)
+    i, t, y = mus.get_state()
+    assert len(i) > 3, "MUS should catch spikes now with only simultaneous collision"
 
 
 def _test_spiking_to_neo(spike_signal_class):
