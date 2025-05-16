@@ -118,7 +118,7 @@ See the {doc}`tutorials/electrodes` and {doc}`tutorials/all_optical` tutorials f
 coords = cleo.ephys.linear_shank_coords(
     array_length=1*b2.mm, channel_count=32, start_location=(0, 0, 0.2)*b2.mm
 )
-mua = cleo.ephys.MultiUnitSpiking(
+mua = cleo.ephys.MultiUnitActivity(
     r_perfect_detection=20 * b2.um,
     r_half_detection=40 * b2.um,
 )
@@ -165,7 +165,7 @@ This is done by creating a subclass and defining the {meth}`~cleo.ioproc.Latency
 class MyProcessor(cleo.ioproc.LatencyIOProcessor):
     def process(self, state_dict, t_samp):
         # state_dict contains a {'recorder_name': value} dict of network.
-        i_spikes, t_spikes, y_spikes = state_dict['Probe']['MultiUnitSpiking']
+        i_spikes, t_spikes, y_spikes = state_dict['Probe']['MultiUnitActivity']
         # on-off control
         irr0 = 5 if len(i_spikes) < 10 else 0
         # output is a {'stimulator_name': value} dict and output time

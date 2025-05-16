@@ -1,14 +1,15 @@
 """Tests for ephys.spiking module"""
 
 import brian2.only as b2
-import cleo
-import cleo.utilities
 import numpy as np
 import pytest
 import quantities as pq
 from brian2 import Network, SpikeGeneratorGroup, mm, ms, um
+
+import cleo
+import cleo.utilities
 from cleo import CLSimulator
-from cleo.ephys import MultiUnitSpiking, Probe, SortedSpiking
+from cleo.ephys import MultiUnitActivity, Probe, SortedSpiking
 from cleo.ioproc import RecordOnlyProcessor
 
 
@@ -40,7 +41,7 @@ def spike_generator_group(z_coords, indices=None, times_ms=None, **kwparams):
     return sgg
 
 
-def test_MUS_multiple_contacts(rand_seed):
+def test_mua_multiple_contacts(rand_seed):
     cleo.utilities.set_seed(rand_seed)
     # raster of test spikes: each character is 1-ms bin
     # | || |  <- neuron 0, 0mm     contact at .25mm
@@ -53,40 +54,39 @@ def test_MUS_multiple_contacts(rand_seed):
     sgg = spike_generator_group((0, 0.5, 1) * mm, indices, times)
     net = Network(sgg)
     sim = CLSimulator(net)
-    mus = MultiUnitSpiking(
-        name="mus",
-        # r_perfect_detection=0.3 * mm,
+    mua = MultiUnitActivity(
+        name="mua",
         r_noise_floor=0.75 * mm,
         threshold_sigma=1,
         collision_prob_fn=no_collision,
         simulate_false_positives=False,
     )
     probe = Probe(
-        coords=[[0, 0, 0.25], [0, 0, 0.75]] * mm, signals=[mus], save_history=True
+        coords=[[0, 0, 0.25], [0, 0, 0.75]] * mm, signals=[mua], save_history=True
     )
     sim.inject(probe, sgg)
 
     # remember i here is channel, no longer neuron
-    i, t, y = mus.get_state()
+    i, t, y = mua.get_state()
     assert len(i) == len(t) == y.sum() == 0
 
     sim.run(1 * ms)  # 1 ms
-    i, t, y = mus.get_state()
+    i, t, y = mua.get_state()
     assert len(i) == len(t) == y.sum()
     assert (0 in i) and (0.9 * ms in t)
 
     sim.run(1 * ms)  # 2 ms
-    i, t, y = mus.get_state()
+    i, t, y = mua.get_state()
     assert len(i) == len(t) == y.sum()
     assert len(i) == 0 and len(t) == 0
 
     sim.run(1 * ms)  # 3 ms
-    i, t, y = mus.get_state()
+    i, t, y = mua.get_state()
     assert len(i) == len(t) == y.sum()
     assert (0 in i) and (2.1 * ms in t)
 
     sim.run(1 * ms)  # 4 ms
-    i, t, y = mus.get_state()
+    i, t, y = mua.get_state()
     assert len(i) == len(t) == y.sum()
     # should pick up 2 spikes on first and 1 or 2 on second channel
     assert 1 in i and len(i) >= 3
@@ -94,22 +94,22 @@ def test_MUS_multiple_contacts(rand_seed):
 
     sim.run(2 * ms)  # to 6 ms
     # sim.get_state() nested dict is what will be passed to IO processor
-    i, t, y = sim.get_state()["Probe"]["mus"]
+    i, t, y = sim.get_state()["Probe"]["mua"]
     assert len(i) == len(t) == y.sum()
     assert (0 in i) and (1 in i) and len(i) >= 7
     assert all(t_i in (t / ms).round(2) for t_i in [4.1, 4.9, 5.1, 5.3, 5.5])
 
     # should have picked up at least one but not all spikes outside perfect radius
-    assert len(mus.i) > 12
+    assert len(mua.i) > 12
     sim.run(5 * ms)  # to 11 ms
     # each channel should have picked up not all spikes
-    assert np.sum(mus.i == 0) < len(indices)
-    assert np.sum(mus.i == 1) < len(indices)
+    assert np.sum(mua.i == 0) < len(indices)
+    assert np.sum(mua.i == 1) < len(indices)
 
-    assert len(mus.i) == len(mus.t) == len(mus.t_samp)
+    assert len(mua.i) == len(mua.t) == len(mua.t_samp)
 
 
-def test_MUS_multiple_groups(rand_seed):
+def test_mua_multiple_groups(rand_seed):
     """
     probe: 0    0.1 mm
     sgg1:  0    0.1 mm                       -------------> 9000 mm
@@ -117,12 +117,12 @@ def test_MUS_multiple_groups(rand_seed):
     sgg3:                                    -------------> 9000 mm
     """
     cleo.utilities.set_seed(rand_seed)
-    mus = MultiUnitSpiking(
-        name="mus",
+    mua = MultiUnitActivity(
+        name="mua",
         collision_prob_fn=no_collision,
         simulate_false_positives=False,
     )
-    r_thresh_mm = mus.r_threshold / mm
+    r_thresh_mm = mua.r_threshold / mm
     sgg1 = spike_generator_group(
         (0, 0.5 * r_thresh_mm, 9000) * mm, period=1 * ms
     )  # i_probe = 4, 5
@@ -132,21 +132,21 @@ def test_MUS_multiple_groups(rand_seed):
     # too far away to record at all:
     sgg3 = spike_generator_group((9000,) * mm, period=1 * ms)
     sim = CLSimulator(Network(sgg1, sgg2, sgg3))
-    probe = Probe([[0, 0, 0], [0, 0, r_thresh_mm]] * mm, [mus], save_history=True)
+    probe = Probe([[0, 0, 0], [0, 0, r_thresh_mm]] * mm, [mua], save_history=True)
     sim.inject(probe, sgg1, sgg2)
 
     sim.run(10 * ms)
-    i, t, y = mus.get_state()
+    i, t, y = mua.get_state()
     # first channel would have caught about nearly 20 from sgg1 and 40/2=20 spikes from sgg2
-    assert 20 < np.sum(mus.i == 0) < 60
+    assert 20 < np.sum(mua.i == 0) < 60
     # second channel would have caught most, but not all, spikes from sgg1 and sgg2
-    assert 50 < np.sum(mus.i == 1) < 60
-    assert len(mus.t) == len(mus.t_samp) == y.sum()
-    assert np.all(mus.t_samp == 10 * ms)
+    assert 50 < np.sum(mua.i == 1) < 60
+    assert len(mua.t) == len(mua.t_samp) == y.sum()
+    assert np.all(mua.t_samp == 10 * ms)
 
 
-def test_MUS_reset():
-    _test_reset(MultiUnitSpiking)
+def test_mua_reset():
+    _test_reset(MultiUnitActivity)
 
 
 def test_SortedSpiking(rand_seed):
@@ -212,19 +212,19 @@ def test_false_positives(rand_seed, dt, reset_dt):
     cleo.utilities.set_seed(rand_seed)
     assert b2.defaultclock.dt == 0.1 * ms
     b2.defaultclock.dt = dt * ms
-    # SS and MUS, different sigmas
+    # SS and mua, different sigmas
     ss1 = SortedSpiking(threshold_sigma=1.5, name="ss1", collision_prob_fn=no_collision)
     ss2 = SortedSpiking(threshold_sigma=2.5, name="ss2", collision_prob_fn=no_collision)
-    mus1 = MultiUnitSpiking(
-        threshold_sigma=1.5, name="mus1", collision_prob_fn=no_collision
+    mua1 = MultiUnitActivity(
+        threshold_sigma=1.5, name="mua1", collision_prob_fn=no_collision
     )
-    mus2 = MultiUnitSpiking(
-        threshold_sigma=2.5, name="mus2", collision_prob_fn=no_collision
+    mua2 = MultiUnitActivity(
+        threshold_sigma=2.5, name="mua2", collision_prob_fn=no_collision
     )
     sgg = spike_generator_group((0, 0.1, 9000) * mm, period=1 * ms)
     sim = CLSimulator(Network(sgg))
     probe = Probe(
-        [[0, 0, 50], [10, 20, 99], [-1, -2, 1000]] * um, [ss1, ss2, mus1, mus2]
+        [[0, 0, 50], [10, 20, 99], [-1, -2, 1000]] * um, [ss1, ss2, mua1, mua2]
     )
     sim.inject(probe, sgg)
     sim.run(
@@ -232,14 +232,14 @@ def test_false_positives(rand_seed, dt, reset_dt):
     )  # longer to give more time for false positives for big dt
     probe.get_state()
 
-    assert len(mus1.t) > len(mus2.t), (
-        f"Lower threshold should catch more spikes ({len(mus1.t)=} !> {len(mus2.t)=})"
+    assert len(mua1.t) > len(mua2.t), (
+        f"Lower threshold should catch more spikes ({len(mua1.t)=} !> {len(mua2.t)=})"
     )
-    assert len(mus1.t) > len(ss1.t), (
-        f"MultiUnitSpiking should report more spikes than SortedSpiking ({len(mus1.t)=} !> {len(ss1.t)=})"
+    assert len(mua1.t) > len(ss1.t), (
+        f"MultiUnitActivity should report more spikes than SortedSpiking ({len(mua1.t)=} !> {len(ss1.t)=})"
     )
-    assert len(mus2.t) > len(ss2.t), (
-        f"MultiUnitSpiking should report more spikes than SortedSpiking ({len(mus2.t)=} !> {len(ss2.t)=})"
+    assert len(mua2.t) > len(ss2.t), (
+        f"MultiUnitActivity should report more spikes than SortedSpiking ({len(mua2.t)=} !> {len(ss2.t)=})"
     )
 
     def num_fp(spiking):
@@ -249,15 +249,15 @@ def test_false_positives(rand_seed, dt, reset_dt):
     assert num_fp(ss1) == num_fp(ss2) == 0, (
         f"SortedSpiking should not have false positives. {num_fp(ss1)=}, {num_fp(ss2)=}"
     )
-    assert num_fp(mus1) > num_fp(mus2), (
-        f"Lower threshold should produce more false positives. {num_fp(mus1)=} !> {num_fp(mus2)=}"
+    assert num_fp(mua1) > num_fp(mua2), (
+        f"Lower threshold should produce more false positives. {num_fp(mua1)=} !> {num_fp(mua2)=}"
     )
-    assert num_fp(mus2) > 0, (
-        f"MultiUnitSpiking should produce false positives. {num_fp(mus2)=} !> 0"
+    assert num_fp(mua2) > 0, (
+        f"MultiUnitActivity should produce false positives. {num_fp(mua2)=} !> 0"
     )
 
 
-@pytest.mark.parametrize("SpikingType", [SortedSpiking, MultiUnitSpiking])
+@pytest.mark.parametrize("SpikingType", [SortedSpiking, MultiUnitActivity])
 def test_r_noise_floor(SpikingType, rand_seed):
     cleo.utilities.set_seed(rand_seed)
     s1 = SpikingType(r_noise_floor=80 * um, name="s1", collision_prob_fn=no_collision)
@@ -273,7 +273,7 @@ def test_r_noise_floor(SpikingType, rand_seed):
     )
 
 
-@pytest.mark.parametrize("SpikingType", [SortedSpiking, MultiUnitSpiking])
+@pytest.mark.parametrize("SpikingType", [SortedSpiking, MultiUnitActivity])
 def test_spike_amplitude_cv(SpikingType, rand_seed):
     cleo.utilities.set_seed(rand_seed)
     s_low_cv = SpikingType(
@@ -292,7 +292,7 @@ def test_spike_amplitude_cv(SpikingType, rand_seed):
     if SpikingType == SortedSpiking:
         nrn_zz = [r_thresh_um * 0.5, r_thresh_um * 1.5, 9e6] * um
         probe_coords = [4, -2, -1] * um
-    elif SpikingType == MultiUnitSpiking:
+    elif SpikingType == MultiUnitActivity:
         nrn_zz = [0] * um
         probe_coords = [
             [0, 0, r_thresh_um * 0.5],
@@ -331,7 +331,7 @@ def _test_reset(spike_signal_class):
         threshold_sigma=1,
         collision_prob_fn=no_collision,
     )
-    if spike_signal_class == MultiUnitSpiking:
+    if spike_signal_class == MultiUnitActivity:
         spike_signal.simulate_false_positives = False
     probe = Probe([[0, 0, 0]] * mm, [spike_signal], save_history=True)
     sim.inject(probe, sgg)
@@ -355,7 +355,7 @@ def test_collision(dt, reset_dt, rand_seed):
     cleo.utilities.set_seed(rand_seed)
     assert b2.defaultclock.dt == 0.1 * ms
     b2.defaultclock.dt = dt * ms
-    mus = MultiUnitSpiking(
+    mua = MultiUnitActivity(
         simulate_false_positives=False, collision_prob_fn=lambda t: t < 2 * ms
     )
     ss = SortedSpiking()
@@ -374,7 +374,7 @@ def test_collision(dt, reset_dt, rand_seed):
     assert np.all(sgg.z[:2] < ss.r_cutoff)
     assert sgg.z[2] > ss.r_cutoff
 
-    probe = Probe([1, 1, 0] * um, [mus, ss, ss_hi, ss_long])
+    probe = Probe([1, 1, 0] * um, [mua, ss, ss_hi, ss_long])
     sim = CLSimulator(Network(sgg))
     sim.inject(probe, sgg)
 
@@ -394,12 +394,12 @@ def test_collision(dt, reset_dt, rand_seed):
         "SS should detect some simultaneous spikes, but not all"
     )
 
-    # MUS can't catch spikes within 2 ms refractory period
-    assert np.sum(np.diff(mus.t) < 2 * ms) == 0, (
-        "MUS should not catch any spikes within 1 ms of each other"
+    # mua can't catch spikes within 2 ms refractory period
+    assert np.sum(np.diff(mua.t) < 2 * ms) == 0, (
+        "mua should not catch any spikes within 1 ms of each other"
     )
-    assert len(mus.t) == 1, (
-        "MUS' hard refractory period should catch only the first spike of a burst"
+    assert len(mua.t) == 1, (
+        "mua' hard refractory period should catch only the first spike of a burst"
     )
 
     assert len(ss.t) > len(ss_hi.t), (
@@ -420,14 +420,14 @@ def test_collision(dt, reset_dt, rand_seed):
         assert np.sum(s.i == 2) == 0, "SortedSpiking should not detect far spikes"
 
     sim.run(1 * ms)
-    i, t, y = mus.get_state()
+    i, t, y = mua.get_state()
     assert len(i) == len(t) == y.sum() == 0, (
         "spikes from previous sample should cause collision"
     )
-    mus.collision_prob_fn = lambda t: t == 0 * ms
+    mua.collision_prob_fn = lambda t: t == 0 * ms
     sim.run(10 * ms)
-    i, t, y = mus.get_state()
-    assert len(i) > 3, "MUS should catch spikes now with only simultaneous collision"
+    i, t, y = mua.get_state()
+    assert len(i) > 3, "mua should catch spikes now with only simultaneous collision"
 
 
 def _test_spiking_to_neo(spike_signal_class):
@@ -451,8 +451,8 @@ def _test_spiking_to_neo(spike_signal_class):
     return spike_sig, stgroup
 
 
-def test_MUS_to_neo():
-    spike_sig, stgroup = _test_spiking_to_neo(MultiUnitSpiking)
+def test_mua_to_neo():
+    spike_sig, stgroup = _test_spiking_to_neo(MultiUnitActivity)
     for st in stgroup.spiketrains:
         i = int(st.annotations["i_channel"])
         assert st.annotations["x_contact"] / pq.mm == spike_sig.probe.coords[i, 0] / mm

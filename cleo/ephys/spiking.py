@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import warnings
 from abc import abstractmethod
 from datetime import datetime
 from functools import cache
@@ -12,9 +13,8 @@ import neo
 import numpy as np
 import quantities as pq
 from attrs import define, field, fields
-from bidict import bidict
 from brian2 import NeuronGroup, Quantity, SpikeMonitor, mm, ms, um
-from jaxtyping import Bool, Float, UInt
+from jaxtyping import Bool, Float, Int, UInt
 from scipy import signal
 from scipy.stats import norm
 
@@ -48,12 +48,13 @@ class Spiking(Signal, NeoExportable):
     
     It also makes some physical sense as the minimum distance from the current source
     it is possible to place an electrode, 5 μm being reasonable as the radius of a typical soma."""
-    recall_cutoff: float = None
-    """Spike detection probability (recall) above which neurons will be considered.
+    recording_recall_cutoff: float = 0.001
+    """*Multi-channel* recall, above which neurons will be considered.
+    I.e., the probability a spike is detected on at least one channel.
     
-    Mainly for efficiency in the case of :class:`MultiUnitSpiking`.
-    Should be somewhat high for :class:`SortedSpiking` since sorter should only identify
-    spikes from high-SNR neurons."""
+    You shouldn't need to change this; it's mainly for efficiency, allowing amplitude 
+    sampling and threshold crossing to operate on fewer spikes by ignoring neurons
+    very unlikely to produce a spike that crosses the threshold."""
     eap_decay_fn: Callable[[Quantity], float] = lambda r: r**-2
     """The function describing the decay of the measured extracellular action potential
     amplitude. By default 1/r^2.
@@ -71,7 +72,7 @@ class Spiking(Signal, NeoExportable):
     for what this might look like for different sorters.
 
     By default simply enforces a hard 1 ms refractory period
-    per channel for :class:`MultiUnitSpiking`.
+    per channel for :class:`MultiUnitActivity`.
     """
 
     @collision_prob_fn.validator
@@ -98,15 +99,18 @@ class Spiking(Signal, NeoExportable):
     )
     """Sample times with Brian units when each spike was recorded, stored if
     :attr:`~cleo.InterfaceDevice.save_history` on :attr:`~Signal.probe`"""
-    i_probe_by_i_ng: bidict = field(init=False, factory=bidict, repr=False)
-    """(neuron_group, i_ng) keys,  i_probe values. bidict for converting between
-    neuron group indices and the indices the probe uses"""
+    i_probe_by_ng: dict[NeuronGroup, Int[np.ndarray, "ng_N"]] = field(
+        init=False, factory=dict, repr=False
+    )
+    """neuron_group keys, i_probe values for every neuron in group."""
+    i_ng_by_i_probe: list[tuple[NeuronGroup, int]] = field(
+        init=False, factory=list, repr=False
+    )
+    """n_neurons-length list indexed by i_probe returning a neuron_group, i_ng tuple
+    to map from i_probe to neuron group and index."""
     _monitors: list[SpikeMonitor] = field(init=False, factory=list, repr=False)
     _mon_spikes_already_seen: list[int] = field(init=False, factory=list, repr=False)
     _mu_eap: Float[np.ndarray, "n_neurons n_channels"] = field(
-        init=False, default=None, repr=False
-    )
-    _sigma_eap: Float[np.ndarray, "n_neurons n_channels"] = field(
         init=False, default=None, repr=False
     )
     _prev_t: Quantity = field(init=False, default=None, repr=False)
@@ -128,7 +132,8 @@ class Spiking(Signal, NeoExportable):
     @property
     @abstractmethod
     def n(self):
-        """Number of spike sources"""
+        """Number of spike sources: channels for :class:`MultiUnitActivity` or sorted neurons
+        for :class:`SortedSpiking`."""
         pass
 
     @property
@@ -137,22 +142,21 @@ class Spiking(Signal, NeoExportable):
         return self.probe.n
 
     @property
-    def snr_cutoff(self) -> float:
-        """The minimum SNR required for spikes to factor into detection.
-        Derived from :attr:`~Spiking.recall_cutoff`."""
-        return self.snr_by_recall(self.recall_cutoff)
+    def n_neurons(self) -> int:
+        """Number of neurons recorded by probe"""
+        return sum([np.sum(i_probe != -2) for i_probe in self.i_probe_by_ng.values()])
 
     @property
     def r_threshold(self, resolution: Quantity = um / 10) -> Quantity:
         """The distance from a contact at which the SNR equals the detection threshold.
-        This also means 50% recall."""
+        This also means 50% single-channel recall."""
         return self.r_for_snr(self.threshold_sigma, resolution=resolution)
 
     @property
     def r_cutoff(self, resolution: Quantity = um / 10) -> Quantity:
-        """The distance from a contact at which the recall is high enough for a neuron
+        """The distance from a contact at which the SNR is high enough for a neuron
         to be included."""
-        return self.r_for_recall(self.recall_cutoff, resolution=resolution)
+        return self.r_for_snr(self.snr_cutoff, resolution=resolution)
 
     def r_for_recall(
         self,
@@ -160,8 +164,8 @@ class Spiking(Signal, NeoExportable):
         resolution: Quantity = um / 10,
         upper_limit: Quantity = None,
     ) -> Quantity:
-        """The distance from a contact at which the recall (detection probability)
-        equals the specified value."""
+        """The distance from a contact at which the single-channel recall
+        (detection probability) equals the specified value."""
         if upper_limit is None:
             upper_limit = 10 * self.r_noise_floor
         rr = np.arange(0, upper_limit / um, resolution / um) * um
@@ -192,7 +196,7 @@ class Spiking(Signal, NeoExportable):
         as a function of SNR."""
         # 1 - P(spike not detected)
         mu = snr
-        sigma = 1 + mu * self.spike_amplitude_cv
+        sigma = np.sqrt(1 + (mu * self.spike_amplitude_cv) ** 2)
         return norm.sf(self.threshold_sigma, loc=mu, scale=sigma)
 
     def recall_by_distance(self, r: Quantity) -> float:
@@ -216,6 +220,10 @@ class Spiking(Signal, NeoExportable):
             Neuron group to record from
         """
         super(Spiking, self).connect_to_neuron_group(neuron_group, **kwparams)
+        if neuron_group in self.i_probe_by_ng:
+            raise ValueError(
+                f"Spiking signal {self.name} already connected to NeuronGroup {neuron_group.name}"
+            )
         # could support separate detection probabilities per group using kwparams
         # n_neurons X n_channels X 3
         dist2 = np.zeros((len(neuron_group), self.n_channels))
@@ -228,45 +236,53 @@ class Spiking(Signal, NeoExportable):
             # proactively strip units to avoid numpy maybe doing so
             dist2 += (dim_ng / mm - dim_probe / mm) ** 2
         distances = np.sqrt(dist2) * mm
-        mu_eap = self.snr_by_distance(distances)
+        snr = self.snr_by_distance(distances)
         # 1 from baseline noise, mu * cv from spike amp variability
-        sigma_eap = 1 + mu_eap * self.spike_amplitude_cv
-        probs = norm.sf(self.threshold_sigma, loc=mu_eap, scale=sigma_eap)
-        assert probs.shape == (len(neuron_group), self.n_channels)
-        # probs is n_neurons by n_channels
-        # cut off to get indices of neurons to monitor
-        # [0] since nonzero returns tuple of array per axis
-        i_ng_to_keep = np.nonzero(np.any(probs >= self.recall_cutoff, axis=1))[0]
+        sigma_eap = np.sqrt(1 + (snr * self.spike_amplitude_cv) ** 2)
+        probs_miss = norm.cdf(self.threshold_sigma, loc=snr, scale=sigma_eap)
+        assert probs_miss.shape == (len(neuron_group), self.n_channels)
+        multi_channel_recall = 1 - np.prod(probs_miss, axis=1)
+        where_to_keep = multi_channel_recall >= self.recording_recall_cutoff
+        i2keep = np.nonzero(where_to_keep)[0]
+        # spike sorters don't sort by multi-channel recall; we only do this
+        # for computational efficiency, to not get super distant neurons
 
-        if len(i_ng_to_keep) > 0:
-            # create monitor
-            mon = SpikeMonitor(neuron_group)
-            self._monitors.append(mon)
-            self.brian_objects.add(mon)
-            self._mon_spikes_already_seen.append(0)
-
-            # update bidict from electrode group index to (neuron group, index)
-            i_probe_start = len(self.i_probe_by_i_ng)
-            new_i_probe = range(i_probe_start, i_probe_start + len(i_ng_to_keep))
-            self.i_probe_by_i_ng.update(
-                {
-                    (neuron_group, i_ng): i_probe
-                    for i_probe, i_ng in zip(new_i_probe, i_ng_to_keep)
-                }
+        n2keep = np.sum(where_to_keep)
+        if n2keep == 0:
+            warnings.warn(
+                f"NeuronGroup {neuron_group.name} has no neurons with multi-channel recall >= {self.recording_recall_cutoff:.3f}."
+                " Skipping this group."
             )
+            return
+
+        # create monitor
+        mon = SpikeMonitor(neuron_group)
+        self._monitors.append(mon)
+        self.brian_objects.add(mon)
+        self._mon_spikes_already_seen.append(0)
+
+        # update mapping from neuron group to probe index
+        i_probe_start = self.n_neurons
+        # -2 means not recorded
+        new_i_probe = np.arange(i_probe_start, i_probe_start + n2keep)
+        i_probe_for_ng = np.full(neuron_group.N, -2, dtype=int)
+        i_probe_for_ng[where_to_keep] = new_i_probe
+        self.i_probe_by_ng[neuron_group] = i_probe_for_ng
+
+        # update mapping from probe index to neuron group & index
+        assert len(self.i_ng_by_i_probe) == i_probe_start
+        self.i_ng_by_i_probe.extend(list(zip([neuron_group] * n2keep, i2keep)))
 
         if not self._prev_t:
             self._prev_t = self.probe.sim.network.t
 
         # store neuron-channel mean and stdev of EAPs to use in subclasses
         if self._mu_eap is None:
-            self._mu_eap = mu_eap[i_ng_to_keep]
-            self._sigma_eap = sigma_eap[i_ng_to_keep]
+            self._mu_eap = snr[where_to_keep]
         else:
-            self._mu_eap = np.concatenate((self._mu_eap, mu_eap[i_ng_to_keep]), axis=0)
-            self._sigma_eap = np.concatenate(
-                (self._sigma_eap, sigma_eap[i_ng_to_keep]), axis=0
-            )
+            self._mu_eap = np.concatenate((self._mu_eap, snr[where_to_keep]), axis=0)
+
+        return snr[where_to_keep]
 
     @abstractmethod
     def get_state(
@@ -284,12 +300,6 @@ class Spiking(Signal, NeoExportable):
         """
         pass
 
-    def _i_ng_to_i_probe(self, i_ng, monitor):
-        ng = monitor.source
-        # assign value of -1 to neurons we aren't recording to filter out
-        i_probe_unfilt = np.array([self.i_probe_by_i_ng.get((ng, k), -1) for k in i_ng])
-        return i_probe_unfilt[i_probe_unfilt != -1].astype(np.uint)
-
     def _get_new_spikes(self) -> Tuple[UInt[np.ndarray, "n_spikes"], Quantity]:
         i_probe = np.array([], dtype=np.uint)
         t = ms * np.array([], dtype=float)
@@ -298,10 +308,8 @@ class Spiking(Signal, NeoExportable):
             spikes_already_seen = self._mon_spikes_already_seen[j]
             i_ng = mon.i[spikes_already_seen:]  # can contain spikes we don't care about
             # filter out spikes we don't care about
-            i_probe_unfilt = np.array(
-                [self.i_probe_by_i_ng.get((mon.source, k), -1) for k in i_ng]
-            )
-            i2keep = i_probe_unfilt != -1
+            i_probe_unfilt = self.i_probe_by_ng[mon.source][i_ng]
+            i2keep = i_probe_unfilt != -2
             i_probe = np.concatenate((i_probe, i_probe_unfilt[i2keep].astype(np.uint)))
             t = unit_safe_cat([t, mon.t[spikes_already_seen:][i2keep]])
 
@@ -374,8 +382,6 @@ class Spiking(Signal, NeoExportable):
         noise, t_noise = self._generate_noise()
         # mu and sigma arrays: n_nrns x n_channels
         mu_eap_for_spikes = self._mu_eap[i_probe]
-        # TODO: probably remove this self._sigma_eap
-        # sigma_eap_for_spikes = self._sigma_eap[i_probe]
         sigma_spike_amps = mu_eap_for_spikes * self.spike_amplitude_cv
 
         # add noise at right timesteps
@@ -487,16 +493,14 @@ class Spiking(Signal, NeoExportable):
 
 
 @define(eq=False)
-class MultiUnitSpiking(Spiking):
+class MultiUnitActivity(Spiking):
     """Detects (unsorted) spikes per channel."""
 
-    recall_cutoff: float = 0.01
     collision_prob_fn: Callable[[Quantity], float] = lambda t: t < 1 * ms
     simulate_false_positives: bool = True
 
     @property
     def n(self):
-        """Number of channels on probe"""
         return self.probe.n
 
     def get_state(
@@ -539,7 +543,7 @@ class MultiUnitSpiking(Spiking):
         return i_chan_detected, t_detected, y
 
     def to_neo(self) -> neo.Group:
-        group = super(MultiUnitSpiking, self).to_neo()
+        group = super(MultiUnitActivity, self).to_neo()
         for st in group.spiketrains:
             i = int(st.annotations["i"])
             st.annotate(
@@ -560,15 +564,76 @@ class SortedSpiking(Spiking):
     multiple potential groups and within a group ignores those
     neurons that are too far away to be easily detected."""
 
-    recall_cutoff: float = 0.8
+    snr_cutoff: float = 8
+    """The signal-to-noise ratio a unit must have for its spikes to be reported.
+    SNR is defined as the mean spike amplitude divided by the standard deviation of
+    the background noise for the peak (closest) channel.
+    
+    Should be higher than :attr:`threshold_sigma`.
+    Spikes from units with SNR < snr_cutoff still factor into collision sampling and
+    are reported as unsorted (index -1), essentially "multi-unit activity"."""
     collision_prob_fn: Callable[[Quantity], float] = lambda t: 0.2 * np.exp(
         -t / (0.3 * ms)
     )
 
     @property
     def n(self):
-        """Number of recorded neurons"""
-        return len(self.i_probe_by_i_ng)
+        return self.n_sorted
+
+    @property
+    def n_sorted(self):
+        """Number of sorted neurons"""
+        return len(self._i_probe_by_i_sorted)
+
+    def i_sorted_by_ng(
+        self, ng: NeuronGroup, i_ng: UInt[np.ndarray, "n_query"]
+    ) -> Int[np.ndarray, "n_query"]:
+        """Get the sorted indices for a given neuron group and its indices.
+
+        -1 means recorded, but not sorted. -2 means not recorded."""
+        return self._i_sorted_by_i_probe[self.i_probe_by_ng[ng][i_ng]]
+
+    def i_ng_by_i_sorted(
+        self,
+        i_sorted: UInt[np.ndarray, "n_query"],
+    ) -> list[tuple[NeuronGroup, int]]:
+        """Get a list of (ng, i_ng) tuples for given indices of sorted neurons.
+
+        That is, this maps from sorted indices back to the original neuron group and
+        indices."""
+        i_probe = self._i_probe_by_i_sorted[i_sorted]
+        return [self.i_ng_by_i_probe[i] for i in i_probe]
+
+    _i_sorted_by_i_probe: Int[np.ndarray, "{self.n_neurons}"] = field(
+        init=False, factory=lambda: np.zeros(0, dtype=int), repr=False
+    )
+    _i_probe_by_i_sorted: Int[np.ndarray, "{self.n_sorted}"] = field(
+        init=False, factory=lambda: np.zeros(0, dtype=int), repr=False
+    )
+
+    def connect_to_neuron_group(self, neuron_group, **kwparams):
+        snr, i_probe = super().connect_to_neuron_group(neuron_group, **kwparams)
+        n_recorded_ng = len(snr)
+        # filter by SNR (measured on peak channel)
+        above_cutoff = snr >= self.snr_cutoff
+        n_above_cutoff = np.sum(above_cutoff)
+        i_srt_new_range = np.arange(self.n_sorted, self.n_sorted + n_above_cutoff)
+
+        # update map from i_probe to i_sorted
+        # -1 means not reported
+        i_srt_by_i_probe_for_ng = np.full(n_recorded_ng, -1)
+        i_srt_by_i_probe_for_ng[above_cutoff] = i_srt_new_range
+        self._i_sorted_by_i_probe = np.concatenate(
+            [self._i_sorted_by_i_probe, i_srt_by_i_probe_for_ng]
+        )
+
+        # update map from i_sorted to i_probe
+        i_probe_by_i_sorted_for_ng = i_probe[above_cutoff]
+        assert len(i_probe_by_i_sorted_for_ng) == n_above_cutoff
+        self._i_probe_by_i_sorted = np.concatenate(
+            [self._i_probe_by_i_sorted, i_probe_by_i_sorted_for_ng]
+        )
+        assert i_srt_new_range[-1] == len(self._i_probe_by_i_sorted) - 1
 
     def get_state(
         self,
@@ -576,25 +641,27 @@ class SortedSpiking(Spiking):
         # inherit docstring
 
         t_samp = self.probe.sim.network.t
-        i_nrn_probe, t = self._get_new_spikes()
+        i_probe, t = self._get_new_spikes()
         t_tcs, i_probe_tcs, i_chan_tcs, amp_tcs, _, _ = self._noisily_get_true_tcs(
-            i_nrn_probe, t
+            i_probe, t
         )
         # no false positives from noise in sorted spiking
         which_collided = self._sample_collisions(t_tcs, i_chan_tcs, amp_tcs)
         t_detected = t_tcs[~which_collided]
-        i_nrn_probe_detected = i_probe_tcs[~which_collided]
+        i_probe_detected = i_probe_tcs[~which_collided]
 
         # remove repeat t, i_nrn spikes (spikes detected on >1 channel)
         _, spk_detected_any_channel = np.unique(
-            np.array([t_detected / ms, i_nrn_probe_detected]), axis=1, return_index=True
+            np.array([t_detected / ms, i_probe_detected]), axis=1, return_index=True
         )
         # get spikes detected on any channel
-        # spk_detected_any_channel = spk_per_chan_dtct.sum(axis=1) > 0
-        i_nrn_probe_detected = i_nrn_probe_detected[spk_detected_any_channel]
+        i_probe_detected = i_probe_detected[spk_detected_any_channel]
         t_detected = t_detected[spk_detected_any_channel]
-        y = np.bincount(i_nrn_probe_detected.astype(int))
+        # convert to sorted indices, including getting -1s for unsorted
+        i_sorted_detected = self._i_sorted_by_i_probe[i_probe_detected]
+
+        y = np.bincount(i_sorted_detected.astype(int))
         # include 0s for upper indices not seen:
-        y = np.concatenate([y, np.zeros(len(self.i_probe_by_i_ng) - len(y))])
-        self._update_saved_vars(t_detected, i_nrn_probe_detected, t_samp)
-        return i_nrn_probe_detected, t_detected, y
+        y = np.concatenate([y, np.zeros(self.n_sorted - len(y))])
+        self._update_saved_vars(t_detected, i_sorted_detected, t_samp)
+        return i_sorted_detected, t_detected, y
