@@ -83,6 +83,10 @@ class Spiking(Signal, NeoExportable):
                 "collision_prob_fn must return a value between 0 and 1"
             )
 
+    simulate_false_positives: bool = True
+    """Whether to simulate false positives from noise. In the case of :class:`SortedSpiking`,
+    these aren't reported, but still affect collision sampling."""
+
     t: Quantity = field(
         init=False, factory=lambda: ms * np.array([], dtype=float), repr=False
     )
@@ -152,12 +156,6 @@ class Spiking(Signal, NeoExportable):
         This also means 50% single-channel recall."""
         return self.r_for_snr(self.threshold_sigma, resolution=resolution)
 
-    @property
-    def r_cutoff(self, resolution: Quantity = um / 10) -> Quantity:
-        """The distance from a contact at which the SNR is high enough for a neuron
-        to be included."""
-        return self.r_for_snr(self.snr_cutoff, resolution=resolution)
-
     def r_for_recall(
         self,
         recall: float,
@@ -178,7 +176,7 @@ class Spiking(Signal, NeoExportable):
             )
 
     def r_for_snr(
-        self, snr: float, resolution: Quantity = um, upper_limit: Quantity = None
+        self, snr: float, resolution: Quantity = um / 10, upper_limit: Quantity = None
     ) -> Quantity:
         """The distance from a contact at which the SNR equals the specified value."""
         if upper_limit is None:
@@ -250,7 +248,7 @@ class Spiking(Signal, NeoExportable):
         n2keep = np.sum(where_to_keep)
         if n2keep == 0:
             warnings.warn(
-                f"NeuronGroup {neuron_group.name} has no neurons with multi-channel recall >= {self.recording_recall_cutoff:.3f}."
+                f"NeuronGroup {neuron_group.name} has no neurons with multi-channel recall >= {self.recording_recall_cutoff}."
                 " Skipping this group."
             )
             return
@@ -282,7 +280,7 @@ class Spiking(Signal, NeoExportable):
         else:
             self._mu_eap = np.concatenate((self._mu_eap, snr[where_to_keep]), axis=0)
 
-        return snr[where_to_keep]
+        return snr[where_to_keep].max(axis=1), new_i_probe
 
     @abstractmethod
     def get_state(
@@ -416,7 +414,10 @@ class Spiking(Signal, NeoExportable):
         intervals = np.arange(10 / dt_ms) * dt_ms * ms
         i = np.searchsorted(-collision_prob_fn(intervals).astype(float), -1e-3)
         if i == len(intervals):
-            raise NotImplementedError("not looking for max collision interval >= 10 ms")
+            warnings.warn(
+                "collision_prob_fn(10 ms) > 1e-3. "
+                "Will not look for collisions over 10 ms in the past."
+            )
         else:
             return intervals[i]
 
@@ -497,7 +498,6 @@ class MultiUnitActivity(Spiking):
     """Detects (unsorted) spikes per channel."""
 
     collision_prob_fn: Callable[[Quantity], float] = lambda t: t < 1 * ms
-    simulate_false_positives: bool = True
 
     @property
     def n(self):
@@ -564,7 +564,7 @@ class SortedSpiking(Spiking):
     multiple potential groups and within a group ignores those
     neurons that are too far away to be easily detected."""
 
-    snr_cutoff: float = 8
+    snr_cutoff: float = 6
     """The signal-to-noise ratio a unit must have for its spikes to be reported.
     SNR is defined as the mean spike amplitude divided by the standard deviation of
     the background noise for the peak (closest) channel.
@@ -585,13 +585,15 @@ class SortedSpiking(Spiking):
         """Number of sorted neurons"""
         return len(self._i_probe_by_i_sorted)
 
-    def i_sorted_by_ng(
-        self, ng: NeuronGroup, i_ng: UInt[np.ndarray, "n_query"]
-    ) -> Int[np.ndarray, "n_query"]:
-        """Get the sorted indices for a given neuron group and its indices.
+    def i_sorted_by_ng(self, ng: NeuronGroup) -> Int[np.ndarray, "{ng.N}"]:
+        """Get the sorted indices for a given neuron group.
 
         -1 means recorded, but not sorted. -2 means not recorded."""
-        return self._i_sorted_by_i_probe[self.i_probe_by_ng[ng][i_ng]]
+        i_probe = self.i_probe_by_ng[ng][ng.i]
+        i_sorted = self._i_sorted_by_i_probe[i_probe]
+        # pass through the -2s so they don't index i_sorted
+        i_sorted[i_probe == -2] = -2
+        return i_sorted
 
     def i_ng_by_i_sorted(
         self,
@@ -611,17 +613,24 @@ class SortedSpiking(Spiking):
         init=False, factory=lambda: np.zeros(0, dtype=int), repr=False
     )
 
+    @property
+    def r_cutoff(self, resolution: Quantity = um / 10) -> Quantity:
+        """The distance from a contact at which the SNR is high enough for a neuron
+        to be included."""
+        return self.r_for_snr(self.snr_cutoff, resolution=resolution)
+
     def connect_to_neuron_group(self, neuron_group, **kwparams):
         snr, i_probe = super().connect_to_neuron_group(neuron_group, **kwparams)
         n_recorded_ng = len(snr)
         # filter by SNR (measured on peak channel)
         above_cutoff = snr >= self.snr_cutoff
         n_above_cutoff = np.sum(above_cutoff)
-        i_srt_new_range = np.arange(self.n_sorted, self.n_sorted + n_above_cutoff)
+        n_prev_sorted = self.n_sorted
+        i_srt_new_range = np.arange(self.n_sorted, n_prev_sorted + n_above_cutoff)
 
         # update map from i_probe to i_sorted
         # -1 means not reported
-        i_srt_by_i_probe_for_ng = np.full(n_recorded_ng, -1)
+        i_srt_by_i_probe_for_ng = np.full(n_recorded_ng, -1, dtype=int)
         i_srt_by_i_probe_for_ng[above_cutoff] = i_srt_new_range
         self._i_sorted_by_i_probe = np.concatenate(
             [self._i_sorted_by_i_probe, i_srt_by_i_probe_for_ng]
@@ -633,7 +642,7 @@ class SortedSpiking(Spiking):
         self._i_probe_by_i_sorted = np.concatenate(
             [self._i_probe_by_i_sorted, i_probe_by_i_sorted_for_ng]
         )
-        assert i_srt_new_range[-1] == len(self._i_probe_by_i_sorted) - 1
+        assert n_prev_sorted + n_above_cutoff == self.n_sorted
 
     def get_state(
         self,
@@ -642,13 +651,35 @@ class SortedSpiking(Spiking):
 
         t_samp = self.probe.sim.network.t
         i_probe, t = self._get_new_spikes()
-        t_tcs, i_probe_tcs, i_chan_tcs, amp_tcs, _, _ = self._noisily_get_true_tcs(
-            i_probe, t
+        t_tcs, i_probe_tcs, i_chan_tcs, amp_tcs, noise, t_noise = (
+            self._noisily_get_true_tcs(i_probe, t)
         )
-        # no false positives from noise in sorted spiking
-        which_collided = self._sample_collisions(t_tcs, i_chan_tcs, amp_tcs)
-        t_detected = t_tcs[~which_collided]
-        i_probe_detected = i_probe_tcs[~which_collided]
+
+        # get false positives from noise
+        if self.simulate_false_positives:
+            i_t_fps, i_chan_fps = (noise > self.threshold_sigma).nonzero()
+            t_fps = t_noise[i_t_fps]
+            amp_fps = noise[i_t_fps, i_chan_fps]
+        else:
+            t_fps, i_chan_fps, amp_fps = [] * ms, [], []
+
+        i_chan = np.concatenate([i_chan_tcs, i_chan_fps])
+        t = unit_safe_cat([t_tcs, t_fps])
+        amps = np.concatenate([amp_tcs, amp_fps])
+        i_probe = np.concatenate([i_probe_tcs, np.full_like(i_chan_fps, -3)]).astype(
+            int
+        )
+        # sort by time
+        sort_idx = np.argsort(t)
+        t = t[sort_idx]
+        i_chan = i_chan[sort_idx]
+        amps = amps[sort_idx]
+        i_probe = i_probe[sort_idx]
+
+        which_collided = self._sample_collisions(t, i_chan, amps)
+        # filter out false positives
+        t_detected = t[~which_collided & (i_probe != -3)]
+        i_probe_detected = i_probe[~which_collided & (i_probe != -3)]
 
         # remove repeat t, i_nrn spikes (spikes detected on >1 channel)
         _, spk_detected_any_channel = np.unique(
@@ -659,9 +690,13 @@ class SortedSpiking(Spiking):
         t_detected = t_detected[spk_detected_any_channel]
         # convert to sorted indices, including getting -1s for unsorted
         i_sorted_detected = self._i_sorted_by_i_probe[i_probe_detected]
+        # filter out -1s
+        to_keep = i_sorted_detected != -1
+        i_srt_dtct_filt = i_sorted_detected[to_keep]
+        t_dtct_filt = t_detected[to_keep]
 
-        y = np.bincount(i_sorted_detected.astype(int))
+        y = np.bincount(i_srt_dtct_filt.astype(int))
         # include 0s for upper indices not seen:
         y = np.concatenate([y, np.zeros(self.n_sorted - len(y))])
-        self._update_saved_vars(t_detected, i_sorted_detected, t_samp)
-        return i_sorted_detected, t_detected, y
+        self._update_saved_vars(t_dtct_filt, i_srt_dtct_filt, t_samp)
+        return i_srt_dtct_filt, t_dtct_filt, y

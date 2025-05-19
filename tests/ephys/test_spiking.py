@@ -151,31 +151,47 @@ def test_mua_reset():
 
 def test_SortedSpiking(rand_seed):
     cleo.utilities.set_seed(rand_seed)
-    # sgg0 neurons at i_eg 0 and 1 are in range, but have no spikes
-    sgg0 = spike_generator_group((0.1, 777, 0.3) * mm, indices=[], times_ms=[])
-    # raster of test spikes: each character is 1-ms bin
-    #        i_ng, i_eg, distance
-    # | || |  <- 0, 2, 0mm     contact at .25mm
-    #    |||  <- 1, 3, 0.5mm   contact at .75mm
-    # ||||||  <- 2, _, 100mm   out of range: shouldn't get detected
-    #         <- 3, 4, -0.1mm  in range, but no spikes
-    #     ||  <- 4, 5, 1mm
-    indices = [0, 0, 0, 1, 1, 4, 0, 1, 4, 2, 2, 2, 2, 2, 2]
-    times = [0.9, 2.1, 3.5, 3.5, 4.1, 4.9, 5.1, 5.3, 5.5, 0, 1, 2, 3, 4, 5]
-    sgg1 = spike_generator_group((0, 0.5, 100, -0.1, 1) * mm, indices, times)
-    net = Network(sgg0, sgg1)
-    sim = CLSimulator(net)
     ss = SortedSpiking(
         name="ss",
-        r_noise_floor=0.75 * mm,
-        threshold_sigma=1,
         collision_prob_fn=no_collision,
     )
-    probe = Probe(
-        [[0, 0, 0.25], [0, 0, 0.75], [0, 0, 10]] * mm, [ss], save_history=True
+    # want 0.5 single-channel recall at 75 um
+    ss.r_noise_floor = np.sqrt(ss.threshold_sigma * (75 * um) ** 2)
+    probe = Probe([[0, 0, 25], [0, 0, 75], [0, 0, 1000]] * um, [ss])
+    # sgg0 neurons at i_sorted 0 and 1 are in range, but have no spikes
+    sgg0 = spike_generator_group((10, 77777, 30) * um, indices=[], times_ms=[])
+    # raster of test spikes: each character is 1-ms bin
+    #     i_ng, i_sorted, distance
+    # | || |  <- 0, 2, 0um     contact at 25um
+    #    |||  <- 1, 3, 50um   contact at 75um
+    # ||||||  <- 2, -2, 10000um   out of range: shouldn't be recorded at all
+    #         <- 3, 4, -?um    close enough to sort, but no spikes
+    #     ||  <- 4, 5, 100um
+    #         <- 5, -1  10+?um  close enough for recording, but not sorting
+    indices = [0, 0, 0, 1, 1, 4, 0, 1, 4, 2, 2, 2, 2, 2, 2]
+    times = [0.9, 2.1, 3.5, 3.5, 4.1, 4.9, 5.1, 5.3, 5.5, 0, 1, 2, 3, 4, 5]
+    dist_sortable = ss.r_for_snr(ss.snr_cutoff + 1) / um
+    dist_rec_not_sort = ss.r_for_snr(ss.snr_cutoff - 1) / um
+    sgg1 = spike_generator_group(
+        (0, 50, 10000, 25 - dist_sortable, 100, 1000 + dist_rec_not_sort) * um,
+        indices,
+        times,
     )
-    # injecting sgg0 before sgg1 needed to predict i_eg
+    net = Network(sgg0, sgg1)
+    sim = CLSimulator(net)
+    # injecting sgg0 before sgg1 needed to predict i_sorted
     sim.inject(probe, sgg0, sgg1)
+    # check indices are as expected: -2 for not recorded, -1 not sorted
+    assert np.all(ss.i_sorted_by_ng(sgg0) == [0, -2, 1])
+    assert np.all(ss.i_sorted_by_ng(sgg1) == [2, 3, -2, 4, 5, -1])
+    assert ss.i_ng_by_i_sorted(np.arange(ss.n)) == [
+        (sgg0, 0),
+        (sgg0, 2),
+        (sgg1, 0),
+        (sgg1, 1),
+        (sgg1, 3),
+        (sgg1, 4),
+    ]
 
     i, t, y = sim.get_state()["Probe"]["ss"]
     assert len(i) == len(t) == y.sum() == 0
@@ -212,23 +228,38 @@ def test_false_positives(rand_seed, dt, reset_dt):
     cleo.utilities.set_seed(rand_seed)
     assert b2.defaultclock.dt == 0.1 * ms
     b2.defaultclock.dt = dt * ms
-    # SS and mua, different sigmas
-    ss1 = SortedSpiking(threshold_sigma=1.5, name="ss1", collision_prob_fn=no_collision)
-    ss2 = SortedSpiking(threshold_sigma=2.5, name="ss2", collision_prob_fn=no_collision)
+    t_low = 1
+    t_hi = 2
+    ss1 = SortedSpiking(
+        threshold_sigma=t_low, name="ss1", collision_prob_fn=no_collision
+    )
+    ss2 = SortedSpiking(
+        threshold_sigma=t_hi, name="ss2", collision_prob_fn=no_collision
+    )
+    ss_coll_fp = SortedSpiking(
+        threshold_sigma=t_low, name="ss_coll", collision_prob_fn=lambda t: t < 1 * ms
+    )
+    ss_coll_no_fp = SortedSpiking(
+        threshold_sigma=t_low,
+        name="ss_coll_no_fp",
+        collision_prob_fn=ss_coll_fp.collision_prob_fn,
+        simulate_false_positives=False,
+    )
     mua1 = MultiUnitActivity(
-        threshold_sigma=1.5, name="mua1", collision_prob_fn=no_collision
+        threshold_sigma=t_low, name="mua1", collision_prob_fn=no_collision
     )
     mua2 = MultiUnitActivity(
-        threshold_sigma=2.5, name="mua2", collision_prob_fn=no_collision
+        threshold_sigma=t_hi, name="mua2", collision_prob_fn=no_collision
     )
     sgg = spike_generator_group((0, 0.1, 9000) * mm, period=1 * ms)
     sim = CLSimulator(Network(sgg))
     probe = Probe(
-        [[0, 0, 50], [10, 20, 99], [-1, -2, 1000]] * um, [ss1, ss2, mua1, mua2]
+        [[10, 20, 99], [-1, -2, 1000]] * um,
+        [ss1, ss2, mua1, mua2, ss_coll_fp, ss_coll_no_fp],
     )
     sim.inject(probe, sgg)
     sim.run(
-        40 * ms * dt / 0.1
+        20 * ms * dt / 0.1
     )  # longer to give more time for false positives for big dt
     probe.get_state()
 
@@ -247,7 +278,10 @@ def test_false_positives(rand_seed, dt, reset_dt):
         return np.sum(((spiking.t / ms).round(3) % (sgg.period / ms)) != 0)
 
     assert num_fp(ss1) == num_fp(ss2) == 0, (
-        f"SortedSpiking should not have false positives. {num_fp(ss1)=}, {num_fp(ss2)=}"
+        f"SortedSpiking should not report false positives. {num_fp(ss1)=}, {num_fp(ss2)=}"
+    )
+    assert len(ss_coll_fp.t) < len(ss_coll_no_fp.t), (
+        "FPs in SS should increase collisions"
     )
     assert num_fp(mua1) > num_fp(mua2), (
         f"Lower threshold should produce more false positives. {num_fp(mua1)=} !> {num_fp(mua2)=}"
@@ -280,18 +314,20 @@ def test_spike_amplitude_cv(SpikingType, rand_seed):
         spike_amplitude_cv=0.01,
         name="s_low_cv",
         collision_prob_fn=no_collision,
-        recall_cutoff=0.1,
+        simulate_false_positives=False,
     )
     s_hi_cv = SpikingType(
         spike_amplitude_cv=0.5,
         name="s_hi_cv",
         collision_prob_fn=no_collision,
-        recall_cutoff=0.1,
+        simulate_false_positives=False,
     )
     r_thresh_um = s_low_cv.r_threshold / um
     if SpikingType == SortedSpiking:
         nrn_zz = [r_thresh_um * 0.5, r_thresh_um * 1.5, 9e6] * um
         probe_coords = [4, -2, -1] * um
+        for s in [s_hi_cv, s_low_cv]:
+            s.snr_cutoff = 1
     elif SpikingType == MultiUnitActivity:
         nrn_zz = [0] * um
         probe_coords = [
@@ -299,13 +335,11 @@ def test_spike_amplitude_cv(SpikingType, rand_seed):
             [-10, 5, r_thresh_um * 1.5],
             [-1, -2, 9e6],
         ] * um
-        for s in [s_hi_cv, s_low_cv]:
-            s.simulate_false_positives = False
     sgg = spike_generator_group(nrn_zz, period=0.1 * ms)  # i_probe = 4, 5
     sim = CLSimulator(Network(sgg))
     probe = Probe(probe_coords, [s_low_cv, s_hi_cv])
     sim.inject(probe, sgg)
-    sim.run(10 * ms)
+    sim.run(30 * ms)
 
     for sig in [s_low_cv, s_hi_cv]:
         i, t, y = sig.get_state()
@@ -358,32 +392,45 @@ def test_collision(dt, reset_dt, rand_seed):
     mua = MultiUnitActivity(
         simulate_false_positives=False, collision_prob_fn=lambda t: t < 2 * ms
     )
-    ss = SortedSpiking()
+    snr_cutoff = 6
+    ss = SortedSpiking(snr_cutoff=snr_cutoff)
     ss_hi = SortedSpiking(
-        name="high", collision_prob_fn=lambda t: ss.collision_prob_fn(t) * 3
+        name="high",
+        collision_prob_fn=lambda t: ss.collision_prob_fn(t) * 3,
+        snr_cutoff=snr_cutoff,
     )
     ss_long = SortedSpiking(
-        name="long", collision_prob_fn=lambda t: ss.collision_prob_fn(t / 3)
+        name="long",
+        collision_prob_fn=lambda t: ss.collision_prob_fn(t / 5),
+        snr_cutoff=snr_cutoff,
     )
-
     sgg = spike_generator_group(
-        # get 2 neurons with recall above cutoff threshold
-        [ss.r_for_recall(0.999), ss.r_for_recall(0.82), ss.r_for_recall(0.001)],
+        [
+            # get 2 neurons with SNR above cutoff threshold
+            ss.r_for_snr(ss.snr_cutoff + 2),
+            ss.r_for_snr(ss.snr_cutoff + 0.2),
+            # and one definitely not
+            ss.r_for_snr(ss.snr_cutoff / 10),
+        ],
         period=1 * ms,
     )
-    assert np.all(sgg.z[:2] < ss.r_cutoff)
-    assert sgg.z[2] > ss.r_cutoff
 
     probe = Probe([1, 1, 0] * um, [mua, ss, ss_hi, ss_long])
     sim = CLSimulator(Network(sgg))
     sim.inject(probe, sgg)
 
-    ss_many = SortedSpiking(name="many")
+    assert all(ss.i_sorted_by_ng(sgg) == [0, 1, -2]), (
+        "should be recording first 2 neurons"
+    )
+
+    ss_many = SortedSpiking(name="many", snr_cutoff=snr_cutoff)
     probe2 = Probe(
         [[-1, -1, 0], [-1, 1, 0], [1, -1, 0], [1, 1, 0]] * um, [ss_many], name="p2"
     )
 
     sim.inject(probe2, sgg)
+    for s in [ss, ss_hi, ss_long, ss_many]:
+        assert s.n_sorted == 2
 
     dur1 = 20 * ms
     sim.run(dur1)
@@ -416,9 +463,6 @@ def test_collision(dt, reset_dt, rand_seed):
 
     assert len(ss_many.t) > len(ss.t), "more channels should improve recall"
 
-    for s in [ss, ss_hi, ss_long, ss_many]:
-        assert np.sum(s.i == 2) == 0, "SortedSpiking should not detect far spikes"
-
     sim.run(1 * ms)
     i, t, y = mua.get_state()
     assert len(i) == len(t) == y.sum() == 0, (
@@ -428,6 +472,37 @@ def test_collision(dt, reset_dt, rand_seed):
     sim.run(10 * ms)
     i, t, y = mua.get_state()
     assert len(i) > 3, "mua should catch spikes now with only simultaneous collision"
+
+
+def test_cutoff(rand_seed):
+    cleo.utilities.set_seed(rand_seed)
+    ss = SortedSpiking()
+    ss_low_recall_cutoff = SortedSpiking(
+        name="lrc", recording_recall_cutoff=ss.recording_recall_cutoff / 1000
+    )
+    ss_low_snr_cutoff = SortedSpiking(name="lsc", snr_cutoff=ss.snr_cutoff * 0.8)
+    sgg = spike_generator_group(np.arange(1000) * um, period=1 * ms)
+
+    lim = (-0.1, 0.1)  # mm
+    cleo.coords.assign_coords_rand_rect_prism(sgg, lim, lim, lim)
+
+    sim = CLSimulator(Network(sgg))
+    probe = Probe([1, 1, 0] * um, [ss, ss_low_recall_cutoff, ss_low_snr_cutoff])
+
+    ss_many = SortedSpiking(name="many")
+    probe2 = Probe(
+        [[-1, -1, 0], [-1, 1, 0], [1, -1, 0], [1, 1, 0]] * um, [ss_many], name="p2"
+    )
+
+    sim.inject(probe, sgg)
+    sim.inject(probe2, sgg)
+
+    assert (
+        ss.n_neurons == ss_low_snr_cutoff.n_neurons < ss_low_recall_cutoff.n_neurons
+    ), "lowering the recall cutoff should increase n_neurons"
+    assert ss.n_sorted == ss_low_recall_cutoff.n_sorted < ss_low_snr_cutoff.n_sorted, (
+        "lowering the snr cutoff should increase n_sorted"
+    )
 
 
 def _test_spiking_to_neo(spike_signal_class):
