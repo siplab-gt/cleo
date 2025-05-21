@@ -45,6 +45,7 @@ ruff = ">=0.1.15"
 [tool.poetry.group.dev.dependencies]
 pytest-xdist = "^3.5.0"
 marimo = ">=0.11.20"
+cvxpy = "^1.6.5"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

@@ -118,10 +118,7 @@ See the {doc}`tutorials/electrodes` and {doc}`tutorials/all_optical` tutorials f
 coords = cleo.ephys.linear_shank_coords(
     array_length=1*b2.mm, channel_count=32, start_location=(0, 0, 0.2)*b2.mm
 )
-mua = cleo.ephys.MultiUnitActivity(
-    r_perfect_detection=20 * b2.um,
-    r_half_detection=40 * b2.um,
-)
+mua = cleo.ephys.MultiUnitActivity()
 probe = cleo.ephys.Probe(coords, signals=[mua])
 sim.inject(probe, ng)
 ```
@@ -184,6 +181,7 @@ The {doc}`tutorials/on_off_ctrl`, {doc}`tutorials/PI_ctrl`, and {doc}`tutorials/
 cleo.utilities.style_plots_for_docs()
 b2.prefs.codegen.target = "numpy"
 b2.defaultclock.dt = 0.5 * b2.ms
+cleo.utilities.set_seed(19950923)
 ```
 
 ```{code-cell} python
@@ -213,8 +211,8 @@ For example:
 ```{code-cell} python
 import matplotlib.pyplot as plt
 fig, (ax1, ax2) = plt.subplots(2, 1, sharex=True)
-ax1.scatter(mua.t / b2.ms, mua.i, marker='.', c='white', s=2)
-ax1.set(ylabel='channel index', title='spikes')
+ax1.plot(mua.t / b2.ms, mua.i, 'w.')
+ax1.set(ylabel='channel index', title='spikes', ylim=[-0.5, probe.n - 0.5])
 ax2.step(fiber.t / b2.ms, fiber.values, c='#72b5f2')
 ax2.set(xlabel='time (ms)', ylabel='irradiance (mW/mm²)', title='photostimulation')
 ```

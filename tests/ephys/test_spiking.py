@@ -184,7 +184,7 @@ def test_SortedSpiking(rand_seed):
     # check indices are as expected: -2 for not recorded, -1 not sorted
     assert np.all(ss.i_sorted_by_ng(sgg0) == [0, -2, 1])
     assert np.all(ss.i_sorted_by_ng(sgg1) == [2, 3, -2, 4, 5, -1])
-    assert ss.i_ng_by_i_sorted(np.arange(ss.n)) == [
+    assert ss.i_ng_by_i_sorted == [
         (sgg0, 0),
         (sgg0, 2),
         (sgg1, 0),

@@ -18,11 +18,13 @@ tasks:
       - pytest -q -n auto --disable-warnings tests/ {{.CLI_ARGS}}
 
   test_all:
+    desc: "Run all tests in the tests folder including slow tests"
     cmds:
       - echo "Running the full test suite including tutorials..."
       - pytest -n auto --ignore=docs/tutorials/video_visualization.ipynb {{.CLI_ARGS}}
     
   clean_nbs:
+    desc: "Clean all notebooks in the docs/tutorials folder"
     cmds:
       - |
         for file in docs/tutorials/*.ipynb; do
@@ -31,7 +33,16 @@ tasks:
         done
       - echo "done"
 
-  regen_nbs:
+  rerun_nbs:
+    desc: "Rerun and overwrite all notebooks in the docs/tutorials folder"
     cmds:
       - echo "Running all tutorial notebooks and overwriting..."
       - pytest -n auto docs/tutorials/
+      - task: clean_nbs
+
+  docs:
+    desc: "Build the documentation"
+    cmds:
+      - echo "Building the documentation..."
+      - make -C docs html -j $(nproc) SPHINXOPTS={{.CLI_ARGS}}
+      - cd $CURRDIR

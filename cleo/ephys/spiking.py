@@ -14,7 +14,7 @@ import numpy as np
 import quantities as pq
 from attrs import define, field, fields
 from brian2 import NeuronGroup, Quantity, SpikeMonitor, mm, ms, um
-from jaxtyping import Bool, Float, Int, UInt
+from jaxtyping import Bool, Float, Int
 from scipy import signal
 from scipy.stats import norm
 
@@ -27,7 +27,7 @@ from cleo.utilities import rng, unit_safe_cat
 class Spiking(Signal, NeoExportable):
     """Base class for probabilistically detecting spikes.
 
-    See `notebooks/spike_detection.py` for an interactive explanation of the methods
+    See ``notebooks/spike_detection.py`` for an interactive explanation of the methods
     and parameters involved."""
 
     r_noise_floor: Quantity = 80 * um
@@ -92,8 +92,8 @@ class Spiking(Signal, NeoExportable):
     )
     """Spike times with Brian units, stored if
     :attr:`~cleo.InterfaceDevice.save_history` on :attr:`~Signal.probe`"""
-    i: UInt[np.ndarray, "n_recorded_spikes"] = field(
-        init=False, factory=lambda: np.array([], dtype=np.uint), repr=False
+    i: Int[np.ndarray, "n_recorded_spikes"] = field(
+        init=False, factory=lambda: np.array([], dtype=int), repr=False
     )
     """Channel (for multi-unit) or neuron (for sorted) indices
     of spikes, stored if
@@ -285,12 +285,12 @@ class Spiking(Signal, NeoExportable):
     @abstractmethod
     def get_state(
         self,
-    ) -> tuple[UInt[np.ndarray, "n_spikes"], Quantity, UInt[np.ndarray, "{self.n}"]]:
+    ) -> tuple[Int[np.ndarray, "n_spikes"], Quantity, Int[np.ndarray, "{self.n}"]]:
         """Return spikes since method was last called (i, t, y)
 
         Returns
         -------
-        tuple[UInt[np.ndarray, "n_spikes"], Quantity, UInt[np.ndarray, "{self.n}"]]
+        tuple[Int[np.ndarray, "n_spikes"], Quantity, Int[np.ndarray, "{self.n}"]]
             (i, t, y) where i is channel (for multi-unit) or neuron (for sorted) spike
             indices, t is spike times, and y is a spike count vector suitable for control-
             theoretic uses---i.e., a 0 for every channel/neuron that hasn't spiked and a 1
@@ -298,8 +298,8 @@ class Spiking(Signal, NeoExportable):
         """
         pass
 
-    def _get_new_spikes(self) -> Tuple[UInt[np.ndarray, "n_spikes"], Quantity]:
-        i_probe = np.array([], dtype=np.uint)
+    def _get_new_spikes(self) -> Tuple[Int[np.ndarray, "n_spikes"], Quantity]:
+        i_probe = np.array([], dtype=int)
         t = ms * np.array([], dtype=float)
         for j in range(len(self._monitors)):
             mon = self._monitors[j]
@@ -308,7 +308,7 @@ class Spiking(Signal, NeoExportable):
             # filter out spikes we don't care about
             i_probe_unfilt = self.i_probe_by_ng[mon.source][i_ng]
             i2keep = i_probe_unfilt != -2
-            i_probe = np.concatenate((i_probe, i_probe_unfilt[i2keep].astype(np.uint)))
+            i_probe = np.concatenate((i_probe, i_probe_unfilt[i2keep]))
             t = unit_safe_cat([t, mon.t[spikes_already_seen:][i2keep]])
 
             self._mon_spikes_already_seen[j] = mon.num_spikes
@@ -369,8 +369,8 @@ class Spiking(Signal, NeoExportable):
         self, i_probe, t
     ) -> Tuple[
         Quantity,
-        UInt[np.ndarray, "n_tcs"],
-        UInt[np.ndarray, "n_tcs"],
+        Int[np.ndarray, "n_tcs"],
+        Int[np.ndarray, "n_tcs"],
         Float[np.ndarray, "n_tcs"],
         Float[np.ndarray, "n_t_window {self.n_channels}"],
         Quantity,
@@ -506,7 +506,7 @@ class MultiUnitActivity(Spiking):
     def get_state(
         self,
     ) -> tuple[
-        UInt[np.ndarray, "n_spikes"], Quantity, UInt[np.ndarray, "{self.n_channels}"]
+        Int[np.ndarray, "n_spikes"], Quantity, Int[np.ndarray, "{self.n_channels}"]
     ]:
         # inherit docstring
         t_samp = self.probe.sim.network.t
@@ -569,7 +569,7 @@ class SortedSpiking(Spiking):
     SNR is defined as the mean spike amplitude divided by the standard deviation of
     the background noise for the peak (closest) channel.
     
-    Should be higher than :attr:`threshold_sigma`.
+    Should be higher than :attr:`~Spiking.threshold_sigma`.
     Spikes from units with SNR < snr_cutoff still factor into collision sampling and
     are reported as unsorted (index -1), essentially "multi-unit activity"."""
     collision_prob_fn: Callable[[Quantity], float] = lambda t: 0.2 * np.exp(
@@ -595,15 +595,13 @@ class SortedSpiking(Spiking):
         i_sorted[i_probe == -2] = -2
         return i_sorted
 
-    def i_ng_by_i_sorted(
-        self,
-        i_sorted: UInt[np.ndarray, "n_query"],
-    ) -> list[tuple[NeuronGroup, int]]:
-        """Get a list of (ng, i_ng) tuples for given indices of sorted neurons.
+    @property
+    def i_ng_by_i_sorted(self) -> list[tuple[NeuronGroup, int]]:
+        """Get a list of (ng, i_ng) tuples for all sorted neurons, in order.
 
         That is, this maps from sorted indices back to the original neuron group and
         indices."""
-        i_probe = self._i_probe_by_i_sorted[i_sorted]
+        i_probe = self._i_probe_by_i_sorted[np.arange(self.n_sorted)]
         return [self.i_ng_by_i_probe[i] for i in i_probe]
 
     _i_sorted_by_i_probe: Int[np.ndarray, "{self.n_neurons}"] = field(
@@ -618,6 +616,11 @@ class SortedSpiking(Spiking):
         """The distance from a contact at which the SNR is high enough for a neuron
         to be included."""
         return self.r_for_snr(self.snr_cutoff, resolution=resolution)
+
+    @property
+    def sorted_units_snr(self) -> Float[np.ndarray, "{self.n_sorted}"]:
+        """The SNR for each sorted neuron, in order."""
+        return self._mu_eap[self._i_probe_by_i_sorted]
 
     def connect_to_neuron_group(self, neuron_group, **kwparams):
         snr, i_probe = super().connect_to_neuron_group(neuron_group, **kwparams)
@@ -646,7 +649,7 @@ class SortedSpiking(Spiking):
 
     def get_state(
         self,
-    ) -> tuple[UInt[np.ndarray, "n_spikes"], Quantity, UInt[np.ndarray, "{self.n}"]]:
+    ) -> tuple[Int[np.ndarray, "n_spikes"], Quantity, Int[np.ndarray, "{self.n}"]]:
         # inherit docstring
 
         t_samp = self.probe.sim.network.t
