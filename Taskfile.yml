@@ -1,0 +1,37 @@
+# https://taskfile.dev
+
+version: '3'
+
+silent: true
+
+tasks:
+  test_not_slow:
+    desc: "Run all 'not slow' tests in the tests folder"
+    cmds:
+      - echo "Running tests (not slow)..."
+      - pytest -q -m "not slow" tests/ --disable-warnings {{.CLI_ARGS}}
+
+  test:
+    desc: "Run all tests in the test folder"
+    cmds:
+      - echo "Running all tests in the tests folder..."
+      - pytest -q -n auto --disable-warnings tests/ {{.CLI_ARGS}}
+
+  test_all:
+    cmds:
+      - echo "Running the full test suite including tutorials..."
+      - pytest -n auto --ignore=docs/tutorials/video_visualization.ipynb {{.CLI_ARGS}}
+    
+  clean_nbs:
+    cmds:
+      - |
+        for file in docs/tutorials/*.ipynb; do
+            echo "cleaning $file"
+            nbdev_clean --fname $file
+        done
+      - echo "done"
+
+  regen_nbs:
+    cmds:
+      - echo "Running all tutorial notebooks and overwriting..."
+      - pytest -n auto docs/tutorials/
