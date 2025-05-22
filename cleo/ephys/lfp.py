@@ -1,4 +1,5 @@
 """Contains LFP signals"""
+
 from __future__ import annotations
 
 import warnings
@@ -445,6 +446,9 @@ class RWSLFPSignalFromSpikes(RWSLFPSignalBase):
 
         J = sparse.lil_array((source_ng.N, neuron_group.N))
         w = self._get_weight(syn, weight)
+        # workaround for version-specific bug where VariableView can't index sparse matrix
+        syn_i = np.array(syn_i, dtype=int)
+        syn_j = np.array(syn_j, dtype=int)
         J[syn_i, syn_j] = w
         J = J.tocsr()
         if self.pop_aggregate:
