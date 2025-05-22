@@ -41,7 +41,7 @@ jobs:
           cache: "poetry"
       - run: poetry install --no-interaction
       - name: test
-        run: poetry run pytest -n auto --ignore=docs/tutorials/lqr_ctrl_ldsctrlest.ipynb
+        run: poetry run pytest -n auto --ignore=docs/tutorials/optimal_ctrl.ipynb
 
       # - name: Setup tmate session # for optional debugging
       #   uses: mxschmitt/action-tmate@v3
