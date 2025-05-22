@@ -22,7 +22,10 @@ python = ">=3.9,<3.14"
 brian2 = "^2.4, !=2.5.0.2"
 matplotlib = "^3.7"
 numpy = ">=1.16"
-scipy = "^1.7.2"
+scipy = [
+    { version = "^1.7.2", python = "<3.13" },
+    { version = "^1.14.1", python = ">=3.13" },
+]
 tklfp = "^0.2"
 attrs = "^23.0"
 neo = "^0.12.0"
