@@ -37,7 +37,7 @@ tasks:
     desc: "Rerun and overwrite all notebooks in the docs/tutorials folder"
     cmds:
       - echo "Running all tutorial notebooks and overwriting..."
-      - pytest -n auto docs/tutorials/
+      - pytest -n auto docs/tutorials/ --overwrite {{.CLI_ARGS}}
       - task: clean_nbs
 
   docs:
