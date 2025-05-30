@@ -21,7 +21,6 @@ packages = [{ include = "cleo" }]
 python = ">=3.10,<3.14"
 brian2 = "^2.4, !=2.5.0.2"
 matplotlib = "^3.7"
-numpy = ">=1.16"
 scipy = [
     { version = "^1.7.2", python = "<3.13" },
     { version = "^1.14.1", python = ">=3.13" },
@@ -53,13 +52,6 @@ requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.pytest.ini_options]
-addopts = [
-    # "--doctest-modules",
-    "--nbmake",
-    # "--flake8",
-    # will want to call this on CI where ldsctrlest is not installed
-    # "--ignore=examples/adaptive_ctrl_ldsctrlest.ipynb"
-    # "--ignore=docs/tutorials/video_visualization.ipynb"
-]
+addopts = ["--nbmake"]
 markers = ["slow: marks tests as slow (deselect with '-m \"not slow\"')"]
 testpaths = ["tests", "docs/tutorials"]

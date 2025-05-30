@@ -13,6 +13,8 @@ notebooks/data/*
 notebooks/__marimo__/
 !notebooks/__marimo__/*.ipynb
 
+poetry.lock
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
