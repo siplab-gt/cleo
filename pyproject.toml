@@ -35,7 +35,8 @@ dev = [
     "sphinx-favicon>=0.2,<0.3",
     "furo>=2024.1.29,<2025.0.0",
     "nbdev>=2.3.12,<3.0.0",
-    "elephant>=1.1.1,<2.0.0",
+    # cherry-pick commit that supports numpy 2+
+    "elephant @ git+https://github.com/NeuralEnsemble/elephant.git@36d4410",
     "seaborn>=0.13.0,<0.14.0",
     "ruff>=0.1.15,<1.0.0",
     "pytest-xdist>=3.5.0,<4.0.0",
