@@ -1,5 +1,6 @@
 """Contains probes, convenience functions for generating electrode array coordinates,
 signals, spiking, and LFP"""
+
 from cleo.ephys.lfp import (
     LFPSignalBase,
     RWSLFPSignalBase,
@@ -16,4 +17,4 @@ from cleo.ephys.probes import (
     tetrode_shank_coords,
     tile_coords,
 )
-from cleo.ephys.spiking import MultiUnitSpiking, SortedSpiking, Spiking
+from cleo.ephys.spiking import MultiUnitActivity, SortedSpiking, Spiking

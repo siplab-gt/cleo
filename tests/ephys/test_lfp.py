@@ -1,7 +1,4 @@
 # """Tests for ephys.lfp module"""
-import time
-from itertools import product
-
 import brian2.only as b2
 import neo
 import numpy as np
@@ -11,7 +8,6 @@ import wslfp
 from brian2 import Hz, Network, SpikeGeneratorGroup, mm, ms, seed, uvolt
 from tklfp import TKLFP
 
-import cleo
 from cleo import CLSimulator
 from cleo.coords import (
     assign_coords,
@@ -337,9 +333,9 @@ def test_RWSLFPSignalFromSpikes(rand_seed):
         assert len(signals) > 1
         for i, sig1 in enumerate(signals):
             for sig2 in signals[i + 1 :]:
-                assert not np.allclose(
-                    sig1.lfp, sig2.lfp
-                ), f"{param} variation not yielding different results"
+                assert not np.allclose(sig1.lfp, sig2.lfp), (
+                    f"{param} variation not yielding different results"
+                )
 
 
 @pytest.mark.slow
@@ -416,9 +412,9 @@ def test_RWSLFPSignalFromPSCs(rand_seed, samp_period):
         assert len(signals) > 1
         for i, sig1 in enumerate(signals):
             for sig2 in signals[i + 1 :]:
-                assert not np.allclose(
-                    sig1.lfp, sig2.lfp
-                ), f"{sig1.name} and {sig2.name} not yielding different results"
+                assert not np.allclose(sig1.lfp, sig2.lfp), (
+                    f"{sig1.name} and {sig2.name} not yielding different results"
+                )
 
 
 def test_psc_buffer():

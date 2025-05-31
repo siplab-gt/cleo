@@ -1,63 +1,62 @@
-[tool.poetry]
+[project]
 name = "cleosim"
-version = "0.17.0"
-description = "Cleo: the Closed-Loop, Electrophysiology, and Optogenetics experiment simulation testbed"
+version = "0.18.0"
+description = "Cleo: the Closed-Loop, Electrophysiology, and Optophysiology experiment simulation testbed"
 authors = [
-    "Kyle Johnsen <kyle@kjohnsen.org>",
-    "Nathan Cruzado <ncruzado3@gatech.edu>",
+    { name = "Kyle Johnsen", email = "kyle@kjohnsen.org" },
+    { name = "Nathan Cruzado", email = "ncruzado3@gatech.edu" },
 ]
 license = "MIT"
-homepage = "https://cleosim.readthedocs.io"
-repository = "https://github.com/siplab-gt/cleo"
 readme = "README.md"
+dynamic = ["classifiers"]
+urls = { documentation = "https://cleosim.readthedocs.io/", source = "https://github.com/siplab-gt/cleo/" }
+
+requires-python = ">=3.10,<3.14"
+dependencies = [
+    "brian2>=2.4,!=2.5.0.2,<3.0.0",
+    "matplotlib>=3.7,<4.0.0",
+    "scipy>=1.7.2,<1.14.1; python_version<'3.13'",
+    "scipy>=1.14.1; python_version>='3.13'",
+    "numpy >= 2.1.0,<3.0.0; python_version>='3.13'",
+    "tklfp>=0.2,<0.3",
+    "attrs>=23.0,<24.0",
+    "neo>=0.12.0,<0.13.0",
+    "wslfp>=0.2.1,<0.3.0",
+    "jaxtyping>=0.2.34,<0.3.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0,<8.0.0",
+    "nbmake>=1.2,<2.0.0",
+    "sphinx>=7.0,<8.0",
+    "sphinx-copybutton>=0.5.2,<0.6.0",
+    "myst-nb>=1.0,<2.0",
+    "sphinx-favicon>=0.2,<0.3",
+    "furo>=2024.1.29,<2025.0.0",
+    "nbdev>=2.3.12,<3.0.0",
+    # cherry-pick commit that supports numpy 2+
+    "elephant @ git+https://github.com/INM-6/elephant.git@36d441010c18137caccebe7a78d8305dc84e797e",
+    "seaborn>=0.13.0,<0.14.0",
+    "ruff>=0.1.15,<1.0.0",
+    "pytest-xdist>=3.5.0,<4.0.0",
+    "marimo>=0.11.20,<1.0.0",
+    "cvxpy>=1.6.5,<2.0.0",
+]
+
+[tool.poetry]
+packages = [{ include = "cleo" }]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: MIT License",
 ]
-packages = [{ include = "cleo" }]
-
-[tool.poetry.dependencies]
-python = ">=3.9,<3.13"
-brian2 = "^2.4, !=2.5.0.2"
-matplotlib = "^3.7"
-numpy = ">=1.16"
-scipy = "^1.7.2"
-tklfp = "^0.2"
-bidict = "*"
-attrs = "^23.0"
-neo = "^0.12.0"
-wslfp = "^0.2.1"
-jaxtyping = "^0.2.34"
-
-[tool.poetry.dev-dependencies]
-pytest = "^7.0.0"
-nbmake = "^1.2"
-sphinx = "^7.0"
-sphinx-copybutton = "^0.5.2"
-myst-nb = "^1.0"
-sphinx-favicon = "^0.2"
-furo = "^2024.01.29"
-nbdev = "^2.3.12"
-elephant = "^0.13.0"
-seaborn = "^0.13.0"
-ruff = "^0.1.2"
-
-[tool.poetry.group.dev.dependencies]
-pytest-xdist = "^3.5.0"
+requires-poetry = ">=2.0"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.pytest.ini_options]
-addopts = [
-    # "--doctest-modules",
-    "--nbmake",
-    # "--flake8",
-    # will want to call this on CI where ldsctrlest is not installed
-    # "--ignore=examples/adaptive_ctrl_ldsctrlest.ipynb"
-    # "--ignore=docs/tutorials/video_visualization.ipynb"
-]
+addopts = ["--nbmake"]
 markers = ["slow: marks tests as slow (deselect with '-m \"not slow\"')"]
 testpaths = ["tests", "docs/tutorials"]

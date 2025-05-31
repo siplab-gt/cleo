@@ -1,0 +1,53 @@
+# https://taskfile.dev
+
+version: '3'
+
+silent: true
+
+tasks:
+  test_fast:
+    desc: "Run all 'not slow' tests in the tests folder"
+    aliases: [t, tf]
+    cmds:
+      - echo "Running tests (not slow)..."
+      - pytest -q -m "not slow" tests/ --disable-warnings {{.CLI_ARGS}}
+
+  test:
+    desc: "Run all tests in the test folder"
+    aliases: [tt]
+    cmds:
+      - echo "Running all tests in the tests folder..."
+      - pytest -q -n auto --disable-warnings tests/ {{.CLI_ARGS}}
+
+  test_all:
+    desc: "Run all tests in the tests folder including slow tests"
+    aliases: [ta]
+    cmds:
+      - echo "Running the full test suite including tutorials..."
+      - pytest -n auto --ignore=docs/tutorials/video_visualization.ipynb {{.CLI_ARGS}}
+    
+  clean_nbs:
+    desc: "Clean all notebooks in the docs/tutorials folder"
+    aliases: [cnb]
+    cmds:
+      - |
+        for file in docs/tutorials/*.ipynb; do
+            echo "cleaning $file"
+            nbdev_clean --fname $file
+        done
+      - echo "done"
+
+  rerun_nbs:
+    desc: "Rerun and overwrite all notebooks in the docs/tutorials folder"
+    cmds:
+      - echo "Running all tutorial notebooks and overwriting..."
+      - pytest -n auto docs/tutorials/ --overwrite {{.CLI_ARGS}}
+      - task: clean_nbs
+
+  docs:
+    desc: "Build the documentation"
+    aliases: [d]
+    cmds:
+      - echo "Building the documentation..."
+      - make -C docs html -j $(nproc) SPHINXOPTS={{.CLI_ARGS}}
+      - cd $CURRDIR

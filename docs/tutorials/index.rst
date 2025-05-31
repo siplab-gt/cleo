@@ -9,7 +9,7 @@ Tutorials
     multi_opto
     on_off_ctrl
     PI_ctrl
-    lqr_ctrl_ldsctrlest
+    optimal_ctrl
     all_optical
     video_visualization
     neo

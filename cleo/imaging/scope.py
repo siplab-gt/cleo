@@ -128,7 +128,7 @@ class Scope(Recorder):
     Smaller neurons have noisier signals."""
     snr_cutoff: float = field(default=1)
     """SNR below which neurons are discarded.
-    Applied only when not focus_depth is not None"""
+    Applied only when focus_depth is not None"""
     dFF: list[Float[np.ndarray, "{self.n}"]] = field(
         factory=list, init=False, repr=False
     )
