@@ -1,6 +1,6 @@
 [project]
 name = "cleosim"
-version = "0.18.0"
+version = "0.18.1"
 description = "Cleo: the Closed-Loop, Electrophysiology, and Optophysiology experiment simulation testbed"
 authors = [
     { name = "Kyle Johnsen", email = "kyle@kjohnsen.org" },
@@ -35,8 +35,7 @@ dev = [
     "sphinx-favicon>=0.2,<0.3",
     "furo>=2024.1.29,<2025.0.0",
     "nbdev>=2.3.12,<3.0.0",
-    # cherry-pick commit that supports numpy 2+
-    "elephant @ git+https://github.com/INM-6/elephant.git@36d441010c18137caccebe7a78d8305dc84e797e",
+    # not including elephant (used in Neo export tutorial) because of dep issues
     "seaborn>=0.13.0,<0.14.0",
     "ruff>=0.1.15,<1.0.0",
     "pytest-xdist>=3.5.0,<4.0.0",

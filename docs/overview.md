@@ -164,14 +164,14 @@ class MyProcessor(cleo.ioproc.LatencyIOProcessor):
         # state_dict contains a {'recorder_name': value} dict of network.
         i_spikes, t_spikes, y_spikes = state_dict['Probe']['MultiUnitActivity']
         # on-off control
-        irr0 = 5 if len(i_spikes) < 10 else 0
+        irr0 = 5 if len(i_spikes) < 5 else 0
         # output is a {'stimulator_name': value} dict and output time
         return {'Light': irr0 * b2.mwatt / b2.mm2}, t_samp + 3 * b2.ms  # (3 ms delay)
 
 sim.set_io_processor(MyProcessor(sample_period=1 * b2.ms))
 ```
 
-The {doc}`tutorials/on_off_ctrl`, {doc}`tutorials/PI_ctrl`, and {doc}`tutorials/lqr_ctrl_ldsctrlest` tutorials give examples of closed-loop control ranging from simple to complex.
+The {doc}`tutorials/on_off_ctrl`, {doc}`tutorials/PI_ctrl`, and {doc}`tutorials/optimal_ctrl` tutorials give examples of closed-loop control ranging from simple to complex.
 
 ### Visualization
 {func}`cleo.viz.plot` allows you to easily visualize your experimental configuration:
