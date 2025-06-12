@@ -320,12 +320,13 @@ class Spiking(Signal, NeoExportable):
     def _prep_noise(dt_s: float) -> np.ndarray:
         lowcut_Hz = 300
         fs_Hz = 1 / dt_s
+        assert False, "support big dt, where highcut < lowcut"
         highcut_Hz = min(3000, 0.45 * fs_Hz)
         sos = signal.butter(
             6, [lowcut_Hz, highcut_Hz], fs=fs_Hz, btype="band", output="sos"
         )
         w, h = signal.sosfreqz(sos, 2**14, fs=fs_Hz)
-        enbw = np.trapz(np.abs(h) ** 2, w)
+        enbw = np.trapezoid(np.abs(h) ** 2, w)
         assert np.isclose(enbw, highcut_Hz - lowcut_Hz, rtol=0.01), (
             f"{enbw} != {highcut_Hz - lowcut_Hz}"
         )
@@ -411,6 +412,9 @@ class Spiking(Signal, NeoExportable):
     @staticmethod
     @cache
     def _max_collision_interval(dt_ms, collision_prob_fn):
+        assert False, (
+            "make it easy to turn off collisions without broadcasting issues and this warning"
+        )
         intervals = np.arange(10 / dt_ms) * dt_ms * ms
         i = np.searchsorted(-collision_prob_fn(intervals).astype(float), -1e-3)
         if i == len(intervals):
