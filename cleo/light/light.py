@@ -21,6 +21,7 @@ from brian2.units import (
     mwatt,
     nmeter,
     um,
+    second,
 )
 from jaxtyping import Float
 from matplotlib import colors
@@ -317,7 +318,9 @@ class Light(Stimulator):
     """light wavelength with unit (usually nmeter)"""
 
     scan_freq : int = field(default=30, kw_only=True)
-    
+
+    is_scanning : bool  = field(default=False, kw_only=True)
+
     @coords.validator
     def _check_coords(self, attribute, value):
         if len(value.shape) != 2 or value.shape[1] != 3:
@@ -360,6 +363,12 @@ class Light(Stimulator):
     def init_for_simulator(self, sim: CLSimulator) -> None:
         registry = registry_for_sim(sim)
         registry.init_register_light(self)
+        """Test Code for setter method"""
+        src = registry.source_for_light(self)     # Subgroup representing this light
+        src.scan_period = (1 / self.scan_freq) * second
+        src.dwell_time  = src.scan_period         # Scope will overwrite
+        src.is_scanning = int(self.is_scanning)
+        src.scale = 1                            
         self.reset()
 
     def connect_to_neuron_group(

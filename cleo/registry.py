@@ -58,12 +58,11 @@ class DeviceInteractionRegistry:
         scale : 1
         epsilon : 1
         Ephoton : joule
-        raster_enable : 1
+        is_scanning : 1
         scan_period : second
-        raster_dwell_time: second
-        Irr_norm = epsilon * T * Irr0_pre : watt/meter**2 
-        Irr_raster = epsilon * T * Irr0_pre * int(((t + scan_period * (i/N)) % (scan_period)) < (raster_dwell_time * scale * 10)) / (scale * 10): watt/meter**2 
-        Irr_post = Irr_norm * (1 - raster_enable) + Irr_raster * raster_enable : watt/meter**2 (summed)
+        dwell_time: second
+        scan_factor = (1 - is_scanning) + is_scanning * int(((t + scan_period * (i/N_pre)) % scan_period) < dwell_time) : 1
+        Irr_post = epsilon * T * Irr0_pre * scan_factor * scale : watt/meter**2 (summed)
         phi_post = Irr_post / Ephoton : 1/second/meter**2 (summed)
     """
     """Model used in light propagation synapses"""
@@ -86,6 +85,18 @@ class DeviceInteractionRegistry:
             self.register_light(device, ng)
         elif "LightDependent" in ancestor_classes:
             self.register_ldd(device, ng)
+    
+    """Test Setter Methods"""
+    def _apply_to_source(self, light: "Light", **values):
+        src = self.source_for_light(light)
+        for k, v in values.items():
+            setattr(src, k, v)
+
+    def set_scan_on(self, light: "Light", enable: bool = True):
+        self._apply_to_source(light, is_scanning=int(bool(enable)))
+
+    def set_scan_freq(self, light: "Light", hz: float):
+        self._apply_to_source(light, scan_period=(1 / hz) * second)
 
     def connect_light_to_ldd_for_ng(
         self, light: "Light", ldd: "LightDependent", ng: NeuronGroup
@@ -115,12 +126,6 @@ class DeviceInteractionRegistry:
             raise ValueError(f"{light} already connected to {ldd.name} for {ng.name}")
 
         i_source = self.subgroup_idx_for_light[light]
-        light_prop_syn.epsilon[i_source, :] = epsilon
-        light_prop_syn.T[i_source, :] = light.transmittance(coords_from_ng(ng)).ravel()
-        light_prop_syn.scan_period = second / light.scan_freq
-        light_prop_syn.raster_dwell_time = (pi * 10 ** -10 * meter2)/ (pi*(self.raster_fov/2)**2) * second / light.scan_freq
-        light_prop_syn.scale = 1 + (defaultclock.dt > light_prop_syn.raster_dwell_time).astype(int) * (defaultclock.dt / (light_prop_syn.raster_dwell_time) - 1)
-        light_prop_syn.raster_enable = self.raster_enable
         # fmt: off
         # Ephoton = h*c/lambda
         light_prop_syn.Ephoton[i_source, :] = (
@@ -129,6 +134,16 @@ class DeviceInteractionRegistry:
             / light.wavelength
         )
         # fmt: on
+        src = self.source_for_light(light)
+        src.scan_period = (1 / light.scan_freq) * second
+        spot_radius = 1e-6 * meter
+        spot_area = pi * spot_radius ** 2
+        fov_radius = self.raster_fov / 2
+        fov_area = pi * fov_radius ** 2
+        src.dwell_time = spot_area / fov_area * src.scan_period
+        src.is_scanning = int(bool(self.raster_enable))
+        src.scale = 1 + (defaultclock.dt / src.dwell_time - 1) if defaultclock.dt > src.dwell_time else 1
+        #Test Code to adapt setter method
         self.connections.add((light, ldd, ng))
 
     def _add_brian_object(self, obj):
@@ -213,14 +228,18 @@ class DeviceInteractionRegistry:
         i = self.subgroup_idx_for_light[light]
         return self.light_source_ng[i]
     
-    def update_fov(self, new_fov: float):
-        self.raster_enable = 1
-        def custom_warning_format(message, category, filename, lineno, line=None):
-            return f"{category.__name__}: {message}\n"
-        warnings.formatwarning = custom_warning_format
-        if self.raster_fov != new_fov:
-            self.raster_fov = new_fov
-            warnings.warn("Warning: cleo currently supports use of single scanning fov in simulation, the latest update parameter will be used", UserWarning)
+    def set_fov(self, light: "Light", fov):
+        src = self.source_for_light(light)
+        spot_radius = 10e-6 * meter
+        spot_area = pi * spot_radius ** 2
+        fov_area = pi * fov ** 2
+        src.dwell_time = spot_area / fov_area * src.scan_period
+        if fov != self.raster_fov:
+            warnings.warn(
+                "Multiple FOV diameters detected; CLEO currently assumes a single imaging FOV. Using latest diameter.",
+                UserWarning,
+            )
+            self.raster_fov = fov
 
 
 registries: dict["CLSimulator", DeviceInteractionRegistry] = {}
