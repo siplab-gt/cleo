@@ -519,7 +519,6 @@ class Light(Stimulator):
                 f"Input to light must be a scalar or an array of"
                 f" length {self.n}. Got {value.shape} instead."
             )
-        assert False, "need to test this"
         unit = value.get_best_unit()
         value = np.broadcast_to(value / unit, (self.n,)) * unit
         if not (_is_power(value) or _is_irr(value)):
