@@ -22,7 +22,7 @@ def reset_dt():
 
 
 def no_collision(t2mt1):
-    return np.zeros(t2mt1.shape)
+    return 0
 
 
 def spike_generator_group(z_coords, indices=None, times_ms=None, **kwparams):
@@ -382,6 +382,31 @@ def _test_reset(spike_signal_class):
 
 def test_SortedSpiking_reset():
     _test_reset(SortedSpiking)
+
+
+@pytest.mark.parametrize("dt", [2, 5, 10, 20])
+def test_big_dt(dt, reset_dt):
+    assert b2.defaultclock.dt == 0.1 * ms
+    b2.defaultclock.dt = dt * ms
+    mua = MultiUnitActivity()
+    ss = SortedSpiking()
+    sgg = spike_generator_group(
+        [
+            # get 2 neurons with SNR above cutoff threshold
+            ss.r_for_snr(ss.snr_cutoff + 2),
+            ss.r_for_snr(ss.snr_cutoff + 0.2),
+            # and one definitely not
+            ss.r_for_snr(ss.snr_cutoff / 10),
+        ],
+        period=20 * ms,
+    )
+
+    probe = Probe([0, 0, 0] * um, [mua, ss])
+    sim = CLSimulator(Network(sgg))
+    sim.inject(probe, sgg)
+    sim.run(20 * ms)
+    with pytest.warns(UserWarning, match="too low to simulate spiking band noise"):
+        probe.get_state()
 
 
 @pytest.mark.parametrize("dt", [0.05, 0.1, 0.2, 1.0])

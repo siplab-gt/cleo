@@ -320,7 +320,6 @@ class Spiking(Signal, NeoExportable):
     def _prep_noise(dt_s: float) -> np.ndarray:
         lowcut_Hz = 300
         fs_Hz = 1 / dt_s
-        assert False, "support big dt, where highcut < lowcut"
         highcut_Hz = min(3000, 0.45 * fs_Hz)
         sos = signal.butter(
             6, [lowcut_Hz, highcut_Hz], fs=fs_Hz, btype="band", output="sos"
@@ -344,11 +343,25 @@ class Spiking(Signal, NeoExportable):
 
         return sos, pre_filter_factor
 
+    @staticmethod
+    @cache
+    def _cannot_simulate_noise(dt_s: float) -> bool:
+        fs_Hz = 1 / dt_s
+        cannot_simulate_noise = fs_Hz / 2 < 300
+        if cannot_simulate_noise:
+            warnings.warn(
+                f"Sampling frequency {fs_Hz} Hz is too low to simulate spiking band noise"
+            )
+        return cannot_simulate_noise
+
     def _generate_noise(self) -> tuple[Float[np.ndarray, "n_t n_channels"], Quantity]:
         """generate noise in spiking band"""
         dt = b2.defaultclock.dt
         n_t = int(round((self.probe.sim.network.t - self._prev_t) / dt))
         t_window = np.arange(n_t) * dt + self._prev_t
+
+        if self._cannot_simulate_noise(dt / b2.second):
+            return np.zeros((n_t, self.n_channels)), t_window
 
         sos, pre_filter_factor = self._prep_noise(dt / b2.second)
         if n_t <= 0:
@@ -412,16 +425,18 @@ class Spiking(Signal, NeoExportable):
     @staticmethod
     @cache
     def _max_collision_interval(dt_ms, collision_prob_fn):
-        assert False, (
-            "make it easy to turn off collisions without broadcasting issues and this warning"
-        )
         intervals = np.arange(10 / dt_ms) * dt_ms * ms
-        i = np.searchsorted(-collision_prob_fn(intervals).astype(float), -1e-3)
+        # allows for function to return scale (like 0)
+        coll_probs = np.broadcast_to(
+            collision_prob_fn(intervals), intervals.shape
+        ).astype(float)
+        i = np.searchsorted(-coll_probs, -1e-3)
         if i == len(intervals):
             warnings.warn(
                 "collision_prob_fn(10 ms) > 1e-3. "
                 "Will not look for collisions over 10 ms in the past."
             )
+            return 10 * ms
         else:
             return intervals[i]
 
