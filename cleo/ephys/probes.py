@@ -105,8 +105,6 @@ class Probe(Recorder, NeoExportable):
     """Signals recorded by the probe.
     Can be added to post-init with :meth:`add_signals`."""
 
-    probe: Probe = field(init=False)
-
     def __attrs_post_init__(self):
         self.coords = self.coords.reshape((-1, 3))
         if len(self.coords.shape) != 2 or self.coords.shape[1] != 3:
