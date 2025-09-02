@@ -1,4 +1,5 @@
 """Contains Light device and propagation models"""
+
 from __future__ import annotations
 
 import datetime
@@ -518,9 +519,8 @@ class Light(Stimulator):
                 f"Input to light must be a scalar or an array of"
                 f" length {self.n}. Got {value.shape} instead."
             )
-        if len(np.shape(value)) == 0:
-            unit = value.get_best_unit()
-            value = np.broadcast_to(value / unit, (self.n,)) * unit
+        unit = value.get_best_unit()
+        value = np.broadcast_to(value / unit, (self.n,)) * unit
         if not (_is_power(value) or _is_irr(value)):
             raise ValueError(
                 f"Input to light must be in units of power or irradiance."

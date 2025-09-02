@@ -1,6 +1,6 @@
 [project]
 name = "cleosim"
-version = "0.18.1"
+version = "0.18.2"
 description = "Cleo: the Closed-Loop, Electrophysiology, and Optophysiology experiment simulation testbed"
 authors = [
     { name = "Kyle Johnsen", email = "kyle@kjohnsen.org" },

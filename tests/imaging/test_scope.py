@@ -109,7 +109,7 @@ def test_target_neurons_in_plane(rand_seed):
         ng, focus_depth, img_width, soma_radius=20 * um
     )
     assert len(i_targets_bigger) > len(i_targets)
-    assert np.all(nff_bigger[np.in1d(i_targets_bigger, i_targets)] < nff)
+    assert np.all(nff_bigger[np.isin(i_targets_bigger, i_targets)] < nff)
 
     # nff smaller for membrane than cytoplasm
     # (counterintuitive since the overall SNR should be stronger,
@@ -118,7 +118,7 @@ def test_target_neurons_in_plane(rand_seed):
     i_targets_membrane, nff_membrane, _ = target_neurons_in_plane(
         ng, focus_depth, img_width, sensor_location="membrane"
     )
-    assert np.all(nff_membrane[np.in1d(i_targets_membrane, i_targets)] < nff)
+    assert np.all(nff_membrane[np.isin(i_targets_membrane, i_targets)] < nff)
     assert len(i_targets_membrane) == len(i_targets)  # since 0 is cutoff
 
     # TODO: random rotations

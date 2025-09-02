@@ -20,7 +20,7 @@ tasks:
       - pytest -q -n auto --disable-warnings tests/ {{.CLI_ARGS}}
 
   test_all:
-    desc: "Run all tests in the tests folder including slow tests"
+    desc: "Run the full test suite including tutorials"
     aliases: [ta]
     cmds:
       - echo "Running the full test suite including tutorials..."
