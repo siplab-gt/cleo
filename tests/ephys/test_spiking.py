@@ -220,7 +220,7 @@ def test_SortedSpiking(rand_seed):
         assert i not in ss.i
 
     assert ss.t.shape == ss.i.shape == ss.t_samp.shape
-    assert np.all(np.in1d(ss.t_samp / ms, [3, 4, 5, 6]))
+    assert np.all(np.isin(ss.t_samp / ms, [3, 4, 5, 6]))
 
 
 @pytest.mark.parametrize("dt", [0.05, 0.1, 0.2, 0.5])
