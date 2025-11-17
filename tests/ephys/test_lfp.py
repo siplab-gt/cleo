@@ -369,6 +369,7 @@ def test_RWSLFPSignalFromPSCs(rand_seed, samp_period):
         Iampa_var_names=["Iampa1"],
         Igaba_var_names=["Igaba1"],
         name=None,
+        inject_kwargs={},
     ):
         rwslfp_sig = RWSLFPSignalFromPSCs(
             pop_aggregate=pop_agg,
@@ -387,6 +388,7 @@ def test_RWSLFPSignalFromPSCs(rand_seed, samp_period):
             orientation=ornt,
             Iampa_var_names=Iampa_var_names,
             Igaba_var_names=Igaba_var_names,
+            **inject_kwargs,
         )
         return rwslfp_sig
 
@@ -415,6 +417,13 @@ def test_RWSLFPSignalFromPSCs(rand_seed, samp_period):
                 assert not np.allclose(sig1.lfp, sig2.lfp), (
                     f"{sig1.name} and {sig2.name} not yielding different results"
                 )
+
+    # test missing sampling period error
+    sim.set_io_processor(None)
+    print(sim.io_processor)
+    with pytest.raises(RuntimeError, match="needs to know the sampling period"):
+        add_rwslfp_sig()
+    add_rwslfp_sig(inject_kwargs={"sample_period": 5 * ms})
 
 
 def test_psc_buffer():
