@@ -18,8 +18,8 @@ from cleo.opto.opsins import (
     FourStateOpsin,
 )
 
-
-ONE_P_TWO_P_RATIO = 270382.2996938772
+# This number is the average of the 1P/2P ratios calculated for ChRmine, ChroME, ChroME2f, and ChroME2s
+ONE_P_TWO_P_RATIO = 250394.05605233982
 
 
 def chr2_4s() -> FourStateOpsin:
@@ -52,6 +52,7 @@ def chr2_4s() -> FourStateOpsin:
         v1=17.1 * mV,
         name="ChR2",
         spectrum=[
+            # Replaced ONE_P_TWO_P_RATIO with calculated value for ChR2 from notebook
             (400, 0.34),
             (422, 0.65),
             (460, 0.96),
@@ -61,23 +62,24 @@ def chr2_4s() -> FourStateOpsin:
             (520, 0.22),
             (540, 0.06),
             (560, 0.01),
-            (800, 0.34 / ONE_P_TWO_P_RATIO),
-            (844, 0.65 / ONE_P_TWO_P_RATIO),
-            (920, 0.96 / ONE_P_TWO_P_RATIO),
-            (940, 1 / ONE_P_TWO_P_RATIO),
-            (946, 1 / ONE_P_TWO_P_RATIO),
-            (1000, 0.57 / ONE_P_TWO_P_RATIO),
-            (1040, 0.22 / ONE_P_TWO_P_RATIO),
-            (1080, 0.06 / ONE_P_TWO_P_RATIO),
-            (1120, 0.01 / ONE_P_TWO_P_RATIO),
+            (800, 0.34 / 18011.05233241948),
+            (844, 0.65 / 18011.05233241948),
+            (920, 0.96 / 18011.05233241948),
+            (940, 1 / 18011.05233241948),
+            (946, 1 / 18011.05233241948),
+            (1000, 0.57 / 18011.05233241948),
+            (1040, 0.22 / 18011.05233241948),
+            (1080, 0.06 / 18011.05233241948),
+            (1120, 0.01 / 18011.05233241948),
         ],
     )
 
 
-def ReaChR_4s() -> BansalFourStateOpsin:  # include this if it's a 4 state
+def reachr_4s() -> BansalFourStateOpsin:
     """Returns a 4-state ReaChR model.
 
-    Params given in Bansal et al., 2020. [Table 1]
+    Params given in Bansal et al., 2021,
+    <https://doi.org/10.1088/1741-2552/ac1175>, [Table 1]
     Action spectrum from `Krause et al., 2017, Fig. 1b
     <https://doi.org/10.1016/j.bpj.2017.02.001>`_,
     extracted using `Plot Digitizer <https://plotdigitizer.com/>`_.
@@ -101,7 +103,6 @@ def ReaChR_4s() -> BansalFourStateOpsin:  # include this if it's a 4 state
         E=7 * mV,
         name="ReaChR",
         spectrum=[
-            (479, 0.67),
             (390, 0.30),
             (401, 0.27),
             (411, 0.30),
@@ -111,6 +112,7 @@ def ReaChR_4s() -> BansalFourStateOpsin:  # include this if it's a 4 state
             (451, 0.46),
             (461, 0.53),
             (472, 0.58),
+            (479, 0.67),
             (490, 0.76),
             (500, 0.86),
             (511, 0.94),
@@ -126,10 +128,11 @@ def ReaChR_4s() -> BansalFourStateOpsin:  # include this if it's a 4 state
     )
 
 
-def ChrimsonR_4s() -> BansalFourStateOpsin:
-    """Returns a 4-state CsChrimsonR model.
+def chrimsonr_4s() -> BansalFourStateOpsin:
+    """Returns a 4-state ChrimsonR model.
 
-    Params given in Bansal et al., 2020. [Table 1]
+    Params given in Bansal et al., 2021,
+    <https://doi.org/10.1088/1741-2552/ac1175> [Table 1]
     Action spectrum from `Cheong, Soon Keen et al., 2018, Fig. 2,
     <doi:10.1371/journal.pone.0194947>`_,
     extracted using `Plot Digitizer <https://plotdigitizer.com/>`_.
@@ -184,8 +187,8 @@ def ChrimsonR_4s() -> BansalFourStateOpsin:
             (632, 0.64),
             (634, 0.60),
             (637, 0.56),
-            (643, 0.47),
             (639, 0.52),
+            (643, 0.47),
             (647, 0.40),
             (652, 0.32),
             (660, 0.24),
@@ -196,10 +199,11 @@ def ChrimsonR_4s() -> BansalFourStateOpsin:
     )
 
 
-def CsChrimson_4s() -> BansalFourStateOpsin:
+def cschrimson_4s() -> BansalFourStateOpsin:
     """Returns a 4-state CsChrimson model.
 
-    Params given in Bansal et al., 2020. [Table 1]
+    Params given in Bansal et al., 2021,
+    <https://doi.org/10.1088/1741-2552/ac1175>, [Table 1]
     Action spectrum from `Kim, Seungsoo, et al., 2015, Fig. 6.3a
     <https://doi.org/10.1007/978-3-319-12913-6_6>`_,
     extracted using `Plot Digitizer <https://plotdigitizer.com/>`_.
@@ -246,10 +250,11 @@ def CsChrimson_4s() -> BansalFourStateOpsin:
     )
 
 
-def bReaChES_4s() -> BansalFourStateOpsin:  # 3 state?
+def breaches_4s() -> BansalFourStateOpsin:
     """Returns a 4-state bReaChES model.
 
-    Params given in Bansal et al., 2020. [Table 1]
+    Params given in Bansal et al., 2021,
+    <https://doi.org/10.1088/1741-2552/ac1175>, [Table 1]
     Action spectrum from `Bansal, H., Pyari, G. & Roy, S., 2024, Fig. 1c
     <https://doi.org/10.1038/s41598-024-62558-2>`_,
     extracted using `Plot Digitizer <https://plotdigitizer.com/>`_.
@@ -290,10 +295,11 @@ def bReaChES_4s() -> BansalFourStateOpsin:  # 3 state?
     )
 
 
-def ChRmine_4s() -> BansalFourStateOpsin:
+def chrmine_4s() -> BansalFourStateOpsin:
     """Returns a 4-state ChRmine model.
 
-    Params given in Bansal et al., 2020. [Table 1]
+    Params given in Bansal et al., 2021,
+    <https://doi.org/10.1088/1741-2552/ac1175>, [Table 1]
     Action spectrum from `Bansal, H., Pyari, G. & Roy, S., 2024, Fig. 1c
     <https://doi.org/10.1038/s41598-024-62558-2>`_,
     extracted using `Plot Digitizer <https://plotdigitizer.com/>`_.
@@ -334,11 +340,11 @@ def ChRmine_4s() -> BansalFourStateOpsin:
     )
 
 
-# these numbers seem wrong based off of bansal table 1? nvm its from ibtronerueoscience
 def chr2_b4s() -> BansalFourStateOpsin:
     """Returns a 4-state ChR2 model.
 
-    Params given in Bansal et al., 2020.
+    Params given in Bansal et al., 2020,
+    <https://doi.org/10.1016/j.neuroscience.2020.09.022>, [Table 1]
     Action spectrum from `Nagel et al., 2003, Fig. 4a
     <https://www.pnas.org/doi/full/10.1073/pnas.1936192100>`_,
     extracted using `Plot Digitizer <https://plotdigitizer.com/>`_.
@@ -363,6 +369,7 @@ def chr2_b4s() -> BansalFourStateOpsin:
         E=0 * mV,
         name="ChR2",
         spectrum=[
+            # Replaced ONE_P_TWO_P_RATIO with calculated value for ChR2 from notebook
             (400, 0.34),
             (422, 0.65),
             (460, 0.96),
@@ -372,15 +379,15 @@ def chr2_b4s() -> BansalFourStateOpsin:
             (520, 0.22),
             (540, 0.06),
             (560, 0.01),
-            (800, 0.34 / ONE_P_TWO_P_RATIO),
-            (844, 0.65 / ONE_P_TWO_P_RATIO),
-            (920, 0.96 / ONE_P_TWO_P_RATIO),
-            (940, 1 / ONE_P_TWO_P_RATIO),
-            (946, 1 / ONE_P_TWO_P_RATIO),
-            (1000, 0.57 / ONE_P_TWO_P_RATIO),
-            (1040, 0.22 / ONE_P_TWO_P_RATIO),
-            (1080, 0.06 / ONE_P_TWO_P_RATIO),
-            (1120, 0.01 / ONE_P_TWO_P_RATIO),
+            (800, 0.34 / 18011.05233241948),
+            (844, 0.65 / 18011.05233241948),
+            (920, 0.96 / 18011.05233241948),
+            (940, 1 / 18011.05233241948),
+            (946, 1 / 18011.05233241948),
+            (1000, 0.57 / 18011.05233241948),
+            (1040, 0.22 / 18011.05233241948),
+            (1080, 0.06 / 18011.05233241948),
+            (1120, 0.01 / 18011.05233241948),
         ],
     )
 
@@ -388,7 +395,8 @@ def chr2_b4s() -> BansalFourStateOpsin:
 def chr2_h134r_4s() -> BansalFourStateOpsin:
     """Returns a 4-state ChR2(H134R) model.
 
-    Params given in Bansal et al., 2020.
+    Params given in Bansal et al., 2020,
+    <https://doi.org/10.1016/j.neuroscience.2020.09.022>, [Table 1]
     Action spectrum is same as for :func:`~chr2_4s`, but blue-shifted 20 nm
     (I cannot find it directly in the literature).
 
@@ -434,13 +442,11 @@ def chr2_h134r_4s() -> BansalFourStateOpsin:
     )
 
 
-# ibroneuroscience
-
-
-def ChETA_4s() -> BansalFourStateOpsin:
+def cheta_4s() -> BansalFourStateOpsin:
     """Returns a 4-state ChETA model.
 
-    Params given in Bansal et al., 2020.
+    Params given in Bansal et al., 2020,
+    <https://doi.org/10.1016/j.neuroscience.2020.09.022>, [Table 1]
     Action spectrum from `Gunaydin, L., Yizhar, O., Berndt, A. et al., 2010, Fig. 2b
     <https://doi.org/10.1038/nn.2495>`_,
     extracted using `Plot Digitizer <https://plotdigitizer.com/>`_.
@@ -469,7 +475,7 @@ def ChETA_4s() -> BansalFourStateOpsin:
             (460, 0.61),
             (468, 0.77),
             (478, 0.89),
-            (490, 1),  # <https://www.addgene.org/guides/optogenetics/>
+            (490, 1),
             (500, 1),
             (514, 0.89),
             (530, 0.70),
@@ -479,10 +485,11 @@ def ChETA_4s() -> BansalFourStateOpsin:
     )
 
 
-def Chronos_4s() -> BansalFourStateOpsin:
+def chronos_4s() -> BansalFourStateOpsin:
     """Returns a 4-state Chronos model.
 
-    Params given in Bansal et al., 2020.
+    Params given in Bansal et al., 2020,
+    <https://doi.org/10.1016/j.neuroscience.2020.09.022>, [Table 1]
     Action spectrum from `Soor, Navjeevan S., et al., 2019, Fig. 1b
     <https://doi.org/10.1088/1361-6463/aaf944>`_,
     extracted using `Plot Digitizer <https://plotdigitizer.com/>`_.
@@ -518,8 +525,8 @@ def Chronos_4s() -> BansalFourStateOpsin:
             (480, 0.86),
             (490, 0.92),
             (498, 1),
-            (516, 0.84),
             (507, 0.90),
+            (516, 0.84),
             (528, 0.68),
             (521, 0.76),
             (533, 0.59),
@@ -535,10 +542,11 @@ def Chronos_4s() -> BansalFourStateOpsin:
     )
 
 
-def CheRiff_4s() -> BansalFourStateOpsin:
+def cheriff_4s() -> BansalFourStateOpsin:
     """Returns a 4-state CheRiff model.
 
-    Params given in Bansal et al., 2020.
+    Params given in Bansal et al., 2020,
+    <https://doi.org/10.1016/j.neuroscience.2020.09.022>, [Table 1]
     Action spectrum from `Hochbaum, Daniel R et al., 2014, Fig. 2a
     <https://doi.org/10.1038/nmeth.3000>`_,
     extracted using `Plot Digitizer <https://plotdigitizer.com/>`_.
@@ -581,7 +589,8 @@ def CheRiff_4s() -> BansalFourStateOpsin:
 def vfchrimson_4s() -> BansalFourStateOpsin:
     """Returns a 4-state vf-Chrimson model.
 
-    Params given in Bansal et al., 2020.
+    Params given in Bansal et al., 2020,
+    <https://doi.org/10.1016/j.neuroscience.2020.09.022>, [Table 1]
     Action spectrum from `Mager et al., 2018, Supp. Fig. 1a
     <https://static-content.springer.com/esm/art%3A10.1038%2Fs41467-018-04146-3/MediaObjects/41467_2018_4146_MOESM1_ESM.docx>`_,
     extracted using `Plot Digitizer <https://plotdigitizer.com/>`_.
@@ -633,7 +642,8 @@ def vfchrimson_4s() -> BansalFourStateOpsin:
 def chrimson_4s() -> BansalFourStateOpsin:
     """Returns a 4-state Chrimson model.
 
-    Params given in Bansal et al., 2020.
+    Params given in Bansal et al., 2020,
+    <https://doi.org/10.1016/j.neuroscience.2020.09.022>, [Table 1]
     Action spectrum from `Mager et al., 2018, Supp. Fig. 1a
     <https://static-content.springer.com/esm/art%3A10.1038%2Fs41467-018-04146-3/MediaObjects/41467_2018_4146_MOESM1_ESM.docx>`_,
     extracted using `Plot Digitizer <https://plotdigitizer.com/>`_.
@@ -685,7 +695,8 @@ def chrimson_4s() -> BansalFourStateOpsin:
 def gtacr2_4s() -> BansalFourStateOpsin:
     """Returns a 4-state model of GtACR2, an anion channel.
 
-    Params given in Bansal et al., 2020.
+    Params given in Bansal et al., 2020,
+    <https://doi.org/10.1016/j.neuroscience.2020.09.022>, [Table 1]
     Action spectra from `Govorunova et al., 2015, Fig. 1f
     <https://www.science.org/doi/10.1126/science.aaa7484#F1>`_,
     extracted using `Plot Digitizer <https://plotdigitizer.com/>`_.
@@ -751,7 +762,8 @@ def gtacr2_4s() -> BansalFourStateOpsin:
 def enphr3_3s():
     """Returns a 3-state model of eNpHR3, a chloride pump.
 
-    Params given in Bansal et al., 2020.
+    Params given in Bansal et al., 2020,
+    <https://doi.org/10.1088/2057-1976/ab90a1>, [Table 1]
     Action spectrum from `Gradinaru et al., 2010 <https://doi.org/10.1016/j.cell.2010.02.037>`_,
     Figure 3F,
     extracted using `Plot Digitizer <https://plotdigitizer.com/>`_.
@@ -795,13 +807,11 @@ def enphr3_3s():
     )
 
 
-# nphr ? 4 state or 3 state? CHECK FOR ALL...turns out they are pumps so they are three state anyway
+def nphr_3s():
+    """Returns a 3-state model of NpHR, a chloride pump.
 
-
-def nphr_4s():
-    """Returns a 4-state model of NpHR, a chloride pump.
-
-    Params given in Bansal et al., 2020. [Table 1]
+    Params given in Bansal et al., 2020,
+    <https://doi.org/10.1088/2057-1976/ab90a1>, [Table 1]
     Action spectrum from `Bamberg et al., 1984, Fig. 3,
     <https://pubs.acs.org/doi/pdf/10.1021/bi00320a050>`_,
     extracted using `Plot Digitizer <https://plotdigitizer.com/>`_.
@@ -841,15 +851,16 @@ def nphr_4s():
     )
 
 
-def jaws_4s():
-    """Returns a 4-state model of Jaws, a chloride pump.
+def jaws_3s():
+    """Returns a 3-state model of Jaws, a chloride pump.
 
-    Params given in Bansal et al., 2020. [Table 1]
+    Params given in Bansal et al., 2020,
+    <https://doi.org/10.1088/2057-1976/ab90a1>, [Table 1]
     Action spectrum from `Chuong, Amy S et al., 2014, Fig. 1d
     <https://doi.org/10.1038/nn.3752>`_,
     extracted using `Plot Digitizer <https://plotdigitizer.com/>`_.
     """
-    return BansalThreeStatePump(  # table 1 params
+    return BansalThreeStatePump(
         Gd=0.167 / ms,
         Gr=0.05 / ms,
         ka=1 / ms,
@@ -875,7 +886,7 @@ def jaws_4s():
             (560, 0.91),
             (577, 0.98),
             (592, 1),
-            (600, 1),  # says in article
+            (600, 1),
             (608, 0.94),
             (624, 0.81),
             (639, 0.54),
