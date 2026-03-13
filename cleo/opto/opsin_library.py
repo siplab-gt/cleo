@@ -28,7 +28,7 @@ def chr2_4s() -> FourStateOpsin:
     Params taken from try.projectpyrho.org's default 4-state configuration.
     Action spectrum from `Nagel et al., 2003, Fig. 4a
     <https://www.pnas.org/doi/full/10.1073/pnas.1936192100>`_,
-    extracted using `Plot Digitizer <https://plotdigitizer.com/>`_.
+    Extracted using `Plot Digitizer <https://plotdigitizer.com/>`_.
 
     Parameters can be changed after initialization but *before injection*.
     """
@@ -62,15 +62,15 @@ def chr2_4s() -> FourStateOpsin:
             (520, 0.22),
             (540, 0.06),
             (560, 0.01),
-            (800, 0.34 / 18011.05233241948),
-            (844, 0.65 / 18011.05233241948),
-            (920, 0.96 / 18011.05233241948),
-            (940, 1 / 18011.05233241948),
-            (946, 1 / 18011.05233241948),
-            (1000, 0.57 / 18011.05233241948),
-            (1040, 0.22 / 18011.05233241948),
-            (1080, 0.06 / 18011.05233241948),
-            (1120, 0.01 / 18011.05233241948),
+            (800, 0.34 / ONE_P_TWO_P_RATIO),
+            (844, 0.65 / ONE_P_TWO_P_RATIO),
+            (920, 0.96 / ONE_P_TWO_P_RATIO),
+            (940, 1 / ONE_P_TWO_P_RATIO),
+            (946, 1 / ONE_P_TWO_P_RATIO),
+            (1000, 0.57 / ONE_P_TWO_P_RATIO),
+            (1040, 0.22 / ONE_P_TWO_P_RATIO),
+            (1080, 0.06 / ONE_P_TWO_P_RATIO),
+            (1120, 0.01 / ONE_P_TWO_P_RATIO),
         ],
     )
 
@@ -78,11 +78,11 @@ def chr2_4s() -> FourStateOpsin:
 def reachr_4s() -> BansalFourStateOpsin:
     """Returns a 4-state ReaChR model.
 
-    Params given in Bansal et al., 2021,
-    <https://doi.org/10.1088/1741-2552/ac1175>, [Table 1]
+    Params given in `Bansal et al., 2021, Table 1
+    <https://doi.org/10.1088/1741-2552/ac1175>`_,
     Action spectrum from `Krause et al., 2017, Fig. 1b
     <https://doi.org/10.1016/j.bpj.2017.02.001>`_,
-    extracted using `Plot Digitizer <https://plotdigitizer.com/>`_.
+    Extracted using `Plot Digitizer <https://plotdigitizer.com/>`_.
     """
 
     return BansalFourStateOpsin(
@@ -131,11 +131,11 @@ def reachr_4s() -> BansalFourStateOpsin:
 def chrimsonr_4s() -> BansalFourStateOpsin:
     """Returns a 4-state ChrimsonR model.
 
-    Params given in Bansal et al., 2021,
-    <https://doi.org/10.1088/1741-2552/ac1175> [Table 1]
-    Action spectrum from `Cheong, Soon Keen et al., 2018, Fig. 2,
-    <doi:10.1371/journal.pone.0194947>`_,
-    extracted using `Plot Digitizer <https://plotdigitizer.com/>`_.
+    Params given in `Bansal et al., 2021, Table 1
+    <https://doi.org/10.1088/1741-2552/ac1175>`_,
+    Action spectrum from `Cheong, Soon Keen et al., 2018, Fig. 2
+    <https://doi.org/10.1371/journal.pone.0194947>`_,
+    Extracted using `Plot Digitizer <https://plotdigitizer.com/>`_.
     """
     return BansalFourStateOpsin(
         Gd1=0.067 / ms,
@@ -202,11 +202,11 @@ def chrimsonr_4s() -> BansalFourStateOpsin:
 def cschrimson_4s() -> BansalFourStateOpsin:
     """Returns a 4-state CsChrimson model.
 
-    Params given in Bansal et al., 2021,
-    <https://doi.org/10.1088/1741-2552/ac1175>, [Table 1]
+    Params given in `Bansal et al., 2021, Table 1
+    <https://doi.org/10.1088/1741-2552/ac1175>`_,
     Action spectrum from `Kim, Seungsoo, et al., 2015, Fig. 6.3a
     <https://doi.org/10.1007/978-3-319-12913-6_6>`_,
-    extracted using `Plot Digitizer <https://plotdigitizer.com/>`_.
+    Extracted using `Plot Digitizer <https://plotdigitizer.com/>`_.
     """
     return BansalFourStateOpsin(
         Gd1=0.033 / ms,
@@ -253,11 +253,11 @@ def cschrimson_4s() -> BansalFourStateOpsin:
 def breaches_4s() -> BansalFourStateOpsin:
     """Returns a 4-state bReaChES model.
 
-    Params given in Bansal et al., 2021,
-    <https://doi.org/10.1088/1741-2552/ac1175>, [Table 1]
+    Params given in `Bansal et al., 2021, Table 1
+    <https://doi.org/10.1088/1741-2552/ac1175>`_,
     Action spectrum from `Bansal, H., Pyari, G. & Roy, S., 2024, Fig. 1c
     <https://doi.org/10.1038/s41598-024-62558-2>`_,
-    extracted using `Plot Digitizer <https://plotdigitizer.com/>`_.
+    Extracted using `Plot Digitizer <https://plotdigitizer.com/>`_.
     """
     return BansalFourStateOpsin(
         Gd1=0.025 / ms,
@@ -298,11 +298,11 @@ def breaches_4s() -> BansalFourStateOpsin:
 def chrmine_4s() -> BansalFourStateOpsin:
     """Returns a 4-state ChRmine model.
 
-    Params given in Bansal et al., 2021,
-    <https://doi.org/10.1088/1741-2552/ac1175>, [Table 1]
+    Params given in `Bansal et al., 2021, Table 1
+    <https://doi.org/10.1088/1741-2552/ac1175>`_,
     Action spectrum from `Bansal, H., Pyari, G. & Roy, S., 2024, Fig. 1c
     <https://doi.org/10.1038/s41598-024-62558-2>`_,
-    extracted using `Plot Digitizer <https://plotdigitizer.com/>`_.
+    Extracted using `Plot Digitizer <https://plotdigitizer.com/>`_.
     """
     return BansalFourStateOpsin(
         Gd1=0.02 / ms,
@@ -343,11 +343,11 @@ def chrmine_4s() -> BansalFourStateOpsin:
 def chr2_b4s() -> BansalFourStateOpsin:
     """Returns a 4-state ChR2 model.
 
-    Params given in Bansal et al., 2020,
-    <https://doi.org/10.1016/j.neuroscience.2020.09.022>, [Table 1]
+    Params given in `Bansal et al., 2020, Table 1
+    <https://doi.org/10.1016/j.neuroscience.2020.09.022>`_,
     Action spectrum from `Nagel et al., 2003, Fig. 4a
     <https://www.pnas.org/doi/full/10.1073/pnas.1936192100>`_,
-    extracted using `Plot Digitizer <https://plotdigitizer.com/>`_.
+    Extracted using `Plot Digitizer <https://plotdigitizer.com/>`_.
 
     Parameters can be changed after initialization but *before injection*.
     """
@@ -379,15 +379,15 @@ def chr2_b4s() -> BansalFourStateOpsin:
             (520, 0.22),
             (540, 0.06),
             (560, 0.01),
-            (800, 0.34 / 18011.05233241948),
-            (844, 0.65 / 18011.05233241948),
-            (920, 0.96 / 18011.05233241948),
-            (940, 1 / 18011.05233241948),
-            (946, 1 / 18011.05233241948),
-            (1000, 0.57 / 18011.05233241948),
-            (1040, 0.22 / 18011.05233241948),
-            (1080, 0.06 / 18011.05233241948),
-            (1120, 0.01 / 18011.05233241948),
+            (800, 0.34 / ONE_P_TWO_P_RATIO),
+            (844, 0.65 / ONE_P_TWO_P_RATIO),
+            (920, 0.96 / ONE_P_TWO_P_RATIO),
+            (940, 1 / ONE_P_TWO_P_RATIO),
+            (946, 1 / ONE_P_TWO_P_RATIO),
+            (1000, 0.57 / ONE_P_TWO_P_RATIO),
+            (1040, 0.22 / ONE_P_TWO_P_RATIO),
+            (1080, 0.06 / ONE_P_TWO_P_RATIO),
+            (1120, 0.01 / ONE_P_TWO_P_RATIO),
         ],
     )
 
@@ -395,8 +395,8 @@ def chr2_b4s() -> BansalFourStateOpsin:
 def chr2_h134r_4s() -> BansalFourStateOpsin:
     """Returns a 4-state ChR2(H134R) model.
 
-    Params given in Bansal et al., 2020,
-    <https://doi.org/10.1016/j.neuroscience.2020.09.022>, [Table 1]
+    Params given in `Bansal et al., 2020, Table 1
+    <https://doi.org/10.1016/j.neuroscience.2020.09.022>`_,
     Action spectrum is same as for :func:`~chr2_4s`, but blue-shifted 20 nm
     (I cannot find it directly in the literature).
 
@@ -445,11 +445,11 @@ def chr2_h134r_4s() -> BansalFourStateOpsin:
 def cheta_4s() -> BansalFourStateOpsin:
     """Returns a 4-state ChETA model.
 
-    Params given in Bansal et al., 2020,
-    <https://doi.org/10.1016/j.neuroscience.2020.09.022>, [Table 1]
+    Params given in `Bansal et al., 2020, Table 1
+    <https://doi.org/10.1016/j.neuroscience.2020.09.022>`_,
     Action spectrum from `Gunaydin, L., Yizhar, O., Berndt, A. et al., 2010, Fig. 2b
     <https://doi.org/10.1038/nn.2495>`_,
-    extracted using `Plot Digitizer <https://plotdigitizer.com/>`_.
+    Extracted using `Plot Digitizer <https://plotdigitizer.com/>`_.
     """
 
     return BansalFourStateOpsin(
@@ -488,11 +488,11 @@ def cheta_4s() -> BansalFourStateOpsin:
 def chronos_4s() -> BansalFourStateOpsin:
     """Returns a 4-state Chronos model.
 
-    Params given in Bansal et al., 2020,
-    <https://doi.org/10.1016/j.neuroscience.2020.09.022>, [Table 1]
+    Params given in `Bansal et al., 2020, Table 1
+    <https://doi.org/10.1016/j.neuroscience.2020.09.022>`_,
     Action spectrum from `Soor, Navjeevan S., et al., 2019, Fig. 1b
     <https://doi.org/10.1088/1361-6463/aaf944>`_,
-    extracted using `Plot Digitizer <https://plotdigitizer.com/>`_.
+    Extracted using `Plot Digitizer <https://plotdigitizer.com/>`_.
     """
 
     return BansalFourStateOpsin(
@@ -545,8 +545,8 @@ def chronos_4s() -> BansalFourStateOpsin:
 def cheriff_4s() -> BansalFourStateOpsin:
     """Returns a 4-state CheRiff model.
 
-    Params given in Bansal et al., 2020,
-    <https://doi.org/10.1016/j.neuroscience.2020.09.022>, [Table 1]
+    Params given in `Bansal et al., 2020, Table 1
+    <https://doi.org/10.1016/j.neuroscience.2020.09.022>`_,
     Action spectrum from `Hochbaum, Daniel R et al., 2014, Fig. 2a
     <https://doi.org/10.1038/nmeth.3000>`_,
     extracted using `Plot Digitizer <https://plotdigitizer.com/>`_.
@@ -589,8 +589,8 @@ def cheriff_4s() -> BansalFourStateOpsin:
 def vfchrimson_4s() -> BansalFourStateOpsin:
     """Returns a 4-state vf-Chrimson model.
 
-    Params given in Bansal et al., 2020,
-    <https://doi.org/10.1016/j.neuroscience.2020.09.022>, [Table 1]
+    Params given in `Bansal et al., 2020, Table 1
+    <https://doi.org/10.1016/j.neuroscience.2020.09.022>`_,
     Action spectrum from `Mager et al., 2018, Supp. Fig. 1a
     <https://static-content.springer.com/esm/art%3A10.1038%2Fs41467-018-04146-3/MediaObjects/41467_2018_4146_MOESM1_ESM.docx>`_,
     extracted using `Plot Digitizer <https://plotdigitizer.com/>`_.
@@ -642,8 +642,8 @@ def vfchrimson_4s() -> BansalFourStateOpsin:
 def chrimson_4s() -> BansalFourStateOpsin:
     """Returns a 4-state Chrimson model.
 
-    Params given in Bansal et al., 2020,
-    <https://doi.org/10.1016/j.neuroscience.2020.09.022>, [Table 1]
+    Params given in `Bansal et al., 2020, Table 1
+    <https://doi.org/10.1016/j.neuroscience.2020.09.022>`_,
     Action spectrum from `Mager et al., 2018, Supp. Fig. 1a
     <https://static-content.springer.com/esm/art%3A10.1038%2Fs41467-018-04146-3/MediaObjects/41467_2018_4146_MOESM1_ESM.docx>`_,
     extracted using `Plot Digitizer <https://plotdigitizer.com/>`_.
@@ -695,8 +695,8 @@ def chrimson_4s() -> BansalFourStateOpsin:
 def gtacr2_4s() -> BansalFourStateOpsin:
     """Returns a 4-state model of GtACR2, an anion channel.
 
-    Params given in Bansal et al., 2020,
-    <https://doi.org/10.1016/j.neuroscience.2020.09.022>, [Table 1]
+    Params given in `Bansal et al., 2020, Table 1
+    <https://doi.org/10.1016/j.neuroscience.2020.09.022>`_,
     Action spectra from `Govorunova et al., 2015, Fig. 1f
     <https://www.science.org/doi/10.1126/science.aaa7484#F1>`_,
     extracted using `Plot Digitizer <https://plotdigitizer.com/>`_.
@@ -762,8 +762,8 @@ def gtacr2_4s() -> BansalFourStateOpsin:
 def enphr3_3s():
     """Returns a 3-state model of eNpHR3, a chloride pump.
 
-    Params given in Bansal et al., 2020,
-    <https://doi.org/10.1088/2057-1976/ab90a1>, [Table 1]
+    Params given in `Bansal et al., 2020, Table 1
+    <https://doi.org/10.1088/2057-1976/ab90a1>`_,
     Action spectrum from `Gradinaru et al., 2010 <https://doi.org/10.1016/j.cell.2010.02.037>`_,
     Figure 3F,
     extracted using `Plot Digitizer <https://plotdigitizer.com/>`_.
@@ -810,8 +810,8 @@ def enphr3_3s():
 def nphr_3s():
     """Returns a 3-state model of NpHR, a chloride pump.
 
-    Params given in Bansal et al., 2020,
-    <https://doi.org/10.1088/2057-1976/ab90a1>, [Table 1]
+    Params given in `Bansal et al., 2020, Table 1
+    <https://doi.org/10.1088/2057-1976/ab90a1>`_,
     Action spectrum from `Bamberg et al., 1984, Fig. 3,
     <https://pubs.acs.org/doi/pdf/10.1021/bi00320a050>`_,
     extracted using `Plot Digitizer <https://plotdigitizer.com/>`_.
@@ -854,8 +854,8 @@ def nphr_3s():
 def jaws_3s():
     """Returns a 3-state model of Jaws, a chloride pump.
 
-    Params given in Bansal et al., 2020,
-    <https://doi.org/10.1088/2057-1976/ab90a1>, [Table 1]
+    Params given in `Bansal et al., 2020, Table 1
+    <https://doi.org/10.1088/2057-1976/ab90a1>`_,
     Action spectrum from `Chuong, Amy S et al., 2014, Fig. 1d
     <https://doi.org/10.1038/nn.3752>`_,
     extracted using `Plot Digitizer <https://plotdigitizer.com/>`_.
