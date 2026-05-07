@@ -341,6 +341,7 @@ class Scope(Recorder):
                 ng,
                 i_targets=i_targets_for_ng,
                 rho_rel=rho_rel_for_ng,
+                soma_radius=self.soma_radius,
                 **kwparams,
             )
 

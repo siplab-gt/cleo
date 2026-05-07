@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from attrs import asdict, define, field, fields_dict
-from brian2 import NeuronGroup, Quantity, Synapses, nmolar, np, second, umolar, mwatt, nmeter, nmolar
+from brian2 import NeuronGroup, Quantity, Synapses, np, second, umolar, nmolar, watt, nmeter, um
 
 from cleo.base import SynapseDevice
 from cleo.light import LightDependent
@@ -163,12 +163,9 @@ class NullExcitation(ExcitationModel):
 class LightExcitation(ExcitationModel):
     """Models light-dependent excitation"""
     """Uses a Hill equation to convert from Ca2+ to ΔF/F, as in Song et al., 2021"""
-
     model: str = field(default="""
-    phi : 1/second/meter**2 (shared)
-    Irr : watt/meter**2 (shared)
-    exc_factor = baseline + (A * ((phi * Irr)**n)/(ec50**n + (phi * Irr)**n))
-                        * exp(-k * phi * Irr * (second/watt)) : 1
+    exc_factor = baseline + ((A * ((Irr_pre * soma_radius**2 * 3.14159265358979 * (1000/watt))**n)/(ec50**n + (Irr_pre * soma_radius**2 * 3.14159265358979 * (1000/watt))**n))
+                        * exp(-k * Irr_pre * soma_radius**2 * 3.14159265358979 * (1000/watt)) * (1/Hz)) : 1
     """, init=False)
 
     baseline: float = field(kw_only=True)
@@ -239,6 +236,12 @@ class GECI(Sensor):
         for field in fields_dict(Sensor):
             params.pop(field)
         # remove private attributes
+        try:
+            from cleo.light import LightDependent
+            for field in fields_dict(LightDependent):
+                params.pop(field, None)
+        except Exception:
+            pass
         for key in list(params.keys()):
             if key.startswith("_"):
                 params.pop(key)
@@ -248,6 +251,7 @@ class GECI(Sensor):
             to_add.pop("model")
             params.update(to_add)
         return params
+
 @define(eq=False, slots=False)
 class LightDependentGECI(GECI, LightDependent):
     """Light-dependent calcium indicator (not yet implemented)"""
@@ -335,6 +339,10 @@ def _create_geci_fn(
     else:
         dFF_1AP = None
 
+    #I am not sure if this is the right call so I wanted to put this comment in to ask about if this line is okay
+    #  or if I should come up with a different solution
+    spectrum = kwparams.pop('spectrum', None)
+
     def geci_fn(
         light_dependent=False,
         doub_exp_conv=True,
@@ -353,7 +361,8 @@ def _create_geci_fn(
         B_T=200 * umolar,
         dCa_T=7.6 * umolar,  # Lütke et al., 2013 and NAOMi code
         name=name,
-        **kwparams,
+        spectrum=spectrum,
+        **extra_kwparams,
     ) -> GECI:
         """Returns a (light-dependent) GECI model with specified submodel choices.
         Default parameters are taken from
@@ -377,19 +386,70 @@ def _create_geci_fn(
             light_dependent,
             doub_exp_conv,
             pre_existing_cal,
+            baseline=1.0,
+            n=1.0,
+            ec50=1.0,
+            k=0.0,
+            K_d=K_d,
+            n_H=n_H,
+            dFF_max=dFF_max,
+            sigma_noise=sigma_noise,
+            dFF_1AP=dFF_1AP,
+            Ca_rest=Ca_rest,
+            A=A,
+            tau_on=tau_on,
+            tau_off=tau_off,
             kappa_S=kappa_S,
             gamma=gamma,
             B_T=B_T,
             dCa_T=dCa_T,
             name=name,
-            **kwparams,
+            spectrum=spectrum,
+            **extra_kwparams,
         )
+
+    # geci_fn.spectrum = spectrum
 
     geci_fn.__doc__ += "\n\n" + (" " * 8) + extra_doc
 
     globals()[brian_safe_name(name.lower())] = geci_fn
 
 import pandas as pd
-df = pd.read_csv('imaging/gecis.csv')
-for index, row in df.iterrows():
-    _create_geci_fn(row.iloc[0], **row.iloc[1:])
+from pathlib import Path
+import ast
+
+target_file = Path(__file__).parent / "gecis.csv"
+if (target_file.exists()):
+    try:
+        df = pd.read_csv(target_file)
+        for index, row in df.iterrows():
+            params = row.iloc[6:-1].dropna().to_dict()
+            if (isinstance(params['spectrum'], str)):
+                params['spectrum'] = ast.literal_eval(params['spectrum'])
+            spec_list = params['spectrum']
+            params['spectrum'] = [(w * nmeter, s) for (w, s) in spec_list]
+            _create_geci_fn(row.iloc[0], **params)
+    except Exception as e:
+        print(f"Failed to register sensors from csv: {e}")
+
+def load_geci_dataframe(name: str):
+    target_file = Path(__file__).parent / "gecis.csv"
+    try:
+        df = pd.read_csv(target_file)
+        mask = df.iloc[:, 0].str.lower() == name.lower()
+        if (not mask.any()):
+            return None
+        else:
+            row = df[df.iloc[:, 0].str.lower() == name.lower()].iloc[0]
+            params = row.iloc[6:-1].dropna().to_dict()
+            if (isinstance(params['spectrum'], str)):
+                params['spectrum'] = ast.literal_eval(params['spectrum'])
+            spec_list = params['spectrum']
+            params['spectrum'] = [(float(w), s) for (w, s) in spec_list]
+            _create_geci_fn(row.iloc[0], **params)
+            sensor_name = brian_safe_name(row.iloc[0].lower())
+            gcamp_func = globals()[sensor_name]
+            gcamp = gcamp_func(light_dependent=True)
+            return gcamp
+    except Exception as e:
+        print(f"Failed to register sensors from csv: {e}")
