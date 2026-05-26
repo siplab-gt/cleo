@@ -420,7 +420,6 @@ def test_RWSLFPSignalFromPSCs(rand_seed, samp_period):
 
     # test missing sampling period error
     sim.set_io_processor(None)
-    print(sim.io_processor)
     with pytest.raises(RuntimeError, match="needs to know the sampling period"):
         add_rwslfp_sig()
     add_rwslfp_sig(inject_kwargs={"sample_period": 5 * ms})
