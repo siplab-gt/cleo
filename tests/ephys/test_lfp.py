@@ -369,8 +369,10 @@ def test_RWSLFPSignalFromPSCs(rand_seed, samp_period):
         Iampa_var_names=["Iampa1"],
         Igaba_var_names=["Igaba1"],
         name=None,
-        inject_kwargs={},
+        inject_kwargs=None,
     ):
+        if inject_kwargs is None:
+            inject_kwargs = {}
         rwslfp_sig = RWSLFPSignalFromPSCs(
             pop_aggregate=pop_agg,
             amp_func=amp_func,
