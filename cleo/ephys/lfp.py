@@ -634,7 +634,7 @@ class RWSLFPSignalFromPSCs(RWSLFPSignalBase):
                 sample_period = self.probe.sim.io_processor.sample_period
             except AttributeError:  # probably means sim doesn't have io_processor
                 raise RuntimeError(
-                    "RSWLFPSignalFromPSCs needs to know the sampling period."
+                    "RWSLFPSignalFromPSCs needs to know the sampling period."
                     " Either set the simulator's IO processor before injecting"
                     f" {self.probe.name} or "
                     f" specify it on injection: .inject({self.probe.name}"
