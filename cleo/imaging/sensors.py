@@ -164,8 +164,8 @@ class LightExcitation(ExcitationModel):
     """Models light-dependent excitation"""
     """Uses a Hill equation to convert from Ca2+ to ΔF/F, as in Song et al., 2021"""
     model: str = field(default="""
-    exc_factor = baseline + ((A * ((Irr_pre * soma_radius**2 * 3.14159265358979 * (1000/watt))**n)/(ec50**n + (Irr_pre * soma_radius**2 * 3.14159265358979 * (1000/watt))**n))
-                        * exp(-k * Irr_pre * soma_radius**2 * 3.14159265358979 * (1000/watt)) * (1/Hz)) : 1
+    exc_factor = baseline + ((A * ((Irr * soma_radius**2 * pi * (mwatt))**n)/(ec50**n + (Irr_pre * soma_radius**2 * pi * (1000/watt))**n))
+                        * exp(-k * Irr * soma_radius**2 * pi * (mwatt)) * (1/Hz)) : 1
     """, init=False)
 
     baseline: float = field(kw_only=True)
@@ -236,12 +236,9 @@ class GECI(Sensor):
         for field in fields_dict(Sensor):
             params.pop(field)
         # remove private attributes
-        try:
-            from cleo.light import LightDependent
-            for field in fields_dict(LightDependent):
-                params.pop(field, None)
-        except Exception:
-            pass
+        from cleo.light import LightDependent
+        for field in fields_dict(LightDependent):
+            params.pop(field, None)
         for key in list(params.keys()):
             if key.startswith("_"):
                 params.pop(key)
@@ -257,7 +254,6 @@ class LightDependentGECI(GECI, LightDependent):
     """Light-dependent calcium indicator (not yet implemented)"""
     """Uses a Hill equation to convert from Ca2+ to ΔF/F, as in Song et al., 2021"""
     pass
-
 
 def geci(
     light_dependent: bool, doub_exp_conv: bool, pre_existing_cal: bool, **kwparams
@@ -339,9 +335,7 @@ def _create_geci_fn(
     else:
         dFF_1AP = None
 
-    #I am not sure if this is the right call so I wanted to put this comment in to ask about if this line is okay
-    #  or if I should come up with a different solution
-    spectrum = kwparams.pop('spectrum', None)
+    spectrum = kwparams.pop('spectrum', LightDependent._default_spectrum())
 
     def geci_fn(
         light_dependent=False,
@@ -453,3 +447,14 @@ def load_geci_dataframe(name: str):
             return gcamp
     except Exception as e:
         print(f"Failed to register sensors from csv: {e}")
+
+import matplotlib.pyplot as plt
+def Plot_Generator(time_history, dFF_history, count):
+    for i in range(len(dFF_history[0])):
+        plt.plot(time_history, dFF_history[:, i].T, label=f"Neuron Group {i + 1}")
+    plt.xlabel('Time in (ms)')
+    plt.ylabel('dFF')
+    plt.title('dFF over time for different neurons')
+    plt.legend()
+    plt.savefig(f"dFF_history_over_time_{count}.png")
+    plt.show()
