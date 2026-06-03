@@ -19,7 +19,7 @@ from cleo.opto.opsins import (
 )
 
 # This number is the average of the 1P/2P ratios calculated for ChRmine, ChroME, ChroME2f, and ChroME2s
-ONE_P_TWO_P_RATIO = 250394.05605233982
+ONE_P_TWO_P_RATIO = 285071.80
 
 
 def chr2_4s() -> FourStateOpsin:
