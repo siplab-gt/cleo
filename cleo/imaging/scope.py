@@ -17,7 +17,7 @@ from cleo.base import Recorder
 from cleo.coords import coords_from_ng
 from cleo.imaging.sensors import Sensor
 from cleo.registry import registry_for_sim
-from cleo.light    import Light, GaussianEllipsoid   # ensure imports
+from cleo.light import Light, GaussianEllipsoid  # ensure imports
 from cleo.utilities import (
     analog_signal,
     normalize_coords,
@@ -165,9 +165,9 @@ class Scope(Recorder):
     )
     """relative expression levels of neurons selected from each injection"""
 
-    scan_freq : float = field(default=30)         
-    imaging_light : Light = field(init=False, repr=False)
+    imaging_light: Light = field(init=False, repr=False)
     """raster scanning parameters"""
+
     @property
     def n(self) -> int:
         """Number of imaged ROIs"""
@@ -208,6 +208,7 @@ class Scope(Recorder):
 
     def __attrs_post_init__(self):
         self._init_saved_vars()
+        self._scan_freq = 30
 
     def reset(self, **kwargs) -> None:
         self._init_saved_vars()
@@ -463,33 +464,40 @@ class Scope(Recorder):
             )
         return signal
         # want ROI coordinates and size in image
-        
+
     # Method for optional raster scanning
-    def create_imaging_light(self):
+    def create_imaging_light(self, wavelength=920e-9 * meter):
         self.imaging_light = Light(
             name=f"{self.name}_imlight",
-            light_model=GaussianEllipsoid(radius=self.img_width/2),
-            wavelength=920e-9*meter, 
+            light_model=GaussianEllipsoid(radius=self.soma_radius),
+            wavelength=wavelength,  # user can pass in wavelength values
             scan_freq=self.scan_freq,
-            is_scanning=True
+            is_scanning=True,
         )
-        self.sim.inject(self.imaging_light)
-        self.set_scan_freq(self.scan_freq) 
         self.enable_scanning(True)
         registry_for_sim(self.sim).set_fov(self.imaging_light, self.img_width)
-        
+        return self.imaging_light
+
     # turn raster scanning on/off
     def enable_scanning(self, flag: bool = True):
         registry_for_sim(self.sim).set_scan_on(self.imaging_light, flag)
 
     # change frame rate
-    def set_scan_freq(self, hz: float):
-        self.scan_freq = hz
-        self.imaging_light.scan_freq = hz            # keep Light in sync
-        registry_for_sim(self.sim).set_scan_freq(self.imaging_light, hz)
+    @property
+    def scan_freq(self):
+        return self._scan_freq
+
+    @scan_freq.setter
+    def scan_freq(self, hz: float):
+        self._scan_freq = hz
+        if hasattr(self, "imaging_light"):
+            self.imaging_light.scan_freq = hz  # keep Light in sync
+            registry_for_sim(self.sim).set_scan_freq(self.imaging_light, hz)
 
     # keep img_width validator and update FOV
     @img_width.validator
     def _update_fov(self, attr, value):
-        if hasattr(self, "imaging_light"): # Make sure create_imaging_light has been called
+        if hasattr(
+            self, "imaging_light"
+        ):  # Make sure create_imaging_light has been called
             registry_for_sim(self.sim).set_fov(self.imaging_light, value)
