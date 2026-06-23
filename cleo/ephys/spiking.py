@@ -245,6 +245,12 @@ class Spiking(Signal, NeoExportable):
         # spike sorters don't sort by multi-channel recall; we only do this
         # for computational efficiency, to not get super distant neurons
 
+        # needed even if no neurons are recorded
+        if not self._prev_t:
+            self._prev_t = self.probe.sim.network.t
+        if self._mu_eap is None:
+            self._mu_eap = np.zeros((0, self.n_channels))
+
         n2keep = np.sum(where_to_keep)
         if n2keep == 0:
             warnings.warn(
@@ -271,14 +277,8 @@ class Spiking(Signal, NeoExportable):
         assert len(self.i_ng_by_i_probe) == i_probe_start
         self.i_ng_by_i_probe.extend(list(zip([neuron_group] * n2keep, i2keep)))
 
-        if not self._prev_t:
-            self._prev_t = self.probe.sim.network.t
-
         # store neuron-channel mean and stdev of EAPs to use in subclasses
-        if self._mu_eap is None:
-            self._mu_eap = snr[where_to_keep]
-        else:
-            self._mu_eap = np.concatenate((self._mu_eap, snr[where_to_keep]), axis=0)
+        self._mu_eap = np.concatenate((self._mu_eap, snr[where_to_keep]), axis=0)
 
         return snr[where_to_keep].max(axis=1), new_i_probe
 
@@ -642,7 +642,11 @@ class SortedSpiking(Spiking):
         return self._mu_eap[self._i_probe_by_i_sorted]
 
     def connect_to_neuron_group(self, neuron_group, **kwparams):
-        snr, i_probe = super().connect_to_neuron_group(neuron_group, **kwparams)
+        connect_result = super().connect_to_neuron_group(neuron_group, **kwparams)
+        if connect_result is None:
+            # No neurons with high-enough multi-channel recall to record
+            return
+        snr, i_probe = connect_result
         n_recorded_ng = len(snr)
         # filter by SNR (measured on peak channel)
         above_cutoff = snr >= self.snr_cutoff

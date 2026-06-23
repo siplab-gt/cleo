@@ -612,7 +612,7 @@ class RWSLFPSignalFromPSCs(RWSLFPSignalBase):
         self._init_wslfp_calc(neuron_group, **kwparams)
 
         buf_len_ampa, buf_len_gaba = self._get_buf_lens_for_wslfp(
-            self._wslfps[neuron_group]
+            self._wslfps[neuron_group], **kwparams
         )
         self._t_ampa_bufs[neuron_group] = deque(maxlen=buf_len_ampa)
         self._I_ampa_bufs[neuron_group] = deque(maxlen=buf_len_ampa)
@@ -633,8 +633,8 @@ class RWSLFPSignalFromPSCs(RWSLFPSignalBase):
             try:
                 sample_period = self.probe.sim.io_processor.sample_period
             except AttributeError:  # probably means sim doesn't have io_processor
-                raise Exception(
-                    "RSWLFPSignalFromPSCs needs to know the sampling period."
+                raise RuntimeError(
+                    "RWSLFPSignalFromPSCs needs to know the sampling period."
                     " Either set the simulator's IO processor before injecting"
                     f" {self.probe.name} or "
                     f" specify it on injection: .inject({self.probe.name}"
