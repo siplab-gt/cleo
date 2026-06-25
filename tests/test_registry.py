@@ -4,7 +4,7 @@ import pytest
 from brian2 import Network, NeuronGroup, mm, mm2, ms, mV, mwatt, nmeter, np, umeter
 
 from cleo import CLSimulator
-from cleo.coords import assign_coords_grid_rect_prism
+from cleo.coords import assign_coords, assign_coords_grid_rect_prism
 from cleo.light import Light, fiber473nm
 from cleo.opto import Opsin, chr2_4s, vfchrimson_4s
 
@@ -144,6 +144,42 @@ def test_multi_channel(sim_ng1_ng2, ops1):
     v_yz = np.array(ng1.v)
 
     assert np.all(v_base_x > v_yz)
+
+
+def test_light_Irr_phi_aggregation():
+    """Tests that both Irr and phi are aggregated correctly for multiple light sources"""
+    sim = CLSimulator(Network())
+    light_agg_ngs = []
+
+    for coords in (
+        [[0, 0, 0]] * mm,
+        [[0, 0, 0], [1, 0, 0]] * mm,
+        [[0, 0, 0], [1, 0, 0], [1, 0, 0]] * mm,
+    ):
+        light = Light(
+            coords=coords, light_model=fiber473nm(), name=f"light_{len(coords)}"
+        )
+        ng = NeuronGroup(len(coords), "v: volt \n Iopto : amp")
+        assign_coords(ng, coords + (0, 0, 100) * umeter)
+        sim.network.add(ng)
+        ops = chr2_4s()
+        ops.name = f"ops_{len(coords)}"
+        sim.inject(ops, ng)
+        sim.inject(light, ng)
+        light.update(1 * mwatt / mm2)
+
+        light_agg_ngs.append(ops.light_agg_ngs[ng.name])
+
+    sim.run(0.1 * ms)
+
+    irrs = [agg.Irr for agg in light_agg_ngs]
+    phis = [agg.phi for agg in light_agg_ngs]
+
+    for var in [irrs, phis]:
+        assert var[0][0] == var[1][0] == var[1][1] == var[2][0], (
+            f"{var} should be same for each neuron regardless of how many sources are present"
+        )
+        assert var[2][1] == var[0][0] * 2, f"{var} should be double for 2 sources"
 
 
 @pytest.mark.slow
