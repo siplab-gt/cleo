@@ -315,6 +315,10 @@ class Scope(Recorder):
         self.focus_coords_per_injct.append(focus_coords)
         self.rho_rel_per_injct.append(rho_rel)
 
+        if not hasattr(self, 'soma_radius_per_injct'):
+            self.soma_radius_per_injct = []
+        self.soma_radius_per_injct.append(soma_radius)
+
     def i_targets_for_neuron_group(self, neuron_group):
         """can handle multiple injections into same ng"""
         i_targets_for_ng = []
@@ -327,20 +331,25 @@ class Scope(Recorder):
         for ng in set(self.neuron_groups):
             i_targets_for_ng = []
             rho_rel_for_ng = []
-            for ng_, i_targets, rho_rel in zip(
-                self.neuron_groups, self.i_targets_per_injct, self.rho_rel_per_injct
+            soma_radius_for_ng = []
+            for ng_, i_targets, rho_rel, s_rad in zip(
+                self.neuron_groups, self.i_targets_per_injct, self.rho_rel_per_injct,
+                  getattr(self, 'soma_radius_per_injct', [self.soma_radius] * len(self.neuron_groups))
             ):
                 if ng_ is not ng:
                     continue
 
                 i_targets_for_ng.extend(i_targets)
                 rho_rel_for_ng.extend(rho_rel)
+                soma_radius_for_ng.extend([s_rad] * len(i_targets))
+            final_soma_radius = soma_radius_for_ng[0] if len(set(soma_radius_for_ng)) == 1 else np.array(soma_radius_for_ng)
 
             self.sim.inject(
                 self.sensor,
                 ng,
                 i_targets=i_targets_for_ng,
                 rho_rel=rho_rel_for_ng,
+                soma_radius=final_soma_radius,
                 **kwparams,
             )
 
