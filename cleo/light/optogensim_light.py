@@ -16,14 +16,14 @@ class OptogenSIMLight(LightModel):
     """Light wavelength. Must be within the simulated grid range."""
     beam_radius: Quantity = 100 * um
     """Beam (1/e^2) radius. Must be within the simulated grid range."""
-    data_path: str = "light_model_4d.nc"
+    data_path: str = "light_model_4d.nc.gz"
     """Path to the 4D dataset."""
     _rz_slice: object = field(init=False, default=None, repr=False)
     _r_range: object = field(init=False, default=None, repr=False)
     _z_range: object = field(init=False, default=None, repr=False)
 
     def __attrs_post_init__(self):
-        rz = xr.open_dataarray(self.data_path).interp(
+        rz = xr.open_dataarray(self.data_path, engine="scipy").interp(
             wavelength=self.wavelength / nmeter, beam_size=self.beam_radius / um
         )
         # data measures z from the atlas top; re-zero to the source
