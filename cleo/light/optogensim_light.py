@@ -6,6 +6,7 @@ from jaxtyping import Float
 from cleo.light.light import LightModel
 from cleo.utilities import uniform_cylinder_rθz, xyz_from_rθz
 from cleo.coords import coords_from_xyz
+from importlib.resources import files
 
 
 @define
@@ -16,14 +17,18 @@ class OptogenSIMLight(LightModel):
     """Light wavelength. Must be within the simulated grid range."""
     beam_radius: Quantity = 100 * um
     """Beam (1/e^2) radius. Must be within the simulated grid range."""
-    data_path: str = "light_model_4d.nc.gz"
-    """Path to the 4D dataset."""
+    data_path: str = None
+    """Path to the 4D dataset. If None, uses the dataset packaged with Cleo."""
     _rz_slice: object = field(init=False, default=None, repr=False)
     _r_range: object = field(init=False, default=None, repr=False)
     _z_range: object = field(init=False, default=None, repr=False)
 
     def __attrs_post_init__(self):
-        rz = xr.open_dataarray(self.data_path, engine="scipy").interp(
+        if self.data_path is None:
+            path = str(files("cleo.light.data") / "light_model_4d.nc.gz")
+        else:
+            path = self.data_path
+        rz = xr.open_dataarray(path, engine="scipy").interp(
             wavelength=self.wavelength / nmeter, beam_size=self.beam_radius / um
         )
         # data measures z from the atlas top; re-zero to the source
