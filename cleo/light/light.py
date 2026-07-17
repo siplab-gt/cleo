@@ -1,4 +1,5 @@
 """Contains Light device and propagation models"""
+
 from __future__ import annotations
 
 import datetime
@@ -14,6 +15,9 @@ from brian2 import (
     Subgroup,
     np,
 )
+
+from brian2 import ms
+
 from brian2.units import (
     Quantity,
     mm,
@@ -317,9 +321,41 @@ class Light(Stimulator):
     wavelength: Quantity = field(default=473 * nmeter, kw_only=True)
     """light wavelength with unit (usually nmeter)"""
 
-    scan_freq : int = field(default=30, kw_only=True)
+    _pulse_freq: float = field(default=30, kw_only=True, alias="pulse_freq")
+    _pulse_width: Quantity = field(default=0 * ms, kw_only=True, alias="pulse_width")
 
-    is_scanning : bool  = field(default=False, kw_only=True)
+    is_scanning: bool = field(default=False, kw_only=True)
+    _pulse_stagger: bool = field(default=False, kw_only=True, alias="pulse_stagger")
+
+    @property
+    def pulse_freq(self):
+        return self._pulse_freq
+
+    @pulse_freq.setter
+    def pulse_freq(self, hz: float):
+        self._pulse_freq = hz
+        if self.sim is not None:
+            registry_for_sim(self.sim).set_pulse_freq(self, hz)
+
+    @property
+    def pulse_width(self):
+        return self._pulse_width
+
+    @pulse_width.setter
+    def pulse_width(self, width: Quantity):
+        self._pulse_width = width
+        if self.sim is not None:
+            registry_for_sim(self.sim).set_pulse_width(self, width)
+
+    @property
+    def pulse_stagger(self):
+        return self._pulse_stagger
+
+    @pulse_stagger.setter
+    def pulse_stagger(self, stagger: bool):
+        self._pulse_stagger = stagger
+        if self.sim is not None:
+            registry_for_sim(self.sim).set_pulse_stagger(self, stagger)
 
     @coords.validator
     def _check_coords(self, attribute, value):
@@ -363,12 +399,6 @@ class Light(Stimulator):
     def init_for_simulator(self, sim: CLSimulator) -> None:
         registry = registry_for_sim(sim)
         registry.init_register_light(self)
-        """Test Code for setter method"""
-        src = registry.source_for_light(self)     # Subgroup representing this light
-        src.scan_period = (1 / self.scan_freq) * second
-        src.dwell_time  = src.scan_period         # Scope will overwrite
-        src.is_scanning = int(self.is_scanning)
-        src.scale = 1                            
         self.reset()
 
     def connect_to_neuron_group(

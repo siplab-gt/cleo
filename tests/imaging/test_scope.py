@@ -1,6 +1,6 @@
 import pytest
 import quantities as pq
-from brian2 import Network, NeuronGroup, meter, ms, np, um
+from brian2 import Network, NeuronGroup, meter, ms, np, um, second
 
 import cleo
 from cleo.coords import assign_coords_rand_rect_prism, assign_xyz
@@ -11,6 +11,10 @@ from cleo.imaging import (
     gcamp6f,
     target_neurons_in_plane,
 )
+from cleo.opto.opsin_library import chrmine_4s
+from cleo.opto.opsin_library import chr2_4s
+
+opsin = chr2_4s()
 
 
 def test_scope():
@@ -158,6 +162,133 @@ def test_scope_to_neo(regular):
     assert np.all(sig.array_annotations["y"] / pq.um == scope.focus_coords[:, 1] / um)
     assert np.all(sig.array_annotations["z"] / pq.um == scope.focus_coords[:, 2] / um)
     assert np.all(sig.array_annotations["i_roi"] == np.arange(scope.n))
+
+
+def test_no_simultaneous_neuron():
+    scope = Scope(
+        focus_depth=200 * um,
+        img_width=500 * um,
+        sensor=gcamp6f(),
+    )
+
+    ng = NeuronGroup(
+        100,
+        """dv/dt = (Iopto - v) / (10*ms) : volt
+    Iopto : amp""",
+        threshold="v > 1*volt",
+        method="euler",
+    )
+    assign_xyz(ng, 0, 0, 0)
+    ng.z[0:40] = 200 * um
+    ng.z[40:75] = 300 * um
+    ng.z[75:] = 400 * um
+
+    sim = cleo.CLSimulator(Network(ng))
+    opsin = chr2_4s()
+
+    sim.inject(scope, ng)
+    sim.inject(opsin, ng)
+    light = scope.create_imaging_light()
+    sim.inject(light, ng)
+    syn = list(sim.registry.light_prop_syns.values())[0]
+    print(list(syn.variables.keys()))
+    scope.is_scanning = True
+    src = sim.registry.source_for_light(light)
+    print(list(src.variables.keys()))
+
+    N = src.N
+    scan_period = src.scan_period[0] / second
+    pulse_width = src.pulse_width[0] / second
+    is_scanning = src.is_scanning[0]
+
+    if not is_scanning:
+        return
+
+    # check at multiple timepoints across one scan period
+    for t in np.linspace(0, scan_period, 100):
+        # light prop model formula
+        active = sum(
+            int(((t + scan_period * (i / N)) % scan_period) < pulse_width)
+            for i in range(N)
+        )
+        assert active <= 1
+
+
+def test_rate_scale():
+    scope = Scope(
+        focus_depth=200 * um,
+        img_width=500 * um,
+        sensor=gcamp6f(),
+    )
+
+    ng = NeuronGroup(
+        100,
+        """dv/dt = (Iopto - v) / (10*ms) : volt
+    Iopto : amp""",
+        threshold="v > 1*volt",
+        method="euler",
+    )
+    assign_xyz(ng, 0, 0, 0)
+    ng.z[0:40] = 200 * um
+    ng.z[40:75] = 300 * um
+    ng.z[75:] = 400 * um
+
+    sim = cleo.CLSimulator(Network(ng))
+    opsin = chr2_4s()
+
+    sim.inject(scope, ng)
+    sim.inject(opsin, ng)
+    light = scope.create_imaging_light()
+    sim.inject(light, ng)
+
+    scope.is_scanning = True
+    src = sim.registry.source_for_light(light)
+    print(list(src.variables.keys()))
+
+    light.pulse_freq = 50
+    assert np.isclose(src.scan_period[0] / second, 1 / 50, atol=1e-6)
+
+    light.pulse_freq = 60
+    assert np.isclose(src.scan_period[0] / second, 1 / 60, atol=1e-6)
+
+
+def test_irradiance_scale():
+    scope = Scope(
+        focus_depth=200 * um,
+        img_width=500 * um,
+        sensor=gcamp6f(),
+    )
+
+    ng = NeuronGroup(
+        100,
+        """dv/dt = (Iopto - v) / (10*ms) : volt
+    Iopto : amp""",
+        threshold="v > 1*volt",
+        method="euler",
+    )
+    assign_xyz(ng, 0, 0, 0)
+    ng.z[0:40] = 200 * um
+    ng.z[40:75] = 300 * um
+    ng.z[75:] = 400 * um
+
+    sim = cleo.CLSimulator(Network(ng))
+    opsin = chrmine_4s()
+
+    sim.inject(scope, ng)
+    sim.inject(opsin, ng)
+    light = scope.create_imaging_light()
+    sim.inject(light, ng)
+
+    scope.is_scanning = True
+    src = sim.registry.source_for_light(light)
+    print(list(src.variables.keys()))
+
+    # doubling light.pulse_freq halves scan_period, so pulse_width should also half
+    light.pulse_freq = 30
+    pulse_width_30 = src.pulse_width[0] / second
+    light.pulse_freq = 60
+    pulse_width_60 = src.pulse_width[0] / second
+    assert np.isclose(pulse_width_60, 0.5 * pulse_width_30, atol=1e-10)
 
 
 if __name__ == "__main__":

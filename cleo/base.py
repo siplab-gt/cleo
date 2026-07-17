@@ -335,6 +335,11 @@ class CLSimulator(NeoExportable):
     _processing_net_op: NetworkOperation = field(default=None, init=False, repr=False)
     _net_store_name: str = field(default="cleo default", init=False, repr=False)
 
+    @property
+    def registry(self):
+        """Returns the DeviceInteractionRegistry for this simulator."""
+        return registry_for_sim(self)
+
     def inject(
         self, device: InterfaceDevice, *neuron_groups: NeuronGroup, **kwparams: Any
     ) -> CLSimulator:

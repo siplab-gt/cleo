@@ -2,22 +2,21 @@ from __future__ import annotations
 
 import warnings
 from datetime import datetime
-from typing import Callable
 
 import matplotlib as mpl
 import neo
 import quantities as pq
 from attrs import define, field, fields
-from brian2 import NeuronGroup, Quantity, Unit, meter, mm, ms, np, um
+from brian2 import NeuronGroup, Quantity, Unit, meter, mm, ms, np, um, second
 from jaxtyping import Float, UInt
 from matplotlib.artist import Artist
 from mpl_toolkits.mplot3d import Axes3D
+from numpy import pi
 
 from cleo.base import Recorder
 from cleo.coords import coords_from_ng
 from cleo.imaging.sensors import Sensor
-from cleo.registry import registry_for_sim
-from cleo.light import Light, GaussianEllipsoid  # ensure imports
+from cleo.light import Light, GaussianEllipsoid
 from cleo.utilities import (
     analog_signal,
     normalize_coords,
@@ -95,12 +94,6 @@ def target_neurons_in_plane(
     return i_targets, noise_focus_factor[i_targets], coords_on_plane[i_targets]
 
 
-"""
-def fov_change_observation(instance, attribute, value):
-    instance.Registry.update_fov(value)
-"""
-
-
 @define(eq=False)
 class Scope(Recorder):
     """Two-photon microscope.
@@ -165,8 +158,10 @@ class Scope(Recorder):
     )
     """relative expression levels of neurons selected from each injection"""
 
-    imaging_light: Light = field(init=False, repr=False)
+    imaging_light: Light = field(init=False, repr=False, default=None)
     """raster scanning parameters"""
+
+    _is_scanning: bool = field(default=False, init=False, repr=False)
 
     @property
     def n(self) -> int:
@@ -208,7 +203,6 @@ class Scope(Recorder):
 
     def __attrs_post_init__(self):
         self._init_saved_vars()
-        self._scan_freq = 30
 
     def reset(self, **kwargs) -> None:
         self._init_saved_vars()
@@ -326,7 +320,8 @@ class Scope(Recorder):
         self.sigma_per_injct.append(sigma_noise)
         self.focus_coords_per_injct.append(focus_coords)
         self.rho_rel_per_injct.append(rho_rel)
-        registry_for_sim(self.sim).update_fov(self.img_width)
+        if self.imaging_light is not None:
+            self.sim.registry.set_img_width(self.imaging_light, self.img_width)
 
     def i_targets_for_neuron_group(self, neuron_group):
         """can handle multiple injections into same ng"""
@@ -466,38 +461,37 @@ class Scope(Recorder):
         # want ROI coordinates and size in image
 
     # Method for optional raster scanning
-    def create_imaging_light(self, wavelength=920e-9 * meter):
+    def create_imaging_light(self, wavelength=920e-9 * meter, pulse_freq=30):
+        spot_area = pi * self.soma_radius**2
+        img_width_area = pi * (self.img_width / 2) ** 2
+        pulse_width = spot_area / img_width_area * (1 / pulse_freq) * second
         self.imaging_light = Light(
             name=f"{self.name}_imlight",
-            light_model=GaussianEllipsoid(radius=self.soma_radius),
+            light_model=GaussianEllipsoid(),
             wavelength=wavelength,  # user can pass in wavelength values
-            scan_freq=self.scan_freq,
+            pulse_freq=pulse_freq,  # user sets pulse freq when creating imaging light
+            pulse_stagger=True,
             is_scanning=True,
+            pulse_width=pulse_width,
         )
-        self.enable_scanning(True)
-        registry_for_sim(self.sim).set_fov(self.imaging_light, self.img_width)
+        # attach soma_radius for registry use
+        self.imaging_light.soma_radius = self.soma_radius
         return self.imaging_light
 
     # turn raster scanning on/off
-    def enable_scanning(self, flag: bool = True):
-        registry_for_sim(self.sim).set_scan_on(self.imaging_light, flag)
-
-    # change frame rate
     @property
-    def scan_freq(self):
-        return self._scan_freq
+    def is_scanning(self):
+        return self._is_scanning
 
-    @scan_freq.setter
-    def scan_freq(self, hz: float):
-        self._scan_freq = hz
-        if hasattr(self, "imaging_light"):
-            self.imaging_light.scan_freq = hz  # keep Light in sync
-            registry_for_sim(self.sim).set_scan_freq(self.imaging_light, hz)
+    @is_scanning.setter
+    def is_scanning(self, flag: bool):
+        self._is_scanning = flag
+        if self.imaging_light is not None:
+            self.sim.registry.set_is_scanning(self.imaging_light, flag)
 
-    # keep img_width validator and update FOV
+    # keep img_width validator and update imaging width
     @img_width.validator
-    def _update_fov(self, attr, value):
-        if hasattr(
-            self, "imaging_light"
-        ):  # Make sure create_imaging_light has been called
-            registry_for_sim(self.sim).set_fov(self.imaging_light, value)
+    def _update_img_width(self, attr, value):
+        # Make sure create_imaging_light has been called
+        if self.imaging_light is not None:
+            self.sim.registry.set_img_width(self.imaging_light, value)

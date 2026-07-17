@@ -1,15 +1,18 @@
-"""Code for orchestrating inter-device interactions. 
+"""Code for orchestrating inter-device interactions.
 
 This should only be relevant for developers, not users, as this code is used
 under the hood when interacting devices are injected (e.g., light and opsin)."""
+
 from __future__ import annotations
 
 from typing import Tuple
 
 from attrs import define, field
-from brian2 import NeuronGroup, Subgroup, Synapses, defaultclock
+from brian2 import NeuronGroup, Subgroup, Synapses, defaultclock, ms
 from brian2.units.allunits import joule, kgram, meter, meter2, second
+from brian2 import Quantity
 from numpy import pi
+import numpy as np
 
 from cleo.coords import coords_from_ng
 from cleo.utilities import brian_safe_name
@@ -49,21 +52,17 @@ class DeviceInteractionRegistry:
     """Set of (light, light-dependent device, neuron group) tuples representing
     previously created connections."""
 
-    raster_fov: int = field(default=500 * 1e-6 * meter, kw_only=True)
+    raster_img_width: int = field(default=500 * 1e-6 * meter, kw_only=True)
 
     raster_enable: int = field(default=0, kw_only=True)
 
     light_prop_model = """
         T : 1
-        scale : 1
         epsilon : 1
         Ephoton : joule
-        is_scanning : 1
-        scan_period : second
-        dwell_time: second
-        scan_factor = (1 - is_scanning) + is_scanning * int(((t + scan_period * (i/N_pre)) % scan_period) < dwell_time) : 1
-        Irr_post = epsilon * T * Irr0_pre * scan_factor * scale : watt/meter**2 (summed)
-        phi_post = Irr_post / Ephoton : 1/second/meter**2 (summed)
+        scan_factor = (1 - is_scanning_pre) + is_scanning_pre * int(((t + pulse_stagger_pre * stagger_offset_pre) % scan_period_pre) < pulse_width_pre) : 1
+        Irr_post = epsilon * T * Irr0_pre * scan_factor * scale_pre : watt/meter**2 (summed)
+        phi_post = epsilon * T * Irr0_pre * scan_factor * scale_pre / Ephoton : 1/second/meter**2 (summed)
     """
     """Model used in light propagation synapses"""
 
@@ -85,18 +84,24 @@ class DeviceInteractionRegistry:
             self.register_light(device, ng)
         elif "LightDependent" in ancestor_classes:
             self.register_ldd(device, ng)
-    
-    """Test Setter Methods"""
-    def _apply_to_source(self, light: "Light", **values):
+
+    # Translate user-set variables to Brian2 simulation variables
+    def _apply_to_img_light(self, light: "Light", **values):
         src = self.source_for_light(light)
         for k, v in values.items():
             setattr(src, k, v)
 
-    def set_scan_on(self, light: "Light", enable: bool = True):
-        self._apply_to_source(light, is_scanning=int(bool(enable)))
+    # Make it easier to set light to scan
+    def set_is_scanning(self, light: "Light", enable: bool = True):
+        self._apply_to_img_light(light, is_scanning=int(bool(enable)))
 
-    def set_scan_freq(self, light: "Light", hz: float):
-        self._apply_to_source(light, scan_period=(1 / hz) * second)
+    # Change pulse frequency after initial setup
+    def set_pulse_freq(self, light: "Light", hz: float):
+        self._apply_to_img_light(light, scan_period=(1 / hz) * second)
+
+    # Change pulse width after initial setup
+    def set_pulse_width(self, light: "Light", width: Quantity):
+        self._apply_to_img_light(light, pulse_width=width)
 
     def connect_light_to_ldd_for_ng(
         self, light: "Light", ldd: "LightDependent", ng: NeuronGroup
@@ -121,11 +126,12 @@ class DeviceInteractionRegistry:
         if epsilon == 0:
             return
 
-        light_prop_syn = self._get_or_create_light_prop_syn(ldd, ng)
         if (light, ldd, ng) in self.connections:
             raise ValueError(f"{light} already connected to {ldd.name} for {ng.name}")
-
+        light_prop_syn = self._get_or_create_light_prop_syn(ldd, ng)
         i_source = self.subgroup_idx_for_light[light]
+        light_prop_syn.T[i_source, :] = light.transmittance(coords_from_ng(ng)).ravel()
+        light_prop_syn.epsilon[i_source, :] = epsilon
         # fmt: off
         # Ephoton = h*c/lambda
         light_prop_syn.Ephoton[i_source, :] = (
@@ -135,16 +141,25 @@ class DeviceInteractionRegistry:
         )
         # fmt: on
         src = self.source_for_light(light)
-        src.scan_period = (1 / light.scan_freq) * second
-        spot_radius = 1e-6 * meter
-        spot_area = pi * spot_radius ** 2
-        fov_radius = self.raster_fov / 2
-        fov_area = pi * fov_radius ** 2
-        src.dwell_time = spot_area / fov_area * src.scan_period
-        src.is_scanning = int(bool(self.raster_enable))
-        src.scale = 1 + (defaultclock.dt / src.dwell_time - 1) if defaultclock.dt > src.dwell_time else 1
-        #Test Code to adapt setter method
-        self.connections.add((light, ldd, ng))
+
+        # set scanning parameters from light object
+        src.scan_period = (1 / light.pulse_freq) * second
+        src.is_scanning = int(bool(light.is_scanning))
+        src.scale = 1
+
+        # add pulse_width and stagger
+        src.pulse_width = light.pulse_width
+        src.pulse_stagger = int(bool(light.pulse_stagger))
+
+        # calculate stagger offset per neuron so not all neurons activate simultaneously
+        N = src.N
+        scan_period_val = src.scan_period[0]
+        src.stagger_offset = np.arange(N) / N * scan_period_val
+
+        src.pulse_width = light.pulse_width
+        self.connections.add(
+            (light, ldd, ng)
+        )  # list of what is connected for rebuild later
 
     def _add_brian_object(self, obj):
         self.brian_objects.add(obj)
@@ -186,20 +201,40 @@ class DeviceInteractionRegistry:
     def init_register_light(self, light: "Light") -> Subgroup:
         """Creates neurons for the light source, if they don't already exist"""
         if self.light_source_ng is not None:
-            Irr0_prev = self.light_source_ng.Irr0
+            Irr0_prev = self.light_source_ng.Irr0[:]
             n_prev = self.light_source_ng.N
+            scan_period_prev = self.light_source_ng.scan_period[:]
+            pulse_width_prev = self.light_source_ng.pulse_width[:]
+            is_scanning_prev = self.light_source_ng.is_scanning[:]
+            scale_prev = self.light_source_ng.scale[:]
+            stagger_offset_prev = self.light_source_ng.stagger_offset[:]
+            pulse_stagger_prev = self.light_source_ng.pulse_stagger[:]
             # need to remove the old light source from the network
             self._remove_brian_object(self.light_source_ng)
         else:
             Irr0_prev = []
             n_prev = 0
 
-        # create new one
+        # create new light
         self.light_source_ng = NeuronGroup(
-            n_prev + light.n, "Irr0: watt/meter**2", name="light_source"
+            n_prev + light.n,
+            """Irr0: watt/meter**2
+            scan_period : second
+            pulse_width : second
+            is_scanning : 1
+            scale : 1
+            stagger_offset : second
+            pulse_stagger : 1""",
+            name="light_source",
         )
         if n_prev > 0:
             self.light_source_ng[:n_prev].Irr0 = Irr0_prev
+            self.light_source_ng[:n_prev].scan_period = scan_period_prev
+            self.light_source_ng[:n_prev].pulse_width = pulse_width_prev
+            self.light_source_ng[:n_prev].is_scanning = is_scanning_prev
+            self.light_source_ng[:n_prev].scale = scale_prev
+            self.light_source_ng[:n_prev].stagger_offset = stagger_offset_prev
+            self.light_source_ng[:n_prev].pulse_stagger = pulse_stagger_prev
         self._add_brian_object(self.light_source_ng)
         self.subgroup_idx_for_light[light] = slice(n_prev, n_prev + light.n)
 
@@ -209,8 +244,8 @@ class DeviceInteractionRegistry:
         prev_cxns = self.connections.copy()
         self.connections.clear()
         self.light_prop_syns.clear()
-        for light, ldd, ng in prev_cxns:
-            self.connect_light_to_ldd_for_ng(light, ldd, ng)
+        for prev_light, prev_ldd, prev_ng in prev_cxns:
+            self.connect_light_to_ldd_for_ng(prev_light, prev_ldd, prev_ng)
         assert prev_cxns == self.connections
 
     def register_light(self, light: "Light", ng: NeuronGroup):
@@ -227,19 +262,22 @@ class DeviceInteractionRegistry:
         """Returns the subgroup representing the given light source"""
         i = self.subgroup_idx_for_light[light]
         return self.light_source_ng[i]
-    
-    def set_fov(self, light: "Light", fov):
+
+    def set_img_width(self, light: "Light", img_width):
         src = self.source_for_light(light)
-        spot_radius = 10e-6 * meter
-        spot_area = pi * spot_radius ** 2
-        fov_area = pi * fov ** 2
-        src.dwell_time = spot_area / fov_area * src.scan_period
-        if fov != self.raster_fov:
+        spot_radius = light.soma_radius
+        spot_area = pi * spot_radius**2
+        img_width_area = pi * (img_width / 2) ** 2
+        src.pulse_width = light.pulse_width
+        if img_width != self.raster_img_width:
             warnings.warn(
-                "Multiple FOV diameters detected; CLEO currently assumes a single imaging FOV. Using latest diameter.",
+                "Multiple img_width values detected; CLEO currently assumes a single imaging width. Using latest value.",
                 UserWarning,
             )
-            self.raster_fov = fov
+            self.raster_img_width = img_width
+
+    def set_pulse_stagger(self, light: "Light", stagger: bool):
+        self._apply_to_img_light(light, pulse_stagger=int(bool(stagger)))
 
 
 registries: dict["CLSimulator", DeviceInteractionRegistry] = {}

@@ -1,12 +1,32 @@
 import warnings
 import pytest
-from brian2 import Network, NeuronGroup, mm, mm2, ms, mV, mwatt, nmeter, np, umeter
+import cleo
+import brian2
+from brian2 import (
+    Network,
+    NeuronGroup,
+    mm,
+    mm2,
+    ms,
+    mV,
+    mwatt,
+    nmeter,
+    np,
+    umeter,
+    meter,
+    um,
+)
+
 
 from cleo import CLSimulator
 from cleo.coords import assign_coords_grid_rect_prism
 from cleo.light import Light, fiber473nm
 from cleo.opto import Opsin, chr2_4s, vfchrimson_4s
 from cleo.registry import registry_for_sim
+from cleo.imaging.scope import Scope
+
+from cleo.imaging import gcamp6f
+from cleo.coords import assign_xyz
 
 
 @pytest.fixture
@@ -218,6 +238,53 @@ def test_multi_light_opsin(sim_ng1_ng2):
     ):
         assert chr2.epsilon(uv.wavelength) == 0
     assert np.all(ng1.v == -70 * mV)
+
+
+def test_connections_survive_rebuild():
+    """Verify that existing light-opsin connections are preserved when a second light is injected."""
+    scope = Scope(
+        focus_depth=200 * um,
+        img_width=500 * um,
+        sensor=gcamp6f(),
+    )
+    ng = NeuronGroup(
+        100,
+        """dv/dt = (Iopto - v) / (10*ms) : volt
+        Iopto : amp""",
+        threshold="v > 1*volt",
+        method="euler",
+    )
+    assign_xyz(ng, 0, 0, 0)
+    ng.z[0:40] = 200 * um
+
+    sim = cleo.CLSimulator(Network(ng))
+    sim.inject(scope, ng)
+
+    opsin = chr2_4s()
+    sim.inject(opsin, ng)
+
+    # inject first imaging light
+    light1 = scope.create_imaging_light(wavelength=473e-9 * meter)
+    sim.inject(light1, ng)
+    scope.is_scanning = True
+
+    # verify connection exists
+    assert (light1, opsin, ng) in sim.registry.connections
+
+    # inject second light from a different scope (triggers registry rebuild)
+    scope2 = Scope(
+        name="scope2",
+        focus_depth=200 * um,
+        img_width=500 * um,
+        sensor=gcamp6f(),
+    )
+    sim.inject(scope2, ng)
+    light2 = scope2.create_imaging_light(wavelength=473e-9 * meter)
+    sim.inject(light2, ng)
+
+    # verify first connection survived the rebuild
+    assert (light1, opsin, ng) in sim.registry.connections
+    assert (light2, opsin, ng) in sim.registry.connections
 
 
 if __name__ == "__main__":
