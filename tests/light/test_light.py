@@ -4,7 +4,7 @@ import quantities as pq
 from brian2 import Network, NeuronGroup, asarray, mm, mm2, ms, mwatt, nmeter, np, um
 
 import cleo
-from cleo.light import GaussianEllipsoid, KoehlerBeam, Light, LightModel, fiber473nm
+from cleo.light import GaussianEllipsoid, KoehlerBeam, Light, LightModel, OptogenSIMLight, fiber473nm
 from cleo.utilities import normalize_coords, unit_safe_allclose
 
 
@@ -101,6 +101,32 @@ def test_OpticFiber():
     assert np.all(T == 0)
 
 
+def test_OptogenSIMLight():
+    model = OptogenSIMLight()  # defaults: 473 nm, 100 um beam radius
+    source_coords = np.array([0, 0, 0]) * mm
+    source_direction = normalize_coords([0, 0, 1])  # pointing +z into tissue
+
+    # transmittance decreases with depth along the beam axis (within range)
+    depths = np.array([[0, 0, d] for d in [0.01, 0.05, 0.1, 0.2, 0.4]]) * mm
+    T_depth = model.transmittance(source_coords, source_direction, depths)
+    assert np.all(np.diff(T_depth.ravel()) < 0)  # strictly decreasing
+
+    # transmittance is exactly 0 behind the source (finite, forward-only model)
+    behind = np.array([[0, 0, -0.1]]) * mm
+    T_behind = model.transmittance(source_coords, source_direction, behind)
+    assert np.all(T_behind == 0)
+
+    # transmittance does not increase with radial distance (at fixed depth)
+    radial = np.array([[r, 0, 0.05] for r in [0.0, 0.02, 0.05, 0.1, 0.2]]) * mm
+    T_radial = model.transmittance(source_coords, source_direction, radial)
+    assert np.all(np.diff(T_radial.ravel()) <= 0)  # non-increasing (r=0 plateau ok)
+
+    # area0 = pi * beam_radius^2
+    from brian2 import mm2
+    expected = np.pi * (100 * um) ** 2
+    assert np.isclose(float(model.area0 / mm2), float(expected / mm2))
+
+
 def test_reset():
     light = Light(light_model=fiber473nm())
     assert light.value == 0
@@ -152,7 +178,7 @@ def test_light_power_irradiance(n_coords, values, shape):
 
 
 @pytest.mark.parametrize(
-    "light_model", [fiber473nm(), GaussianEllipsoid(), KoehlerBeam(1 * mm)]
+    "light_model", [fiber473nm(), GaussianEllipsoid(), KoehlerBeam(1 * mm), OptogenSIMLight()]
 )
 @pytest.mark.parametrize(
     "m, squeeze_coords, squeeze_dir",
