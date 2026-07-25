@@ -102,6 +102,8 @@ def test_OpticFiber():
 
 
 def test_OptogenSIMLight():
+    from brian2 import mm2, cm
+
     model = OptogenSIMLight()  # defaults: 473 nm, 100 um beam radius
     source_coords = np.array([0, 0, 0]) * mm
     source_direction = normalize_coords([0, 0, 1])  # pointing +z into tissue
@@ -111,10 +113,20 @@ def test_OptogenSIMLight():
     T_depth = model.transmittance(source_coords, source_direction, depths)
     assert np.all(np.diff(T_depth.ravel()) < 0)  # strictly decreasing
 
-    # transmittance is exactly 0 behind the source (finite, forward-only model)
-    behind = np.array([[0, 0, -0.1]]) * mm
-    T_behind = model.transmittance(source_coords, source_direction, behind)
-    assert np.all(T_behind == 0)
+    # behind the source: real (small) backscatter within the data's negative-z
+    # range, but exactly 0 beyond it (the clip must not freeze a nonzero value)
+    peak = model.transmittance(
+        source_coords, source_direction, np.array([[0, 0, 0]]) * mm
+    )
+    near_behind = np.array([[0, 0, -0.05]]) * mm  # 0.05 mm behind source
+    T_near = model.transmittance(source_coords, source_direction, near_behind)
+    assert np.all(T_near >= 0)
+    assert np.all(T_near < peak)  # backscatter is weaker than the forward peak
+
+    z_back = model._z_range[0]  # cm, most-negative z with data (~ -0.29 cm)
+    far_behind = np.array([[0, 0, z_back - 0.05]]) * cm  # beyond the data range
+    T_far = model.transmittance(source_coords, source_direction, far_behind)
+    assert np.all(T_far == 0)
 
     # transmittance does not increase with radial distance (at fixed depth)
     radial = np.array([[r, 0, 0.05] for r in [0.0, 0.02, 0.05, 0.1, 0.2]]) * mm
@@ -122,7 +134,6 @@ def test_OptogenSIMLight():
     assert np.all(np.diff(T_radial.ravel()) <= 0)  # non-increasing (r=0 plateau ok)
 
     # area0 = pi * beam_radius^2
-    from brian2 import mm2
     expected = np.pi * (100 * um) ** 2
     assert np.isclose(float(model.area0 / mm2), float(expected / mm2))
 

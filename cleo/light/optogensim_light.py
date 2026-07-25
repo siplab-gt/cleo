@@ -47,7 +47,7 @@ class OptogenSIMLight(LightModel):
             z=xr.DataArray(np.clip(z_cm, *self._z_range)),
         ).values
         T = np.nan_to_num(T, nan=0.0)
-        T[z_cm < 0] = 0   # no light behind the source
+        T[z_cm < self._z_range[0]] = 0  # zero only beyond data range; keep real backscatter within it
         return T
 
     @property
