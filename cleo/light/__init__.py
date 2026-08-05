@@ -5,7 +5,7 @@ from cleo.light.light import (
     OpticFiber,
     fiber473nm,
 )
-from cleo.light.optogensim_light import OptogenSIMLight
+from cleo.light.optogensim import OptogenSIMLight
 from cleo.light.light_dependence import (
     LightDependent,
     cubic_interpolator,
