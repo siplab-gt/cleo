@@ -1,5 +1,6 @@
 import xarray as xr
 import numpy as np
+from functools import cached_property
 from attrs import define, field
 from brian2.units import Quantity, nmeter, um, cm, mm
 from jaxtyping import Float
@@ -9,33 +10,39 @@ from cleo.coords import coords_from_xyz
 from importlib.resources import files
 
 
-@define
-class OptogenSIMLight(LightModel):
+@define(slots=False)
+class OptogenSIM(LightModel):
     """Light model from OptogenSIM Monte Carlo simulations."""
 
     wavelength: Quantity = 473 * nmeter
     """Light wavelength. Must be within the simulated grid range."""
     beam_radius: Quantity = 100 * um
     """Beam (1/e^2) radius. Must be within the simulated grid range."""
-    data_path: str = None
-    """Path to the 4D dataset. If None, uses the dataset packaged with Cleo."""
-    _rz_slice: object = field(init=False, default=None, repr=False)
-    _r_range: object = field(init=False, default=None, repr=False)
-    _z_range: object = field(init=False, default=None, repr=False)
+    data: xr.DataArray = field(default=None, repr=False)
+    """The 4D (wavelength, beam_size, r, z) dataset. Defaults to the dataset
+    packaged with Cleo if not provided."""
 
     def __attrs_post_init__(self):
-        if self.data_path is None:
+        if self.data is None:
             path = str(files("cleo.light.data") / "light_model_4d.nc.gz")
-        else:
-            path = self.data_path
-        rz = xr.open_dataarray(path, engine="scipy").interp(
+            self.data = xr.open_dataarray(path, engine="scipy")
+
+    @cached_property
+    def _rz_slice(self):
+        rz = self.data.interp(
             wavelength=self.wavelength / nmeter, beam_size=self.beam_radius / um
         )
         # data measures z from the atlas top; re-zero to the source
         z_source = float(rz.isel(r=0).z[rz.isel(r=0).argmax("z")])
-        self._rz_slice = rz.assign_coords(z=rz.z - z_source)
-        self._r_range = (float(self._rz_slice.r.min()), float(self._rz_slice.r.max()))
-        self._z_range = (float(self._rz_slice.z.min()), float(self._rz_slice.z.max()))
+        return rz.assign_coords(z=rz.z - z_source)
+
+    @cached_property
+    def _r_range(self):
+        return (float(self._rz_slice.r.min()), float(self._rz_slice.r.max()))
+
+    @cached_property
+    def _z_range(self):
+        return (float(self._rz_slice.z.min()), float(self._rz_slice.z.max()))
 
     def transmittance(self, source_coords, source_dir_uvec, target_coords):
         assert np.allclose(np.linalg.norm(source_dir_uvec, axis=-1), 1)
@@ -89,3 +96,25 @@ class OptogenSIMLight(LightModel):
         r_thresh = (r_vals[below_r[0]] if len(below_r) > 0 else r_vals[-1]) * cm
 
         return r_thresh * 1.2, zc_thresh
+
+
+def defocused_gaussian_beam(
+    wavelength: Quantity = 473 * nmeter,
+    beam_radius: Quantity = 100 * um,
+    data_path: str = None,
+) -> OptogenSIM:
+    """Construct an :class:`OptogenSIM` light model from a dataset file.
+
+    Parameters
+    ----------
+    wavelength : Quantity
+        Light wavelength. Must be within the simulated grid range.
+    beam_radius : Quantity
+        Beam (1/e^2) radius. Must be within the simulated grid range.
+    data_path : str, optional
+        Path to the 4D dataset. If None, uses the dataset packaged with Cleo.
+    """
+    if data_path is None:
+        data_path = str(files("cleo.light.data") / "light_model_4d.nc.gz")
+    data = xr.open_dataarray(data_path, engine="scipy")
+    return OptogenSIM(wavelength=wavelength, beam_radius=beam_radius, data=data)

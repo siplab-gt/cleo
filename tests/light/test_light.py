@@ -4,7 +4,7 @@ import quantities as pq
 from brian2 import Network, NeuronGroup, asarray, mm, mm2, ms, mwatt, nmeter, np, um
 
 import cleo
-from cleo.light import GaussianEllipsoid, KoehlerBeam, Light, LightModel, OptogenSIMLight, fiber473nm
+from cleo.light import GaussianEllipsoid, KoehlerBeam, Light, LightModel, OptogenSIM, fiber473nm
 from cleo.utilities import normalize_coords, unit_safe_allclose
 
 
@@ -101,10 +101,10 @@ def test_OpticFiber():
     assert np.all(T == 0)
 
 
-def test_OptogenSIMLight():
+def test_OptogenSIM():
     from brian2 import mm2, cm
 
-    model = OptogenSIMLight()  # defaults: 473 nm, 100 um beam radius
+    model = OptogenSIM()  # defaults: 473 nm, 100 um beam radius
     source_coords = np.array([0, 0, 0]) * mm
     source_direction = normalize_coords([0, 0, 1])  # pointing +z into tissue
 
@@ -189,7 +189,7 @@ def test_light_power_irradiance(n_coords, values, shape):
 
 
 @pytest.mark.parametrize(
-    "light_model", [fiber473nm(), GaussianEllipsoid(), KoehlerBeam(1 * mm), OptogenSIMLight()]
+    "light_model", [fiber473nm(), GaussianEllipsoid(), KoehlerBeam(1 * mm), OptogenSIM()]
 )
 @pytest.mark.parametrize(
     "m, squeeze_coords, squeeze_dir",
