@@ -1,17 +1,18 @@
 from __future__ import annotations
 
 from attrs import asdict, define, field, fields_dict
-from brian2 import NeuronGroup, Quantity, Synapses, nmolar, np, second, umolar
+from brian2 import NeuronGroup, Quantity, Synapses, np, second, umolar, nmolar, watt, nmeter, um
 
 from cleo.base import SynapseDevice
 from cleo.light import LightDependent
 from cleo.utilities import brian_safe_name
 
-
 @define(eq=False)
 class Sensor(SynapseDevice):
     """Base class for sensors"""
 
+    name: str = field(default="sensor", kw_only=True)
+    """name of the sensor device"""
     sigma_noise: float = field(kw_only=True)
     """standard deviation of Gaussian noise in ΔF/F measurement"""
     dFF_1AP: float = field(kw_only=True)
@@ -47,9 +48,8 @@ class CalciumModel:
 
     Must provide variable Ca (molar) in model."""
 
-    on_pre: str = field(default="", init=False)
     model: str
-
+    on_pre: str = field(default="", init=False)
 
 @define(eq=False)
 class PreexistingCalcium(CalciumModel):
@@ -75,15 +75,15 @@ class DynamicCalcium(CalciumModel):
     )
     """from eq 8 in Lütke et al., 2013"""
 
-    Ca_rest: Quantity = field(kw_only=True)
+    Ca_rest: Quantity = field(default=50 * nmolar, kw_only=True)
     """resting Ca2+ concentration (molar)"""
-    gamma: Quantity = field(kw_only=True)
+    gamma: Quantity = field(default=292.3 / second, kw_only=True)
     """clearance/extrusion rate (1/sec)"""
-    B_T: Quantity = field(kw_only=True)
+    B_T: Quantity = field(default=200 * umolar, kw_only=True)
     """total indicator (buffer) concentration (molar)"""
-    kappa_S: float = field(kw_only=True)
+    kappa_S: float = field(default=110.0, kw_only=True)
     """Ca2+ binding ratio of the endogenous buffer"""
-    dCa_T: Quantity = field(kw_only=True)
+    dCa_T: Quantity = field(default=7.6 * umolar, kw_only=True)
     """total Ca2+ concentration increase per spike (molar)"""
 
     def init_syn_vars(self, syn: Synapses) -> None:
@@ -151,8 +151,7 @@ class DoubExpCalBindingActivation(CalBindingActivationModel):
 class ExcitationModel:
     """Defines ``exc_factor``"""
 
-    model: str
-
+    model: str = field(default="exc_factor = 1 : 1", init=False)
 
 @define(eq=False)
 class NullExcitation(ExcitationModel):
@@ -163,10 +162,18 @@ class NullExcitation(ExcitationModel):
 
 @define(eq=False)
 class LightExcitation(ExcitationModel):
-    """Models light-dependent excitation (not implemented yet)"""
+    """Models light-dependent excitation"""
+    """Uses a Hill equation to convert from Ca2+ to ΔF/F, as in Song et al., 2021"""
+    model: str = field(default="""
+    exc_factor = baseline + ((A * ((Irr * soma_radius**2 * pi * (mwatt))**n)/(ec50**n + (Irr_pre * soma_radius**2 * pi * (1000/watt))**n))
+                        * exp(-k * Irr * soma_radius**2 * pi * (mwatt)) * (1/Hz)) : 1
+    """, init=False)
 
-    model: str = field(default="exc_factor = some_function(Irr_pre) : 1", init=False)
-
+    baseline: float = field(default=1.0, kw_only=True)
+    A: float = field(default=1.0, kw_only=True)
+    n: float = field(default=1.0, kw_only=True)
+    ec50: float = field(default=1.0, kw_only=True)
+    k: float = field(default=0.0, kw_only=True)
 
 @define(eq=False)
 class GECI(Sensor):
@@ -180,23 +187,11 @@ class GECI(Sensor):
     to data, rather than to biophysical processes before the data.
     """
 
-    location: str = field(default="cytoplasm", init=False)
-
+    name: str = field(default="GECI", kw_only=True)
     cal_model: CalciumModel = field(kw_only=True)
     bind_act_model: CalBindingActivationModel = field(kw_only=True)
     exc_model: ExcitationModel = field(kw_only=True)
 
-    fluor_model: str = field(
-        default="""
-            dFF_baseline = 1 / (1 + (K_d / Ca_rest) ** n_H) : 1
-            dFF = exc_factor * rho_rel * dFF_max  * (
-                1 / (1 + (K_d / CaB_active) ** n_H)
-                - dFF_baseline
-            ) : 1
-            rho_rel : 1
-        """,
-        init=False,
-    )
     """Uses a Hill equation to convert from Ca2+ to ΔF/F, as in Song et al., 2021"""
     K_d: Quantity = field(kw_only=True)
     """indicator dissociation constant (binding affinity) (molar)"""
@@ -205,6 +200,16 @@ class GECI(Sensor):
     dFF_max: float = field(kw_only=True)
     """amplitude of Hill equation for conversion from Ca2+ to ΔF/F,
     Fmax/F0. May be approximated from 'dynamic range' in literature Fmax/Fmin"""
+
+    location: str = field(default="cytoplasm", init=False)
+    fluor_model: str = field(
+        default="""
+        dFF_baseline = 1/(1 + (K_d / Ca_rest)**n_H) : 1
+        dFF = exc_factor * rho_rel * dFF_max * (
+        1/ (1 + (K_d / CaB_active) ** n_H) - dFF_baseline) : 1
+        rho_rel : 1
+    """, init=False
+    )
 
     def get_state(self) -> dict[NeuronGroup, np.ndarray]:
         return {ng_name: syn.dFF for ng_name, syn in self.synapses.items()}
@@ -233,6 +238,9 @@ class GECI(Sensor):
         for field in fields_dict(Sensor):
             params.pop(field)
         # remove private attributes
+        from cleo.light import LightDependent
+        for field in fields_dict(LightDependent):
+            params.pop(field, None)
         for key in list(params.keys()):
             if key.startswith("_"):
                 params.pop(key)
@@ -243,12 +251,17 @@ class GECI(Sensor):
             params.update(to_add)
         return params
 
-
+@define(eq=False, slots=False)
 class LightDependentGECI(GECI, LightDependent):
-    """Light-dependent calcium indicator (not yet implemented)"""
+    """Light-dependent calcium indicator"""
 
-    pass
+    name: str = field(default="LightDependentGECI", kw_only=True)
 
+    def __attrs_post_init__(self):
+        super().__attrs_post_init__()
+        # Ensure LightDependent mixin initialization runs to set spectrum defaults
+        if hasattr(LightDependent, "__post_init__"):
+            LightDependent.__post_init__(self)
 
 def geci(
     light_dependent: bool, doub_exp_conv: bool, pre_existing_cal: bool, **kwparams
@@ -305,6 +318,7 @@ def _create_geci_fn(
     t_on=None,
     t_off=None,
     extra_doc="",
+    **kwparams
 ):
     """convenience function for creating GECI model functions.
 
@@ -329,6 +343,8 @@ def _create_geci_fn(
     else:
         dFF_1AP = None
 
+    spectrum = kwparams.pop('spectrum', [(488 * nmeter, 1.0)]) 
+
     def geci_fn(
         light_dependent=False,
         doub_exp_conv=True,
@@ -347,7 +363,8 @@ def _create_geci_fn(
         B_T=200 * umolar,
         dCa_T=7.6 * umolar,  # Lütke et al., 2013 and NAOMi code
         name=name,
-        **kwparams,
+        spectrum=spectrum,
+        **extra_kwparams,
     ) -> GECI:
         """Returns a (light-dependent) GECI model with specified submodel choices.
         Default parameters are taken from
@@ -371,64 +388,80 @@ def _create_geci_fn(
             light_dependent,
             doub_exp_conv,
             pre_existing_cal,
+            baseline=1.0,
+            n=1.0,
+            ec50=1.0,
+            k=0.0,
             K_d=K_d,
             n_H=n_H,
             dFF_max=dFF_max,
             sigma_noise=sigma_noise,
             dFF_1AP=dFF_1AP,
+            Ca_rest=Ca_rest,
             A=A,
             tau_on=tau_on,
             tau_off=tau_off,
-            Ca_rest=Ca_rest,
             kappa_S=kappa_S,
             gamma=gamma,
             B_T=B_T,
             dCa_T=dCa_T,
             name=name,
-            **kwparams,
+            spectrum=spectrum,
+            **extra_kwparams,
         )
 
     geci_fn.__doc__ += "\n\n" + (" " * 8) + extra_doc
 
     globals()[brian_safe_name(name.lower())] = geci_fn
 
+import pandas as pd
+from pathlib import Path
+import ast
 
-# from NAOMi:
-#                      K_d, n_H, dFF_max, sigma_noise_rel, dFF_1AP_rel, ca_amp, t_on, t_off
-_create_geci_fn("GCaMP6f", 290, 2.7, 25.2, 1.24, 0.735, 76.1251, 0.8535, 98.6173)
-_create_geci_fn("GCaMP6s", 147, 2.45, 27.2, 1, 1, 54.6943, 0.4526, 68.5461)
-# noise, dFF for GCaMP3 from Dana 2019, since not in Zhang 2023
-_create_geci_fn(
-    "GCaMP3", 287, 2.52, 12, (3.9 / 2.1) / (13.3 / 4.4), 3.9 / 13.3, 0.05, 1, 1
-)
+target_file = Path(__file__).parent / "gecis.csv"
+if target_file.exists():
+    try:
+        df = pd.read_csv(target_file)
+        for index, row in df.iterrows():
+            params = row.iloc[6:].dropna().to_dict()
+            if "spectrum" in params and isinstance(params["spectrum"], str):
+                params["spectrum"] = ast.literal_eval(params["spectrum"])
+                spec_list = params["spectrum"]
+                params["spectrum"] = [(w * nmeter, s) for (w, s) in spec_list]
+            _create_geci_fn(row.iloc[0], **params)
+    except Exception as e:
+        print(f"Failed to register sensors from csv: {e}")
 
-# from NAOMi, but
-# don't have double exponential convolution parameters for these:
-_create_geci_fn(
-    "OGB-1",
-    250,
-    1,
-    14,
-    1,
-    extra_doc="*Don't know sigma_noise. Default is the GCaMP6s value.*",
-)
-_create_geci_fn(
-    "GCaMP6-RS09",
-    520,
-    3.2,
-    25,
-    1,
-    extra_doc="*Don't know sigma_noise. Default is the GCaMP6s value.*",
-)
-_create_geci_fn(
-    "GCaMP6-RS06",
-    320,
-    3,
-    15,
-    1,
-    extra_doc="*Don't know sigma_noise. Default is the GCaMP6s value.*",
-)
-_create_geci_fn("jGCaMP7f", 174, 2.3, 30.2, 0.72, 1.71)
-_create_geci_fn("jGCaMP7s", 68, 2.49, 40.4, 0.33, 4.96)
-_create_geci_fn("jGCaMP7b", 82, 3.06, 22.1, 0.25, 4.64)
-_create_geci_fn("jGCaMP7c", 298, 2.44, 145.6, 0.39, 1.85)
+
+def load_geci_dataframe(name: str):
+    target_file = Path(__file__).parent / "gecis.csv"
+    try:
+        df = pd.read_csv(target_file)
+        mask = df.iloc[:, 0].str.lower() == name.lower()
+        if not mask.any():
+            return None
+        else:
+            row = df[df.iloc[:, 0].str.lower() == name.lower()].iloc[0]
+            params = row.iloc[6:].dropna().to_dict()
+            if "spectrum" in params and isinstance(params["spectrum"], str):
+                params["spectrum"] = ast.literal_eval(params["spectrum"])
+                spec_list = params["spectrum"]
+                params["spectrum"] = [(float(w), s) for (w, s) in spec_list]
+            _create_geci_fn(row.iloc[0], **params)
+            sensor_name = brian_safe_name(row.iloc[0].lower())
+            gcamp_func = globals()[sensor_name]
+            gcamp = gcamp_func(light_dependent=True)
+            return gcamp
+    except Exception as e:
+        print(f"Failed to register sensors from csv: {e}")
+
+import matplotlib.pyplot as plt
+def Plot_Generator(time_history, dFF_history, count):
+    for i in range(len(dFF_history[0])):
+        plt.plot(time_history, dFF_history[:, i].T, label=f"Neuron Group {i + 1}")
+    plt.xlabel('Time in (ms)')
+    plt.ylabel('dFF')
+    plt.title('dFF over time for different neurons')
+    plt.legend()
+    plt.savefig(f"dFF_history_over_time_{count}.png")
+    plt.show()

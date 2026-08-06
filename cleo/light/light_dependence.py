@@ -78,8 +78,9 @@ class LightDependent:
 
     @spectrum.default
     def _default_spectrum(self):
+        device_name = getattr(self, "name", self.__class__.__name__)
         warnings.warn(
-            f"No spectrum provided for light-dependent device {self.name}."
+            f"No spectrum provided for light-dependent device {device_name}."
             " Assuming ε = 1 for all λ."
         )
         return [(-1e10, 1), (1e10, 1)]
@@ -101,6 +102,7 @@ class LightDependent:
     def _get_source_for_synapse(
         self, target_ng: NeuronGroup, i_targets: list[int]
     ) -> Tuple[NeuronGroup, list[int]]:
+        device_name = getattr(self, "name", self.__class__.__name__)
         # create light aggregator neurons
         light_agg_ng = NeuronGroup(
             len(i_targets),
@@ -108,7 +110,7 @@ class LightDependent:
             phi : 1/second/meter**2
             Irr : watt/meter**2
             """,
-            name=f"light_agg_{brian_safe_name(self.name)}_{target_ng.name}",
+            name=f"light_agg_{brian_safe_name(device_name)}_{target_ng.name}",
         )
         assign_xyz(
             light_agg_ng,
@@ -122,6 +124,7 @@ class LightDependent:
     def epsilon(self, lambda_new: Quantity) -> float:
         """Returns the :math:`\\varepsilon` value for a given lambda (including units)
         representing the relative sensitivity of the opsin to that wavelength."""
+        device_name = getattr(self, "name", self.__class__.__name__)
         lam_eps_array = np.array(self.spectrum)
         lambdas, epsilons = lam_eps_array[lam_eps_array[:, 0].argsort()].T
         lambda_new /= nmeter
@@ -132,19 +135,19 @@ class LightDependent:
             if not self.extrapolate:
                 warnings.warn(
                     f"λ = {lambda_new} nm is outside the range of the action spectrum data"
-                    f" for {self.name} and extrapolate=False. Assuming ε = 0."
+                    f" for {device_name} and extrapolate=False. Assuming ε = 0."
                 )
                 return 0
             elif self.extrapolate:
                 warnings.warn(
                     f"λ = {lambda_new} nm is outside the range of the action spectrum data"
-                    f" for {self.name}. Extrapolating: ε = {eps_new:.3f}."
+                    f" for {device_name}. Extrapolating: ε = {eps_new:.3f}."
                 )
         if eps_new < 0:
-            warnings.warn(f"ε = {eps_new} < 0 for {self.name}. Setting ε = 0.")
+            warnings.warn(f"ε = {eps_new} < 0 for {device_name}. Setting ε = 0.")
             eps_new = 0
         if eps_new > 1:
-            warnings.warn(f"ε = {eps_new} > 1 for {self.name}. Setting ε = 1.")
+            warnings.warn(f"ε = {eps_new} > 1 for {device_name}. Setting ε = 1.")
             eps_new = 1
         return eps_new
 
@@ -219,7 +222,8 @@ def plot_spectra(
         epsilons_new = ldd.spectrum_interpolator(lambdas, epsilons, lambdas_new)
         c_points = [wavelength_to_rgb(l) for l in lambdas * nmeter]
         c_line = wavelength_to_rgb(lambdas[np.argmax(epsilons)] * nmeter)
-        ax.plot(lambdas_new, epsilons_new, c=c_line, label=ldd.name)
+        device_name = getattr(ldd, "name", ldd.__class__.__name__)
+        ax.plot(lambdas_new, epsilons_new, c=c_line, label=device_name)
         ax.scatter(lambdas, epsilons, marker="o", s=50, color=c_points)
 
     title = (

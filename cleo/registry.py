@@ -1,8 +1,7 @@
-"""Code for orchestrating inter-device interactions.
+"""Code for orchestrating inter-device interactions. 
 
 This should only be relevant for developers, not users, as this code is used
 under the hood when interacting devices are injected (e.g., light and opsin)."""
-
 from __future__ import annotations
 
 from typing import Tuple
@@ -52,7 +51,7 @@ class DeviceInteractionRegistry:
         epsilon : 1
         Ephoton : joule
         Irr_post = epsilon * T * Irr0_pre : watt/meter**2 (summed)
-        phi_post = epsilon * T * Irr0_pre / Ephoton : 1/second/meter**2 (summed)
+        phi_post = Irr_post / Ephoton : 1/second/meter**2 (summed)
     """
     """Model used in light propagation synapses"""
 

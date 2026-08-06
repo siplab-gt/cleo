@@ -1,26 +1,18 @@
-"""Contains Scope and sensors for two-photon microscopy"""
-from cleo.imaging.scope import Scope, target_neurons_in_plane
-from cleo.imaging.sensors import (
-    GECI,
-    CalBindingActivationModel,
-    CalciumModel,
-    DoubExpCalBindingActivation,
-    DynamicCalcium,
-    ExcitationModel,
-    LightExcitation,
-    NullBindingActivation,
-    NullExcitation,
-    PreexistingCalcium,
-    Sensor,
-    gcamp3,
-    gcamp6_rs06,
-    gcamp6_rs09,
-    gcamp6f,
-    gcamp6s,
-    geci,
-    jgcamp7b,
-    jgcamp7c,
-    jgcamp7f,
-    jgcamp7s,
-    ogb_1,
-)
+from cleo.imaging.sensors import *
+
+try:
+    from cleo.imaging.sensors import (
+        gcamp3,
+        gcamp6s,
+        gcamp6f,
+        gcamp6_rs06,
+        gcamp6_rs09,
+        jGCaMP7s,
+        jGCaMP7f,
+        jGCaMP7b,
+        jGCaMP7c,
+        jRGECO1a,
+        ogb_1,
+    )
+except ImportError:
+    pass
