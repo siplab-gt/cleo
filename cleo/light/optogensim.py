@@ -105,14 +105,9 @@ def defocused_gaussian_beam(
 ) -> OptogenSIM:
     """Construct an :class:`OptogenSIM` light model from a dataset file.
 
-    Parameters
-    ----------
-    wavelength : Quantity
-        Light wavelength. Must be within the simulated grid range.
-    beam_radius : Quantity
-        Beam (1/e^2) radius. Must be within the simulated grid range.
-    data_path : str, optional
-        Path to the 4D dataset. If None, uses the dataset packaged with Cleo.
+    ``wavelength`` and ``beam_radius`` are as documented on
+    :class:`OptogenSIM`. ``data_path`` is an optional path to a 4D dataset;
+    if None, the dataset packaged with Cleo is used.
     """
     if data_path is None:
         data_path = str(files("cleo.light.data") / "light_model_4d.nc.gz")
