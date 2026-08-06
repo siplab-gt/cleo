@@ -12,7 +12,7 @@ def _():
 @app.cell
 def _(mo):
     mo.md("""
-    # OptogenSIMLight profile explorer
+    # OptogenSIM profile explorer
 
     Interactive 2D cross-sections of the OptogenSIM Monte Carlo light model.
     Drag the sliders to set a wavelength and beam radius and see how light
