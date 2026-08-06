@@ -18,7 +18,7 @@ def rand_coords(rows, squeeze, repr_dist=1 * mm):
 
 @pytest.mark.parametrize(
     "light_model, repr_dist",
-    [(fiber473nm(), 1 * mm), (GaussianEllipsoid(), 50 * um)],
+    [(fiber473nm(), 1 * mm), (GaussianEllipsoid(), 50 * um), (OptogenSIM(), 200 * um)],
 )
 @pytest.mark.parametrize("m, squeeze_target", [(1, True), (1, False), (4, False)])
 @pytest.mark.parametrize("n, squeeze_source", [(1, True), (1, False), (6, False)])
@@ -136,6 +136,30 @@ def test_OptogenSIM():
     # area0 = pi * beam_radius^2
     expected = np.pi * (100 * um) ** 2
     assert np.isclose(float(model.area0 / mm2), float(expected / mm2))
+
+def test_OptogenSIM_T_increases_with_beam_radius(rand_seed):
+    from cleo.light import OptogenSIM
+    source = np.array([0, 0, 0]) * mm
+    direction = (0, 0, 1)
+    target = np.array([[0.05, 0, 0.2]]) * mm  # off-axis, moderate depth
+    Ts = []
+    for br in [50, 100, 200, 400]:
+        light = Light(light_model=OptogenSIM(beam_radius=br * um),
+                      coords=source, direction=direction)
+        Ts.append(float(light.transmittance(target).squeeze()))
+    assert np.all(np.diff(Ts) > 0)
+
+def test_OptogenSIM_T_increases_with_wavelength(rand_seed):
+    from cleo.light import OptogenSIM
+    source = np.array([0, 0, 0]) * mm
+    direction = (0, 0, 1)
+    target = np.array([[0, 0, 0.8]]) * mm  # deep, where absorption dominates
+    Ts = []
+    for wl in [470, 590, 740]:
+        light = Light(light_model=OptogenSIM(wavelength=wl * nmeter),
+                      coords=source, direction=direction)
+        Ts.append(float(light.transmittance(target).squeeze()))
+    assert np.all(np.diff(Ts) > 0)
 
 
 def test_reset():
