@@ -155,7 +155,7 @@ def test_multi_light_opsin(sim_ng1_ng2):
     # let 'vfchrimson' be identical to chr2, but with different spectrum
     # this lets us isolate the effect of the spectrum
     vfchrimson.spectrum = vfchrimson_4s().spectrum
-    amber = Light(light_model=fiber473nm(), wavelength=590 * nmeter, name="amber")
+    amber = Light(light_model=fiber473nm(wavelength=590 * nmeter), name="amber")
 
     sim.inject(chr2, ng1, Iopto_var_name="Iopto")
     sim.inject(vfchrimson, ng2, Iopto_var_name="Iopto2")
@@ -164,7 +164,7 @@ def test_multi_light_opsin(sim_ng1_ng2):
     sim.inject(amber, ng1, ng2)
 
     # warning when going outside action spectrum data
-    uv = Light(light_model=fiber473nm(), wavelength=300 * nmeter, name="uv")
+    uv = Light(light_model=fiber473nm(wavelength=300 * nmeter), name="uv")
     with pytest.warns(
         UserWarning,
         match="300.0 nm.*outside.*spectrum.*ChR2.*extrapolate=False",

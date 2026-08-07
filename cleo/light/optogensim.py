@@ -14,8 +14,6 @@ from importlib.resources import files
 class OptogenSIM(LightModel):
     """Light model from OptogenSIM Monte Carlo simulations."""
 
-    wavelength: Quantity = 473 * nmeter
-    """Light wavelength. Must be within the simulated grid range."""
     beam_radius: Quantity = 100 * um
     """Beam (1/e^2) radius. Must be within the simulated grid range."""
     data: xr.DataArray = field(default=None, repr=False)
