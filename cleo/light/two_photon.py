@@ -114,8 +114,7 @@ def tp_light_from_scope(scope, wavelength=1060 * nmeter, **kwargs) -> Light:
     light = Light(
         coords=coords,
         direction=scope.direction,
-        light_model=GaussianEllipsoid(),
-        wavelength=wavelength,
+        light_model=GaussianEllipsoid(wavelength=wavelength),
         **kwargs,
     )
     return light
