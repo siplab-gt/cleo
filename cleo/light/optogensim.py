@@ -10,15 +10,24 @@ from cleo.coords import coords_from_xyz
 from importlib.resources import files
 
 
-@define(slots=False)
+@define
 class OptogenSIM(LightModel):
     """Light model from OptogenSIM Monte Carlo simulations."""
 
     beam_radius: Quantity = 100 * um
     """Beam (1/e^2) radius. Must be within the simulated grid range."""
     data: xr.DataArray = field(default=None, repr=False)
-    """The 4D (wavelength, beam_size, r, z) dataset. Defaults to the dataset
-    packaged with Cleo if not provided."""
+    """The 4D transmittance dataset. Defaults to the dataset packaged with Cleo.
+
+    To supply your own, pass an :class:`xarray.DataArray` with dimensions
+    ``(wavelength, beam_size, r, z)`` in that order, with coordinate values in
+    these units: ``wavelength`` in nm, ``beam_size`` (the beam radius) in µm,
+    and ``r`` and ``z`` in cm, where ``z`` is measured from the top of the
+    simulated tissue volume. Values are transmittance in [0, 1]. The packaged
+    dataset spans wavelengths 380-740 nm (30 nm steps) and beam radii of 10, 20,
+    100, 200, 400, and 800 µm; it was generated with a modified version of the
+    OptogenSIM Monte Carlo model (repository link to follow) sweeping over
+    wavelength and beam radius."""
 
     def __attrs_post_init__(self):
         if self.data is None:
@@ -60,13 +69,16 @@ class OptogenSIM(LightModel):
         return np.pi * self.beam_radius**2
 
     def viz_params(self, coords, direction, T_threshold,
-                   n_points_per_source=4000, **kwargs):
-        r_thresh, zc_thresh = self._find_rz_thresholds(T_threshold)
-        r, theta, zc = uniform_cylinder_rθz(n_points_per_source, r_thresh, zc_thresh)
+                   n_points_per_source=16000, **kwargs):
+        r_thresh, zc_thresh, zc_back = self._find_rz_thresholds(T_threshold)
+        # cylinder spans from behind the source (zc_back < 0) through zc_thresh
+        total_length = zc_thresh - zc_back
+        r, theta, zc = uniform_cylinder_rθz(n_points_per_source, r_thresh, total_length)
+        start = coords + zc_back * direction
         end = coords + zc_thresh * direction
-        x, y, z = xyz_from_rθz(r, theta, zc, coords, end)
+        x, y, z = xyz_from_rθz(r, theta, zc, start, end)
         density_factor = 3
-        cyl_vol = np.pi * r_thresh**2 * zc_thresh
+        cyl_vol = np.pi * r_thresh**2 * total_length
         markersize = (cyl_vol / n_points_per_source * density_factor) ** (1 / 3)
         intensity_scale = 1.5 * (4e3 / n_points_per_source) ** (1 / 3)
         return coords_from_xyz(x, y, z), markersize, intensity_scale
@@ -77,14 +89,21 @@ class OptogenSIM(LightModel):
         on_axis = self._rz_slice.isel(r=0)
         z_vals = on_axis.z.values  # cm, source at 0
         T_z = on_axis.values
-        # Only look in the forward (z >= 0) direction.
-        mask = z_vals >= 0
-        z_pos = z_vals[mask]
-        T_pos = T_z[mask]
+
+        # Forward extent (z >= 0): first z where T drops below threshold.
+        fwd = z_vals >= 0
+        z_pos, T_pos = z_vals[fwd], T_z[fwd]
         below = np.where(T_pos < thresh)[0]
         zc_thresh = (z_pos[below[0]] if len(below) > 0 else z_pos[-1]) * cm
 
-        # Find r threshold at z = zc_thresh / 2.
+        # Backward extent (z < 0): most-negative z still above threshold,
+        # so backscatter behind the source is included in the visualization.
+        back = z_vals < 0
+        z_neg, T_neg = z_vals[back], T_z[back]
+        above_back = z_neg[T_neg >= thresh]
+        zc_back = (float(above_back.min()) if len(above_back) > 0 else 0.0) * cm
+
+        # r threshold at the forward midpoint.
         z_mid = float(zc_thresh / cm) / 2
         z_mid = np.clip(z_mid, float(self._rz_slice.z.min()),
                         float(self._rz_slice.z.max()))
@@ -93,21 +112,19 @@ class OptogenSIM(LightModel):
         below_r = np.where(T_r < thresh)[0]
         r_thresh = (r_vals[below_r[0]] if len(below_r) > 0 else r_vals[-1]) * cm
 
-        return r_thresh * 1.2, zc_thresh
+        return r_thresh * 1.2, zc_thresh, zc_back
 
 
 def defocused_gaussian_beam(
     wavelength: Quantity = 473 * nmeter,
     beam_radius: Quantity = 100 * um,
-    data_path: str = None,
 ) -> OptogenSIM:
-    """Construct an :class:`OptogenSIM` light model from a dataset file.
+    """Construct an :class:`OptogenSIM` model for a defocused Gaussian beam.
 
-    ``wavelength`` and ``beam_radius`` are as documented on
-    :class:`OptogenSIM`. ``data_path`` is an optional path to a 4D dataset;
-    if None, the dataset packaged with Cleo is used.
+    This is the default OptogenSIM profile: light emitted from a defocused
+    Gaussian beam source, propagating through gray matter, using the Monte
+    Carlo dataset packaged with Cleo. ``wavelength`` and ``beam_radius`` are
+    as documented on :class:`OptogenSIM`. To use a custom dataset, construct
+    :class:`OptogenSIM` directly and pass your own ``data`` array.
     """
-    if data_path is None:
-        data_path = str(files("cleo.light.data") / "light_model_4d.nc.gz")
-    data = xr.open_dataarray(data_path, engine="scipy")
-    return OptogenSIM(wavelength=wavelength, beam_radius=beam_radius, data=data)
+    return OptogenSIM(wavelength=wavelength, beam_radius=beam_radius)
