@@ -137,15 +137,28 @@ def test_OptogenSIM():
     expected = np.pi * (100 * um) ** 2
     assert np.isclose(float(model.area0 / mm2), float(expected / mm2))
 
-def test_OptogenSIM_T_increases_with_beam_radius(rand_seed):
-    from cleo.light import OptogenSIM
+@pytest.mark.parametrize(
+    "model_fn, target, widths",
+    [
+        # fiber: sweep R0
+        (lambda w: fiber473nm(R0=w * um),
+         np.array([[0.05, 0, 0.2]]) * mm, [50, 100, 200, 400]),
+        # gaussian: sweep sigma_lateral (close target where light reaches)
+        (lambda w: GaussianEllipsoid(sigma_lateral=w * um),
+         np.array([[10, 0, 20]]) * um, [50, 100, 200, 400]),
+        # optogensim: sweep beam_radius
+        (lambda w: OptogenSIM(beam_radius=w * um),
+         np.array([[0.05, 0, 0.2]]) * mm, [50, 100, 200, 400]),
+    ],
+)
+def test_T_increases_with_beam_width(model_fn, target, widths, rand_seed):
+    """Transmittance at an off-axis point should increase as the source's
+    lateral width increases, across light models with a width parameter."""
     source = np.array([0, 0, 0]) * mm
     direction = (0, 0, 1)
-    target = np.array([[0.05, 0, 0.2]]) * mm  # off-axis, moderate depth
     Ts = []
-    for br in [50, 100, 200, 400]:
-        light = Light(light_model=OptogenSIM(beam_radius=br * um),
-                      coords=source, direction=direction)
+    for w in widths:
+        light = Light(light_model=model_fn(w), coords=source, direction=direction)
         Ts.append(float(light.transmittance(target).squeeze()))
     assert np.all(np.diff(Ts) > 0)
 
