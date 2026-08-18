@@ -1,13 +1,14 @@
-import xarray as xr
-import numpy as np
 from functools import cached_property
+from importlib.resources import files
+
+import numpy as np
+import xarray as xr
 from attrs import define, field
-from brian2.units import Quantity, nmeter, um, cm, mm
-from jaxtyping import Float
+from brian2.units import Quantity, cm, nmeter, um
+
+from cleo.coords import coords_from_xyz
 from cleo.light.light import LightModel
 from cleo.utilities import uniform_cylinder_rθz, xyz_from_rθz
-from cleo.coords import coords_from_xyz
-from importlib.resources import files
 
 
 @define
@@ -61,15 +62,18 @@ class OptogenSIM(LightModel):
             z=xr.DataArray(np.clip(z_cm, *self._z_range)),
         ).values
         T = np.nan_to_num(T, nan=0.0)
-        T[z_cm < self._z_range[0]] = 0  # zero only beyond data range; keep real backscatter within it
+        T[z_cm < self._z_range[0]] = (
+            0  # zero only beyond data range; keep real backscatter within it
+        )
         return T
 
     @property
     def area0(self):
         return np.pi * self.beam_radius**2
 
-    def viz_params(self, coords, direction, T_threshold,
-                   n_points_per_source=16000, **kwargs):
+    def viz_params(
+        self, coords, direction, T_threshold, n_points_per_source=16000, **kwargs
+    ):
         r_thresh, zc_thresh, zc_back = self._find_rz_thresholds(T_threshold)
         # cylinder spans from behind the source (zc_back < 0) through zc_thresh
         total_length = zc_thresh - zc_back
@@ -105,8 +109,9 @@ class OptogenSIM(LightModel):
 
         # r threshold at the forward midpoint.
         z_mid = float(zc_thresh / cm) / 2
-        z_mid = np.clip(z_mid, float(self._rz_slice.z.min()),
-                        float(self._rz_slice.z.max()))
+        z_mid = np.clip(
+            z_mid, float(self._rz_slice.z.min()), float(self._rz_slice.z.max())
+        )
         r_vals = self._rz_slice.r.values
         T_r = self._rz_slice.interp(z=float(z_mid)).values
         below_r = np.where(T_r < thresh)[0]
