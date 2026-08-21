@@ -29,25 +29,23 @@ def _(mo):
 @app.cell
 def _():
     import numpy as np
-    import xarray as xr
     import plotly.graph_objects as go
+    from cleo.light import OptogenSIM
+    from brian2 import nmeter, um
 
-    return go, np, xr
-
-
-@app.cell
-def _(xr):
-    from importlib.resources import files
-    _path = str(files("cleo.light.data") / "light_model_4d.nc.gz")
-    da = xr.open_dataarray(_path, engine="scipy")
-    da.load()
-    return (da,)
+    return OptogenSIM, go, nmeter, np, um
 
 
 @app.cell
-def _(da, mo):
-    wl_vals = da.wavelength.values
-    bs_vals = da.beam_size.values
+def _(OptogenSIM):
+    _m = OptogenSIM()  # default instance, just to read the packaged data grid
+    wl_vals = _m.data.wavelength.values
+    bs_vals = _m.data.beam_size.values
+    return bs_vals, wl_vals
+
+
+@app.cell
+def _(bs_vals, mo, wl_vals):
     wavelength = mo.ui.slider(
         start=float(wl_vals.min()),
         stop=float(wl_vals.max()),
@@ -69,15 +67,15 @@ def _(da, mo):
 
 
 @app.cell
-def _(beam, da, go, np, wavelength):
-    sl = da.interp(wavelength=wavelength.value, beam_size=beam.value)
+def _(OptogenSIM, beam, go, nmeter, np, um, wavelength):
+    model = OptogenSIM(
+        wavelength=wavelength.value * nmeter,
+        beam_radius=beam.value * um,
+    )
+    sl = model._rz_slice  # interpolated to wavelength/beam; z already re-zeroed to source
 
-    r = sl.r.values * 10.0   # cm -> mm
-    z = sl.z.values * 10.0   # cm -> mm
-
-    on_axis = sl.isel(r=0).values
-    z0 = z[int(np.argmax(on_axis))]
-    z_rel = z - z0
+    r = sl.r.values * 10.0        # cm -> mm
+    z_rel = sl.z.values * 10.0    # cm -> mm (already source-relative)
 
     T = sl.values
     T = T / np.nanmax(T)
@@ -101,6 +99,7 @@ def _(beam, da, go, np, wavelength):
         xaxis_title="z, depth from source (mm)",
         yaxis_title="r, radial distance (mm)",
         width=750, height=450,
+        yaxis=dict(scaleanchor="x", scaleratio=1),
     )
     fig.update_xaxes(range=[float(z_rel.min()), min(float(z_rel.max()), 3)])
     fig
