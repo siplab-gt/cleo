@@ -27,7 +27,7 @@ class OptogenSIM(LightModel):
     simulated tissue volume. Values are transmittance in [0, 1]. The packaged
     dataset spans wavelengths 380-740 nm (30 nm steps) and beam radii of 10, 20,
     100, 200, 400, and 800 µm; it was generated with a modified version of the
-    OptogenSIM Monte Carlo model (repository link to follow) sweeping over
+    OptogenSIM Monte Carlo model (https://github.com/akhilsnarra-ui/optogensim-cleo) sweeping over
     wavelength and beam radius."""
 
     def __attrs_post_init__(self):
