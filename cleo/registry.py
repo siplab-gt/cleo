@@ -121,6 +121,7 @@ class DeviceInteractionRegistry:
     def _remove_brian_object(self, obj):
         self.brian_objects.remove(obj)
         self.sim.network.remove(obj)
+        obj._network = self.sim.network.id
 
     def _get_or_create_light_prop_syn(
         self, ldd: "LightDependent", ng: NeuronGroup
