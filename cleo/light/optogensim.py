@@ -72,7 +72,7 @@ class OptogenSIM(LightModel):
         return np.pi * self.beam_radius**2
 
     def viz_params(
-        self, coords, direction, T_threshold, n_points_per_source=16000, **kwargs
+        self, coords, direction, T_threshold, n_points_per_source=1.5e5, **kwargs
     ):
         r_thresh, zc_thresh, zc_back = self._find_rz_thresholds(T_threshold)
         # cylinder spans from behind the source (zc_back < 0) through zc_thresh
