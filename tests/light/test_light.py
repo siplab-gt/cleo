@@ -1,10 +1,17 @@
 import neo
 import pytest
 import quantities as pq
-from brian2 import Network, NeuronGroup, asarray, mm, mm2, ms, mwatt, nmeter, np, um
+from brian2 import Network, NeuronGroup, asarray, cm, mm, mm2, ms, mwatt, nmeter, np, um
 
 import cleo
-from cleo.light import GaussianEllipsoid, KoehlerBeam, Light, LightModel, OptogenSIM, fiber473nm
+from cleo.light import (
+    GaussianEllipsoid,
+    KoehlerBeam,
+    Light,
+    LightModel,
+    OptogenSIM,
+    fiber473nm,
+)
 from cleo.utilities import normalize_coords, unit_safe_allclose
 
 
@@ -102,8 +109,6 @@ def test_OpticFiber():
 
 
 def test_OptogenSIM():
-    from brian2 import mm2, cm
-
     model = OptogenSIM()  # defaults: 473 nm, 100 um beam radius
     source_coords = np.array([0, 0, 0]) * mm
     source_direction = normalize_coords([0, 0, 1])  # pointing +z into tissue
@@ -137,18 +142,28 @@ def test_OptogenSIM():
     expected = np.pi * (100 * um) ** 2
     assert np.isclose(float(model.area0 / mm2), float(expected / mm2))
 
+
 @pytest.mark.parametrize(
     "model_fn, target, widths",
     [
         # fiber: sweep R0
-        (lambda w: fiber473nm(R0=w * um),
-         np.array([[0.05, 0, 0.2]]) * mm, [50, 100, 200, 400]),
+        (
+            lambda w: fiber473nm(R0=w * um),
+            np.array([[0.05, 0, 0.2]]) * mm,
+            [50, 100, 200, 400],
+        ),
         # gaussian: sweep sigma_lateral (close target where light reaches)
-        (lambda w: GaussianEllipsoid(sigma_lateral=w * um),
-         np.array([[10, 0, 20]]) * um, [50, 100, 200, 400]),
+        (
+            lambda w: GaussianEllipsoid(sigma_lateral=w * um),
+            np.array([[10, 0, 20]]) * um,
+            [50, 100, 200, 400],
+        ),
         # optogensim: sweep beam_radius
-        (lambda w: OptogenSIM(beam_radius=w * um),
-         np.array([[0.05, 0, 0.2]]) * mm, [50, 100, 200, 400]),
+        (
+            lambda w: OptogenSIM(beam_radius=w * um),
+            np.array([[0.05, 0, 0.2]]) * mm,
+            [50, 100, 200, 400],
+        ),
     ],
 )
 def test_T_increases_with_beam_width(model_fn, target, widths, rand_seed):
@@ -162,15 +177,20 @@ def test_T_increases_with_beam_width(model_fn, target, widths, rand_seed):
         Ts.append(float(light.transmittance(target).squeeze()))
     assert np.all(np.diff(Ts) > 0)
 
+
 def test_OptogenSIM_T_increases_with_wavelength(rand_seed):
     from cleo.light import OptogenSIM
+
     source = np.array([0, 0, 0]) * mm
     direction = (0, 0, 1)
     target = np.array([[0, 0, 0.8]]) * mm  # deep, where absorption dominates
     Ts = []
     for wl in [470, 590, 740]:
-        light = Light(light_model=OptogenSIM(wavelength=wl * nmeter),
-                      coords=source, direction=direction)
+        light = Light(
+            light_model=OptogenSIM(wavelength=wl * nmeter),
+            coords=source,
+            direction=direction,
+        )
         Ts.append(float(light.transmittance(target).squeeze()))
     assert np.all(np.diff(Ts) > 0)
 
@@ -226,7 +246,8 @@ def test_light_power_irradiance(n_coords, values, shape):
 
 
 @pytest.mark.parametrize(
-    "light_model", [fiber473nm(), GaussianEllipsoid(), KoehlerBeam(1 * mm), OptogenSIM()]
+    "light_model",
+    [fiber473nm(), GaussianEllipsoid(), KoehlerBeam(1 * mm), OptogenSIM()],
 )
 @pytest.mark.parametrize(
     "m, squeeze_coords, squeeze_dir",
