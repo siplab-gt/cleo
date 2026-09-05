@@ -1,3 +1,4 @@
+import matplotlib.pyplot as plt
 import neo
 import pytest
 import quantities as pq
@@ -11,7 +12,9 @@ from cleo.light import (
     LightModel,
     OptogenSIM,
     fiber473nm,
+    plot_spectra,
 )
+from cleo.opto import chr2_4s
 from cleo.utilities import normalize_coords, unit_safe_allclose
 
 
@@ -198,6 +201,27 @@ def test_OptogenSIM_T_increases_with_wavelength(rand_seed):
 def test_reset():
     light = Light(light_model=fiber473nm())
     assert light.value == 0
+
+
+def test_plot_spectra_sorts_wavelengths():
+    sorted_opsin = chr2_4s()
+    unsorted_opsin = chr2_4s()
+    unsorted_opsin.spectrum = unsorted_opsin.spectrum[::-1]
+    original_spectrum = unsorted_opsin.spectrum.copy()
+
+    sorted_fig, sorted_ax = plot_spectra(sorted_opsin)
+    unsorted_fig, unsorted_ax = plot_spectra(unsorted_opsin)
+
+    np.testing.assert_allclose(
+        unsorted_ax.lines[0].get_xdata(), sorted_ax.lines[0].get_xdata()
+    )
+    np.testing.assert_allclose(
+        unsorted_ax.lines[0].get_ydata(), sorted_ax.lines[0].get_ydata()
+    )
+    assert unsorted_opsin.spectrum == original_spectrum
+
+    plt.close(sorted_fig)
+    plt.close(unsorted_fig)
 
 
 def test_coords():

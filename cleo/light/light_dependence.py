@@ -55,6 +55,11 @@ def log_makima_interpolator(lambdas_nm, epsilons, lambda_new_nm):
     return _log_(makima_interpolator, lambdas_nm, epsilons, lambda_new_nm)
 
 
+def _sorted_spectrum(spectrum):
+    spectrum_array = np.array(spectrum)
+    return spectrum_array[spectrum_array[:, 0].argsort()].T
+
+
 # hacky MRO stuff...multiple inheritance only works because slots=False,
 # and must be placed *before* SynapseDevice to work right
 @define(eq=False, slots=False)
@@ -122,8 +127,7 @@ class LightDependent:
     def epsilon(self, lambda_new: Quantity) -> float:
         """Returns the :math:`\\varepsilon` value for a given lambda (including units)
         representing the relative sensitivity of the opsin to that wavelength."""
-        lam_eps_array = np.array(self.spectrum)
-        lambdas, epsilons = lam_eps_array[lam_eps_array[:, 0].argsort()].T
+        lambdas, epsilons = _sorted_spectrum(self.spectrum)
         lambda_new /= nmeter
         eps_new = self.spectrum_interpolator(lambdas, epsilons, lambda_new)
 
@@ -205,7 +209,7 @@ def plot_spectra(
 
     fig, ax = plt.subplots()
     for ldd in ldds:
-        lambdas, epsilons = np.array(ldd.spectrum).T
+        lambdas, epsilons = _sorted_spectrum(ldd.spectrum)
         i_data_in_range = (lambdas > xlim[0]) & (lambdas < xlim[1])
         lambdas, epsilons = lambdas[i_data_in_range], epsilons[i_data_in_range]
         if not extrapolate:
