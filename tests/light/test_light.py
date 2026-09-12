@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import neo
 import pytest
 import quantities as pq
-from brian2 import Network, NeuronGroup, asarray, mm, mm2, ms, mwatt, nmeter, np, um
+from brian2 import Network, NeuronGroup, asarray, cm, mm, mm2, ms, mwatt, nmeter, np, um
 
 import cleo
 from cleo.light import (
@@ -10,6 +10,7 @@ from cleo.light import (
     KoehlerBeam,
     Light,
     LightModel,
+    OptogenSIM,
     fiber473nm,
     plot_spectra,
 )
@@ -27,7 +28,7 @@ def rand_coords(rows, squeeze, repr_dist=1 * mm):
 
 @pytest.mark.parametrize(
     "light_model, repr_dist",
-    [(fiber473nm(), 1 * mm), (GaussianEllipsoid(), 50 * um)],
+    [(fiber473nm(), 1 * mm), (GaussianEllipsoid(), 50 * um), (OptogenSIM(), 200 * um)],
 )
 @pytest.mark.parametrize("m, squeeze_target", [(1, True), (1, False), (4, False)])
 @pytest.mark.parametrize("n, squeeze_source", [(1, True), (1, False), (6, False)])
@@ -110,6 +111,93 @@ def test_OpticFiber():
     assert np.all(T == 0)
 
 
+def test_OptogenSIM():
+    model = OptogenSIM()  # defaults: 473 nm, 100 um beam radius
+    source_coords = np.array([0, 0, 0]) * mm
+    source_direction = normalize_coords([0, 0, 1])  # pointing +z into tissue
+
+    # transmittance decreases with depth along the beam axis (within range)
+    depths = np.array([[0, 0, d] for d in [0.01, 0.05, 0.1, 0.2, 0.4]]) * mm
+    T_depth = model.transmittance(source_coords, source_direction, depths)
+    assert np.all(np.diff(T_depth.ravel()) < 0)  # strictly decreasing
+
+    # behind the source: real (small) backscatter within the data's negative-z
+    # range, but exactly 0 beyond it (the clip must not freeze a nonzero value)
+    peak = model.transmittance(
+        source_coords, source_direction, np.array([[0, 0, 0]]) * mm
+    )
+    near_behind = np.array([[0, 0, -0.05]]) * mm  # 0.05 mm behind source
+    T_near = model.transmittance(source_coords, source_direction, near_behind)
+    assert np.all(T_near >= 0)
+    assert np.all(T_near < peak)  # backscatter is weaker than the forward peak
+
+    z_back = model._z_range[0]  # cm, most-negative z with data (~ -0.29 cm)
+    far_behind = np.array([[0, 0, z_back - 0.05]]) * cm  # beyond the data range
+    T_far = model.transmittance(source_coords, source_direction, far_behind)
+    assert np.all(T_far == 0)
+
+    # transmittance does not increase with radial distance (at fixed depth)
+    radial = np.array([[r, 0, 0.05] for r in [0.0, 0.02, 0.05, 0.1, 0.2]]) * mm
+    T_radial = model.transmittance(source_coords, source_direction, radial)
+    assert np.all(np.diff(T_radial.ravel()) <= 0)  # non-increasing (r=0 plateau ok)
+
+    # area0 = pi * beam_radius^2
+    expected = np.pi * (100 * um) ** 2
+    assert np.isclose(float(model.area0 / mm2), float(expected / mm2))
+
+
+@pytest.mark.parametrize(
+    "model_fn, target, widths",
+    [
+        # fiber: sweep R0
+        (
+            lambda w: fiber473nm(R0=w * um),
+            np.array([[0.05, 0, 0.2]]) * mm,
+            [50, 100, 200, 400],
+        ),
+        # gaussian: sweep sigma_lateral (close target where light reaches)
+        (
+            lambda w: GaussianEllipsoid(sigma_lateral=w * um),
+            np.array([[10, 0, 20]]) * um,
+            [50, 100, 200, 400],
+        ),
+        # optogensim: sweep beam_radius
+        (
+            lambda w: OptogenSIM(beam_radius=w * um),
+            np.array([[0.05, 0, 0.2]]) * mm,
+            [50, 100, 200, 400],
+        ),
+    ],
+)
+def test_T_increases_with_beam_width(model_fn, target, widths, rand_seed):
+    """Transmittance at an off-axis point should increase as the source's
+    lateral width increases, across light models with a width parameter."""
+    source = np.array([0, 0, 0]) * mm
+    direction = (0, 0, 1)
+    Ts = []
+    for w in widths:
+        light = Light(light_model=model_fn(w), coords=source, direction=direction)
+        Ts.append(float(light.transmittance(target).squeeze()))
+    assert np.all(np.diff(Ts) > 0)
+
+
+def test_OptogenSIM_T_increases_with_wavelength(rand_seed):
+    from cleo.light import OptogenSIM
+
+    source = np.array([0, 0, 0]) * mm
+    direction = (0, 0, 1)
+    target = np.array([[0, 0, 0.8]]) * mm  # deep, where absorption dominates
+    Ts = []
+    for wl in [470, 590, 740]:
+        light = Light(
+            light_model=OptogenSIM(wavelength=wl * nmeter),
+            coords=source,
+            direction=direction,
+        )
+        Ts.append(float(light.transmittance(target).squeeze()))
+    assert np.all(np.diff(Ts) > 0)
+
+
 def test_reset():
     light = Light(light_model=fiber473nm())
     assert light.value == 0
@@ -182,7 +270,8 @@ def test_light_power_irradiance(n_coords, values, shape):
 
 
 @pytest.mark.parametrize(
-    "light_model", [fiber473nm(), GaussianEllipsoid(), KoehlerBeam(1 * mm)]
+    "light_model",
+    [fiber473nm(), GaussianEllipsoid(), KoehlerBeam(1 * mm), OptogenSIM()],
 )
 @pytest.mark.parametrize(
     "m, squeeze_coords, squeeze_dir",
