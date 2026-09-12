@@ -31,9 +31,9 @@ def _():
     import numpy as np
     import plotly.graph_objects as go
     from cleo.light import OptogenSIM
-    from brian2 import nmeter, um
+    from brian2 import mm, nmeter, um
 
-    return OptogenSIM, go, nmeter, np, um
+    return OptogenSIM, go, mm, nmeter, np, um
 
 
 @app.cell
@@ -67,31 +67,40 @@ def _(bs_vals, mo, wl_vals):
 
 
 @app.cell
-def _(OptogenSIM, beam, go, nmeter, np, um, wavelength):
+def _(OptogenSIM, beam, go, mm, nmeter, np, um, wavelength):
     model = OptogenSIM(
         wavelength=wavelength.value * nmeter,
         beam_radius=beam.value * um,
     )
-    sl = model._rz_slice  # interpolated to wavelength/beam; z already re-zeroed to source
 
-    r = sl.r.values * 10.0        # cm -> mm
-    z_rel = sl.z.values * 10.0    # cm -> mm (already source-relative)
+    # build an (r, z) grid of target points, as a user would: real coordinates
+    # with brian2 units. Source at origin pointing in +z.
+    r_mm = np.linspace(0, 3, 120)
+    z_mm = np.linspace(-1, 6, 200)
+    R, Z = np.meshgrid(r_mm, z_mm, indexing="ij")
+    grid_coords = np.stack([R.ravel(), np.zeros(R.size), Z.ravel()], axis=-1) * mm
 
-    T = sl.values
-    T = T / np.nanmax(T)
+    source = np.array([0, 0, 0]) * mm
+    direction = np.array([0, 0, 1.0])
+
+    T = model.transmittance(source, direction, grid_coords).reshape(R.shape)
+
+    # normalize to peak for display (colorbar is log10 T/peak)
+    
     logT = np.log10(np.clip(T, 1e-4, None))
 
-    r_full = np.concatenate([-r[::-1], r])
+    # mirror across the beam axis for a symmetric view
+    r_full = np.concatenate([-r_mm[::-1], r_mm])
     logT_full = np.vstack([logT[::-1, :], logT])
 
     fig = go.Figure(
         data=go.Heatmap(
-            x=z_rel,
+            x=z_mm,
             y=r_full,
             z=logT_full,
             colorscale="Viridis",
             zmin=-4, zmax=0,
-            colorbar=dict(title="log₁₀ T/peak"),
+            colorbar=dict(title="log₁₀ T"),
         )
     )
     fig.update_layout(
@@ -101,7 +110,7 @@ def _(OptogenSIM, beam, go, nmeter, np, um, wavelength):
         width=750, height=450,
         yaxis=dict(scaleanchor="x", scaleratio=1),
     )
-    fig.update_xaxes(range=[float(z_rel.min()), min(float(z_rel.max()), 3)])
+    fig.update_xaxes(range=[float(z_mm.min()), min(float(z_mm.max()), 3)])
     fig
     return
 

@@ -122,6 +122,7 @@ class DeviceInteractionRegistry:
     def _remove_brian_object(self, obj):
         self.brian_objects.remove(obj)
         self.sim.network.remove(obj)
+        # brian2's BrianObject.__del__ warns if _network is None when the object is garbage-collected ("never included in a network"). This object was in the network and is being deliberately discarded (replaced by a combined light source), so set _network to the network's id to suppress the spurious warning.
         obj._network = self.sim.network.id
 
     def _get_or_create_light_prop_syn(
