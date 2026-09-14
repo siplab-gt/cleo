@@ -60,7 +60,7 @@ class DeviceInteractionRegistry:
         T : 1
         epsilon : 1
         Ephoton : joule
-        scan_factor = (1 - is_scanning_pre) + is_scanning_pre * int(((t + pulse_stagger_pre * stagger_offset_pre) % scan_period_pre) < pulse_width_pre) : 1
+        scan_factor = (1 - is_pulsed_pre) + is_pulsed_pre * int(((t + pulse_stagger_pre * stagger_offset_pre) % scan_period_pre) < pulse_width_pre) : 1
         Irr_post = epsilon * T * Irr0_pre * scan_factor * scale_pre : watt/meter**2 (summed)
         phi_post = epsilon * T * Irr0_pre * scan_factor * scale_pre / Ephoton : 1/second/meter**2 (summed)
     """
@@ -92,8 +92,8 @@ class DeviceInteractionRegistry:
             setattr(src, k, v)
 
     # Make it easier to set light to scan
-    def set_is_scanning(self, light: "Light", enable: bool = True):
-        self._apply_to_img_light(light, is_scanning=int(bool(enable)))
+    def set_is_pulsed(self, light: "Light", enable: bool = True):
+        self._apply_to_img_light(light, is_pulsed=int(bool(enable)))
 
     # Change pulse frequency after initial setup
     def set_pulse_freq(self, light: "Light", hz: float):
@@ -144,7 +144,7 @@ class DeviceInteractionRegistry:
 
         # set scanning parameters from light object
         src.scan_period = (1 / light.pulse_freq) * second
-        src.is_scanning = int(bool(light.is_scanning))
+        src.is_pulsed = int(bool(light.is_pulsed))
         src.scale = 1
 
         # add pulse_width and stagger
@@ -205,7 +205,7 @@ class DeviceInteractionRegistry:
             n_prev = self.light_source_ng.N
             scan_period_prev = self.light_source_ng.scan_period[:]
             pulse_width_prev = self.light_source_ng.pulse_width[:]
-            is_scanning_prev = self.light_source_ng.is_scanning[:]
+            is_pulsed_prev = self.light_source_ng.is_pulsed[:]
             scale_prev = self.light_source_ng.scale[:]
             stagger_offset_prev = self.light_source_ng.stagger_offset[:]
             pulse_stagger_prev = self.light_source_ng.pulse_stagger[:]
@@ -221,7 +221,7 @@ class DeviceInteractionRegistry:
             """Irr0: watt/meter**2
             scan_period : second
             pulse_width : second
-            is_scanning : 1
+            is_pulsed : 1
             scale : 1
             stagger_offset : second
             pulse_stagger : 1""",
@@ -231,7 +231,7 @@ class DeviceInteractionRegistry:
             self.light_source_ng[:n_prev].Irr0 = Irr0_prev
             self.light_source_ng[:n_prev].scan_period = scan_period_prev
             self.light_source_ng[:n_prev].pulse_width = pulse_width_prev
-            self.light_source_ng[:n_prev].is_scanning = is_scanning_prev
+            self.light_source_ng[:n_prev].is_pulsed = is_pulsed_prev
             self.light_source_ng[:n_prev].scale = scale_prev
             self.light_source_ng[:n_prev].stagger_offset = stagger_offset_prev
             self.light_source_ng[:n_prev].pulse_stagger = pulse_stagger_prev

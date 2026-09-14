@@ -192,17 +192,12 @@ def test_no_simultaneous_neuron():
     sim.inject(light, ng)
     syn = list(sim.registry.light_prop_syns.values())[0]
     print(list(syn.variables.keys()))
-    scope.is_scanning = True
     src = sim.registry.source_for_light(light)
     print(list(src.variables.keys()))
 
     N = src.N
     scan_period = src.scan_period[0] / second
     pulse_width = src.pulse_width[0] / second
-    is_scanning = src.is_scanning[0]
-
-    if not is_scanning:
-        return
 
     # check at multiple timepoints across one scan period
     for t in np.linspace(0, scan_period, 100):
@@ -241,7 +236,6 @@ def test_rate_scale():
     light = scope.create_imaging_light()
     sim.inject(light, ng)
 
-    scope.is_scanning = True
     src = sim.registry.source_for_light(light)
     print(list(src.variables.keys()))
 
@@ -279,7 +273,6 @@ def test_irradiance_scale():
     light = scope.create_imaging_light()
     sim.inject(light, ng)
 
-    scope.is_scanning = True
     src = sim.registry.source_for_light(light)
     print(list(src.variables.keys()))
 

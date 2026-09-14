@@ -24,7 +24,7 @@ from cleo.coords import assign_coords_grid_rect_prism
 from cleo.light import Light, fiber473nm
 from cleo.opto import Opsin, chr2_4s, vfchrimson_4s
 
-from cleo.registry import registry_for_sim
+
 from cleo.imaging.scope import Scope
 
 from cleo.imaging import gcamp6f
@@ -268,7 +268,6 @@ def test_connections_survive_rebuild():
     # inject first imaging light
     light1 = scope.create_imaging_light(wavelength=473e-9 * meter)
     sim.inject(light1, ng)
-    scope.is_scanning = True
 
     # verify connection exists
     assert (light1, opsin, ng) in sim.registry.connections

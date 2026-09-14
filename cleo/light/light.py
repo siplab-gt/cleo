@@ -9,24 +9,15 @@ from typing import Any
 
 import matplotlib as mpl
 import quantities as pq
-from attrs import define, field
+from attrs import define, field, setters
 from brian2 import (
     NeuronGroup,
     Subgroup,
     np,
 )
 
-from brian2 import ms
 
-from brian2.units import (
-    Quantity,
-    mm,
-    mm2,
-    mwatt,
-    nmeter,
-    um,
-    second,
-)
+from brian2.units import Quantity, mm, mm2, mwatt, nmeter, um, second, ms
 from jaxtyping import Float
 from matplotlib import colors
 from matplotlib.artist import Artist
@@ -286,7 +277,22 @@ def _is_irr(q: Quantity) -> bool:
     return q.has_same_dimensions(mwatt / mm2)
 
 
-@define(eq=False)
+def _sync_scan_param_to_registry(instance, attribute, value):
+    """attrs on_setattr hook: pushes scan-related field changes down to the
+    Brian variable on light.source, if this Light is part of a running sim."""
+    if instance.sim is not None:
+        setter_name = f"set_{attribute.name}"
+        if hasattr(instance.sim.registry, setter_name):
+            getattr(instance.sim.registry, setter_name)(instance, value)
+    return value
+
+
+@define(
+    eq=False,
+    on_setattr=setters.pipe(
+        setters.convert, setters.validate, _sync_scan_param_to_registry
+    ),
+)
 class Light(Stimulator):
     """Delivers light to the network for photostimulation and (when implemented) imaging.
 
@@ -320,41 +326,20 @@ class Light(Stimulator):
     wavelength: Quantity = field(default=473 * nmeter, kw_only=True)
     """light wavelength with unit (usually nmeter)"""
 
-    _pulse_freq: float = field(default=30, kw_only=True, alias="pulse_freq")
-    _pulse_width: Quantity = field(default=0 * ms, kw_only=True, alias="pulse_width")
+    pulse_freq: float = field(default=30, kw_only=True)
+    """Rate (Hz) at which the raster scan sweeps over target neurons."""
 
-    is_scanning: bool = field(default=False, kw_only=True)
-    _pulse_stagger: bool = field(default=False, kw_only=True, alias="pulse_stagger")
+    pulse_width: Quantity = field(default=0 * ms, kw_only=True)
+    """Duration of each per-neuron light pulse during raster scanning."""
 
-    @property
-    def pulse_freq(self):
-        return self._pulse_freq
+    is_pulsed: bool = field(default=False, kw_only=True)
+    """Whether this light delivers discrete pulses (raster scanning) vs. constant illumination."""
 
-    @pulse_freq.setter
-    def pulse_freq(self, hz: float):
-        self._pulse_freq = hz
-        if self.sim is not None:
-            self.sim.registry.set_pulse_freq(self, hz)
+    pulse_stagger: bool = field(default=False, kw_only=True)
+    """Whether per-neuron pulses are staggered in time to avoid simultaneous activation."""
 
-    @property
-    def pulse_width(self):
-        return self._pulse_width
-
-    @pulse_width.setter
-    def pulse_width(self, width: Quantity):
-        self._pulse_width = width
-        if self.sim is not None:
-            self.sim.registry.set_pulse_width(self, width)
-
-    @property
-    def pulse_stagger(self):
-        return self._pulse_stagger
-
-    @pulse_stagger.setter
-    def pulse_stagger(self, stagger: bool):
-        self._pulse_stagger = stagger
-        if self.sim is not None:
-            self.sim.registry.set_pulse_stagger(self, stagger)
+    soma_radius: Quantity = field(default=10 * um, kw_only=True)
+    """Assumed neuron radius, used to compute pulse width for raster scanning."""
 
     @coords.validator
     def _check_coords(self, attribute, value):

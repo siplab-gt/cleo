@@ -161,8 +161,6 @@ class Scope(Recorder):
     imaging_light: Light = field(init=False, repr=False, default=None)
     """raster scanning parameters"""
 
-    _is_scanning: bool = field(default=False, init=False, repr=False)
-
     @property
     def n(self) -> int:
         """Number of imaged ROIs"""
@@ -471,23 +469,11 @@ class Scope(Recorder):
             wavelength=wavelength,  # user can pass in wavelength values
             pulse_freq=pulse_freq,  # user sets pulse freq when creating imaging light
             pulse_stagger=True,
-            is_scanning=True,
+            is_pulsed=True,
             pulse_width=pulse_width,
+            soma_radius=self.soma_radius,
         )
-        # attach soma_radius for registry use
-        self.imaging_light.soma_radius = self.soma_radius
         return self.imaging_light
-
-    # turn raster scanning on/off
-    @property
-    def is_scanning(self):
-        return self._is_scanning
-
-    @is_scanning.setter
-    def is_scanning(self, flag: bool):
-        self._is_scanning = flag
-        if self.imaging_light is not None:
-            self.sim.registry.set_is_scanning(self.imaging_light, flag)
 
     # keep img_width validator and update imaging width
     @img_width.validator
