@@ -63,3 +63,7 @@ We can then test the shortcut imports by making sure to use them in the unit tes
 
 ## Notebooks
 Please use [nbdev for Git-friendly Jupyter](https://nbdev.fast.ai/tutorials/git_friendly_jupyter.html), especially `nbdev_clean` before committing Jupyter notebooks.
+
+## Taskfile helpers
+Install [Task](https://taskfile.dev/) to make use of the shortcuts in `Taskfile`, such as cleaning all notebooks, building docs, or running different subsets of tests.
+Run `task -l` for details.

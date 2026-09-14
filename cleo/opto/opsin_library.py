@@ -908,5 +908,6 @@ if __name__ == "__main__":
         gtacr2_4s(),
         enphr3_3s(),
         extrapolate=True,
+        range="1p2p",
     )
     plt.show()

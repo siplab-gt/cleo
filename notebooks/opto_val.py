@@ -1,19 +1,21 @@
 from brian2 import (
-    nsiemens,
-    pamp,
-    mV,
-    ms,
     Mohm,
+    Network,
     NeuronGroup,
     SpikeMonitor,
-    Network,
+    mm2,
+    ms,
+    mV,
+    mwatt,
+    nsiemens,
+    pamp,
     prefs,
 )
-from cleo import CLSimulator
-from cleo.opto import *
-from cleo.light import *
-from cleo.coords import assign_coords_rand_rect_prism
 
+from cleo import CLSimulator
+from cleo.coords import assign_coords_rand_rect_prism
+from cleo.light import *
+from cleo.opto import *
 
 neuron_params = {
     "a": 0.0 * nsiemens,
@@ -35,10 +37,11 @@ def lif(n, name="LIF"):
         Iopto: amp
         """,
         threshold="v>=theta",
-        reset="v=E_L",
+        reset="v=v_reset",
         refractory=2 * ms,
         namespace=neuron_params,
         name=name,
+        method="exact",
     )
     ng.v = neuron_params["E_L"]
     return ng

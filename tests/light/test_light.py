@@ -121,13 +121,17 @@ def test_coords():
         (1 * mwatt, 1 * mwatt / mm2),
     ],
 )
-def test_light_power_irradiance(n_coords, values):
+@pytest.mark.parametrize("shape", [(), (1,), (-1,)])
+def test_light_power_irradiance(n_coords, values, shape):
     area0 = 2 * mm2
     light = Light(
         coords=rand_coords(n_coords, False),
         light_model=KoehlerBeam(radius=np.sqrt(area0 / np.pi)),
     )
     for val in values:
+        if shape == (-1,):
+            shape = n_coords
+        val = np.broadcast_to(val, shape, subok=True)
         light.update(val)
 
     for i_channel in range(n_coords):

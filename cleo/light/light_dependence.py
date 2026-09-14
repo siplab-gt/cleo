@@ -93,8 +93,9 @@ class LightDependent:
     outside of the provided excitation/action spectrum."""
 
     @property
-    def light_agg_ngs(self):
-        """Returns the "neurons" that aggregate light for this device."""
+    def light_agg_ngs(self) -> dict[str, NeuronGroup]:
+        """Returns the "neurons" that aggregate light for this device.
+        Dict of form {target_ng.name: light_agg_ng}."""
         return self.source_ngs
 
     def _get_source_for_synapse(

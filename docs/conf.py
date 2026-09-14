@@ -55,7 +55,7 @@ exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 autoclass_content = "both"
 intersphinx_mapping = {
     "brian2": ("https://brian2.readthedocs.io/en/stable", None),
-    "matplotlib": ("http://matplotlib.org/stable", None),
+    "matplotlib": ("https://matplotlib.org/stable", None),
     "neo": ("https://neo.readthedocs.io/en/latest", None),
 }
 

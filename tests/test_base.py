@@ -121,6 +121,46 @@ def test_io_processor_in_sim(sim, neurons):
     assert my_stim.value == "expected"
 
 
+class IOP(IOProcessor):
+    def __init__(self):
+        super().__init__()
+        self.counter = 0
+
+    def put_state(self, state_dict: dict, time): ...
+
+    def get_ctrl_signals(self, time) -> dict:
+        self.counter += 1
+        return {}
+
+    def is_sampling_now(self, time) -> bool:
+        return True
+
+    def reset(self):
+        self.counter = 0
+
+
+def test_switch_io_processor():
+    sim = CLSimulator(Network())
+    iop = IOP()
+    sim.set_io_processor(iop)
+    sim.run(0.2 * ms)
+    assert iop.counter == 2
+    iop2 = IOP()
+    sim.set_io_processor(iop2)
+    sim.run(0.2 * ms)
+    assert iop2.counter == 2
+    assert iop.counter == 2
+
+    # also after reset
+    sim.reset()
+    assert iop.counter == 2
+    assert iop2.counter == 0
+    sim.set_io_processor(iop)
+    sim.run(0.2 * ms)
+    assert iop.counter == 4
+    assert iop2.counter == 0
+
+
 def test_namespace_level():
     test_v = -5
     ng = NeuronGroup(1, "v = -70 + test_v: 1")

@@ -1,4 +1,5 @@
 """Contains Probe and Signal classes and electrode coordinate functions"""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -27,7 +28,7 @@ class Signal(ABC):
     def _default_name(self) -> str:
         return self.__class__.__name__
 
-    brian_objects: set = field(init=False, factory=set)
+    brian_objects: set = field(init=False, factory=set, repr=False)
     """All Brian objects created by the signal.
     Must be kept up-to-date for automatic injection into the network"""
     probe: Probe = field(init=False, default=None)
@@ -103,8 +104,6 @@ class Probe(Recorder, NeoExportable):
     signals: list[Signal] = field(factory=list)
     """Signals recorded by the probe.
     Can be added to post-init with :meth:`add_signals`."""
-
-    probe: Probe = field(init=False)
 
     def __attrs_post_init__(self):
         self.coords = self.coords.reshape((-1, 3))

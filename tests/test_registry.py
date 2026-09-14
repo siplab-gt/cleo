@@ -1,4 +1,5 @@
 import warnings
+
 import pytest
 import cleo
 import brian2
@@ -22,6 +23,7 @@ from cleo import CLSimulator
 from cleo.coords import assign_coords_grid_rect_prism
 from cleo.light import Light, fiber473nm
 from cleo.opto import Opsin, chr2_4s, vfchrimson_4s
+
 from cleo.registry import registry_for_sim
 from cleo.imaging.scope import Scope
 
