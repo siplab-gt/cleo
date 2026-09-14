@@ -334,7 +334,7 @@ class Light(Stimulator):
     def pulse_freq(self, hz: float):
         self._pulse_freq = hz
         if self.sim is not None:
-            registry_for_sim(self.sim).set_pulse_freq(self, hz)
+            self.sim.registry.set_pulse_freq(self, hz)
 
     @property
     def pulse_width(self):
@@ -344,7 +344,7 @@ class Light(Stimulator):
     def pulse_width(self, width: Quantity):
         self._pulse_width = width
         if self.sim is not None:
-            registry_for_sim(self.sim).set_pulse_width(self, width)
+            self.sim.registry.set_pulse_width(self, width)
 
     @property
     def pulse_stagger(self):
@@ -354,7 +354,7 @@ class Light(Stimulator):
     def pulse_stagger(self, stagger: bool):
         self._pulse_stagger = stagger
         if self.sim is not None:
-            registry_for_sim(self.sim).set_pulse_stagger(self, stagger)
+            self.sim.registry.set_pulse_stagger(self, stagger)
 
     @coords.validator
     def _check_coords(self, attribute, value):
