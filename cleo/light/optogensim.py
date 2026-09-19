@@ -3,6 +3,7 @@ from importlib.resources import files
 
 import numpy as np
 import xarray as xr
+import warnings
 from attrs import define, field
 from brian2.units import Quantity, cm, nmeter, um
 
@@ -57,6 +58,21 @@ class OptogenSIM(LightModel):
         r, z = self._get_rz_for_xyz(source_coords, source_dir_uvec, target_coords)
         r_cm = np.asarray(r / cm)
         z_cm = np.asarray(z / cm)
+
+        # Warn if targets fall outside the simulated data range. Out-of-range r
+        # and z are clipped to the data edges below; z beyond the near edge is
+        # zeroed. Data coverage may be extended in a future re-run.
+        if (
+            np.any(r_cm > self._r_range[1])
+            or np.any(z_cm > self._z_range[1])
+            or np.any(z_cm < self._z_range[0])
+        ):
+            warnings.warn(
+                "Some target coordinates fall outside the OptogenSIM data range "
+                f"(r: {self._r_range} cm, z: {self._z_range} cm). Transmittance "
+                "is clipped to the data edge (z beyond the near edge is zeroed)."
+            )
+
         T = self._rz_slice.interp(
             r=xr.DataArray(np.clip(r_cm, *self._r_range)),
             z=xr.DataArray(np.clip(z_cm, *self._z_range)),

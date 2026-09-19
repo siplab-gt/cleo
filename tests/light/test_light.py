@@ -145,6 +145,22 @@ def test_OptogenSIM():
     expected = np.pi * (100 * um) ** 2
     assert np.isclose(float(model.area0 / mm2), float(expected / mm2))
 
+def test_OptogenSIM_warns_and_clips_outside_range():
+    from brian2 import mm, um, nmeter
+
+    model = OptogenSIM(wavelength=473 * nmeter, beam_radius=100 * um)
+    source = np.array([0, 0, 0]) * mm
+    direction = np.array([0, 0, 1.0])
+    # target far beyond the data range in both r and z
+    far_target = np.array([[50, 0, 50]]) * mm
+
+    with pytest.warns(UserWarning, match="outside the OptogenSIM data range"):
+        T = model.transmittance(source, direction, far_target)
+
+    # out-of-range coords are clipped/zeroed, so T stays finite and in [0, 1]
+    assert np.all(np.isfinite(T))
+    assert np.all((T >= 0) & (T <= 1))
+
 
 @pytest.mark.parametrize(
     "model_fn, target, widths",
