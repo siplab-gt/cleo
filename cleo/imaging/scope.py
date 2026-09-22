@@ -103,30 +103,38 @@ class Scope(Recorder):
     rho_rel_generator : Callable[[int], Float[np.ndarray, "n"], optional
         A function assigning expression levels. Takes n as an arg, outputs float array.
         ``lambda n: np.ones(n)`` by default.
-    focus_depth : Quantity, optional
-        The depth of the focal plane, by default that of the scope.
-    soma_radius : Quantity, optional
-        The radius of the soma of the neuron, by default that of the scope.
-        Used to compute noise focus factor, since smaller ROIs will have
-        a noisier distribution of fluorescence, averaged over fewer pixels.
+            focus_depth : Quantity, optional
+                The depth of the focal plane, by default that of the scope.
+            soma_radius : Quantity, optional
+                The radius of the soma of the neuron, by default that of the scope.
+                Used to compute noise focus factor, since smaller ROIs will have
+                a noisier distribution of fluorescence, averaged over fewer pixels.
     """
 
     sensor: Sensor = field()
     img_width: Quantity = field()
     """The width (diameter) of the (circular) image captured by the microscope.
     Specified in distance units."""
+
     focus_depth: Quantity = None
     """The depth of the focal plane, with distance units"""
+
     location: Quantity = [0, 0, 0] * mm
     """Location of the objective lens."""
+
     direction: Float[np.ndarray, "3"] = field(
         default=(0, 0, 1), converter=normalize_coords
     )
     """Direction in which the microscope is pointing.
     By default straight down (`+z` direction)"""
+
     soma_radius: Quantity = field(default=10 * um)
     """Assumed radius of neurons, used to compute noise focus factor.
     Smaller neurons have noisier signals."""
+
+    t_flyback: Quantity = field(default=0 * ms, kw_only=True)
+    """Dead time per scan cycle for the scanning mirror to reset (flyback)."""
+
     snr_cutoff: float = field(default=1)
     """SNR below which neurons are discarded.
     Applied only when focus_depth is not None"""
@@ -319,7 +327,9 @@ class Scope(Recorder):
         self.focus_coords_per_injct.append(focus_coords)
         self.rho_rel_per_injct.append(rho_rel)
         if self.imaging_light is not None:
-            self.sim.registry.set_img_width(self.imaging_light, self.img_width)
+            self.sim.registry.set_img_width(
+                self.imaging_light, self.img_width, self.soma_radius
+            )
 
     def i_targets_for_neuron_group(self, neuron_group):
         """can handle multiple injections into same ng"""
@@ -462,7 +472,8 @@ class Scope(Recorder):
     def create_imaging_light(self, wavelength=920e-9 * meter, pulse_freq=30):
         spot_area = pi * self.soma_radius**2
         img_width_area = pi * (self.img_width / 2) ** 2
-        pulse_width = spot_area / img_width_area * (1 / pulse_freq) * second
+        effective_scan_time = (1 / pulse_freq) * second - self.t_flyback
+        pulse_width = spot_area / img_width_area * effective_scan_time
         self.imaging_light = Light(
             name=f"{self.name}_imlight",
             light_model=GaussianEllipsoid(),
@@ -471,7 +482,6 @@ class Scope(Recorder):
             pulse_stagger=True,
             is_pulsed=True,
             pulse_width=pulse_width,
-            soma_radius=self.soma_radius,
         )
         return self.imaging_light
 
@@ -480,4 +490,4 @@ class Scope(Recorder):
     def _update_img_width(self, attr, value):
         # Make sure create_imaging_light has been called
         if self.imaging_light is not None:
-            self.sim.registry.set_img_width(self.imaging_light, value)
+            self.sim.registry.set_img_width(self.imaging_light, value, self.soma_radius)

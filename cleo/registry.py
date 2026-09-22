@@ -263,7 +263,7 @@ class DeviceInteractionRegistry:
         i = self.subgroup_idx_for_light[light]
         return self.light_source_ng[i]
 
-    def set_img_width(self, light: "Light", img_width):
+    def set_img_width(self, light: "Light", img_width, soma_radius):
         src = self.source_for_light(light)
         spot_radius = light.soma_radius
         spot_area = pi * spot_radius**2

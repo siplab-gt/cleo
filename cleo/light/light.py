@@ -338,9 +338,6 @@ class Light(Stimulator):
     pulse_stagger: bool = field(default=False, kw_only=True)
     """Whether per-neuron pulses are staggered in time to avoid simultaneous activation."""
 
-    soma_radius: Quantity = field(default=10 * um, kw_only=True)
-    """Assumed neuron radius, used to compute pulse width for raster scanning."""
-
     @coords.validator
     def _check_coords(self, attribute, value):
         if len(value.shape) != 2 or value.shape[1] != 3:
