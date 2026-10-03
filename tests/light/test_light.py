@@ -122,7 +122,7 @@ def test_OptogenSIM():
     assert np.all(np.diff(T_depth.ravel()) < 0)  # strictly decreasing
 
     # behind the source: real (small) backscatter within the data's negative-z
-    # range, but exactly 0 beyond it (the clip must not freeze a nonzero value)
+    # range, but exactly 0 beyond it
     peak = model.transmittance(
         source_coords, source_direction, np.array([[0, 0, 0]]) * mm
     )
@@ -133,7 +133,8 @@ def test_OptogenSIM():
 
     z_back = model._z_range[0]  # cm, most-negative z with data (~ -0.29 cm)
     far_behind = np.array([[0, 0, z_back - 0.05]]) * cm  # beyond the data range
-    T_far = model.transmittance(source_coords, source_direction, far_behind)
+    with pytest.warns(UserWarning, match="outside the OptogenSIM data range"):
+        T_far = model.transmittance(source_coords, source_direction, far_behind)
     assert np.all(T_far == 0)
 
     # transmittance does not increase with radial distance (at fixed depth)
@@ -145,7 +146,8 @@ def test_OptogenSIM():
     expected = np.pi * (100 * um) ** 2
     assert np.isclose(float(model.area0 / mm2), float(expected / mm2))
 
-def test_OptogenSIM_warns_and_clips_outside_range():
+
+def test_OptogenSIM_warns_and_zeros_outside_range():
     from brian2 import mm, um, nmeter
 
     model = OptogenSIM(wavelength=473 * nmeter, beam_radius=100 * um)
@@ -157,9 +159,8 @@ def test_OptogenSIM_warns_and_clips_outside_range():
     with pytest.warns(UserWarning, match="outside the OptogenSIM data range"):
         T = model.transmittance(source, direction, far_target)
 
-    # out-of-range coords are clipped/zeroed, so T stays finite and in [0, 1]
-    assert np.all(np.isfinite(T))
-    assert np.all((T >= 0) & (T <= 1))
+    # out-of-range targets get transmittance 0
+    assert np.all(T == 0)
 
 
 @pytest.mark.parametrize(

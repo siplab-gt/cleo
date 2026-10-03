@@ -59,18 +59,21 @@ class OptogenSIM(LightModel):
         r_cm = np.asarray(r / cm)
         z_cm = np.asarray(z / cm)
 
-        # Warn if targets fall outside the simulated data range. Out-of-range r
-        # and z are clipped to the data edges below; z beyond the near edge is
-        # zeroed. Data coverage may be extended in a future re-run.
-        if (
-            np.any(r_cm > self._r_range[1])
-            or np.any(z_cm > self._z_range[1])
-            or np.any(z_cm < self._z_range[0])
-        ):
+        # Warn if targets fall outside the simulated data range. Targets with
+        # r beyond the far edge or z outside the data range get transmittance
+        # 0. Targets nearer the axis than the first radial bin (r < r_min)
+        # are clipped to the edge, i.e. take the near-axis peak value.
+        # Data coverage may be extended in a future re-run.
+        outside = (
+            (r_cm > self._r_range[1])
+            | (z_cm < self._z_range[0])
+            | (z_cm > self._z_range[1])
+        )
+        if np.any(outside):
             warnings.warn(
                 "Some target coordinates fall outside the OptogenSIM data range "
                 f"(r: {self._r_range} cm, z: {self._z_range} cm). Transmittance "
-                "is clipped to the data edge (z beyond the near edge is zeroed)."
+                "is set to 0 outside the data range."
             )
 
         T = self._rz_slice.interp(
@@ -78,9 +81,7 @@ class OptogenSIM(LightModel):
             z=xr.DataArray(np.clip(z_cm, *self._z_range)),
         ).values
         T = np.nan_to_num(T, nan=0.0)
-        T[z_cm < self._z_range[0]] = (
-            0  # zero only beyond data range; keep real backscatter within it
-        )
+        T[outside] = 0  # zero outside data range; keep real backscatter within it
         return T
 
     @property
