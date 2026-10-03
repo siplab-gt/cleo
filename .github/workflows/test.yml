@@ -28,11 +28,8 @@ jobs:
         python: ["3.10", 3.11, 3.12, 3.13]
 
     env:
-      # use system python for uv
-      UV_SYSTEM_PYTHON: 1
-      # force uv-managed Python: runner system Pythons are PEP 668
-      # externally-managed, so `uv pip install` refuses them
-      UV_PYTHON_PREFERENCE: only-managed
+      # UV_PYTHON is set by setup-uv from the matrix; all uv commands below
+      # use it (e.g. `uv venv` builds the venv from that interpreter)
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
@@ -46,10 +43,12 @@ jobs:
           python-version: ${{ matrix.python }}
 
       - name: Install package
-        run: uv pip install .[dev]
+        run: |
+          uv venv
+          uv pip install .[dev]
 
       - name: Run tests
-        run: uv run pytest -n auto --ignore=docs/tutorials/optimal_ctrl.ipynb
+        run: uv run --no-sync pytest -n auto --ignore=docs/tutorials/optimal_ctrl.ipynb
 
       # - name: Setup tmate session # for optional debugging
       #   uses: mxschmitt/action-tmate@v3
