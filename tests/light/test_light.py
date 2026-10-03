@@ -163,6 +163,16 @@ def test_OptogenSIM_warns_and_zeros_outside_range():
     assert np.all(T == 0)
 
 
+def test_OptogenSIM_data_peak_normalized():
+    # the packaged Monte Carlo dataset is peak-normalized: transmittance
+    # spans [0, 1] with peak exactly 1 (the explorer relies on this)
+    from brian2 import um, nmeter
+
+    model = OptogenSIM(wavelength=473 * nmeter, beam_radius=100 * um)
+    assert np.isclose(float(model.data.max()), 1.0)
+    assert float(model.data.min()) >= 0
+
+
 @pytest.mark.parametrize(
     "model_fn, target, widths",
     [
