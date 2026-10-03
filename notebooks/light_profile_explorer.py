@@ -85,8 +85,8 @@ def _(OptogenSIM, beam, go, mm, nmeter, np, um, wavelength):
 
     T = model.transmittance(source, direction, grid_coords).reshape(R.shape)
 
-    # normalize to peak for display (colorbar is log10 T/peak)
-    
+    # T is already peak-normalized in the data (max 1), so log10 T needs no
+    # further normalization for display
     logT = np.log10(np.clip(T, 1e-4, None))
 
     # mirror across the beam axis for a symmetric view
@@ -99,7 +99,8 @@ def _(OptogenSIM, beam, go, mm, nmeter, np, um, wavelength):
             y=r_full,
             z=logT_full,
             colorscale="Viridis",
-            zmin=-4, zmax=0,
+            zmin=-4,
+            zmax=0,
             colorbar=dict(title="log₁₀ T"),
         )
     )
@@ -107,7 +108,8 @@ def _(OptogenSIM, beam, go, mm, nmeter, np, um, wavelength):
         title=f"{wavelength.value:.0f} nm, {beam.value:.0f} µm beam radius",
         xaxis_title="z, depth from source (mm)",
         yaxis_title="r, radial distance (mm)",
-        width=750, height=450,
+        width=750,
+        height=450,
         yaxis=dict(scaleanchor="x", scaleratio=1),
     )
     fig.update_xaxes(range=[float(z_mm.min()), min(float(z_mm.max()), 3)])
