@@ -30,6 +30,9 @@ jobs:
     env:
       # use system python for uv
       UV_SYSTEM_PYTHON: 1
+      # force uv-managed Python: runner system Pythons are PEP 668
+      # externally-managed, so `uv pip install` refuses them
+      UV_PYTHON_PREFERENCE: only-managed
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
