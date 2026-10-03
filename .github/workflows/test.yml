@@ -39,9 +39,8 @@ jobs:
           python-version: ${{ matrix.python }}
 
       - name: Install package
-        run: |
-          uv venv
-          uv pip install .[dev]
+        # setup-uv already created and activated a .venv above
+        run: uv pip install .[dev]
 
       - name: Run tests
         run: uv run --no-sync pytest -n auto --ignore=docs/tutorials/optimal_ctrl.ipynb
