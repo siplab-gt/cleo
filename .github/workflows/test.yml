@@ -40,7 +40,7 @@ jobs:
       - uses: actions/checkout@v5
 
       - name: Install uv and set up Python
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
           python-version: ${{ matrix.python }}
