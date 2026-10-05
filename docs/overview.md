@@ -133,7 +133,6 @@ This requires injection of both a light source and an opsin---see the {doc}`tuto
 fiber = cleo.light.Light(
     coords=(0, 0, 0.5)*b2.mm,
     light_model=cleo.light.fiber473nm(),
-    wavelength=473*b2.nmeter
 )
 chr2 = cleo.opto.chr2_4s()
 sim.inject(fiber, ng).inject(chr2, ng)

@@ -5,6 +5,7 @@ from cleo.light.light import (
     OpticFiber,
     fiber473nm,
 )
+from cleo.light.optogensim import OptogenSIM, defocused_gaussian_beam
 from cleo.light.light_dependence import (
     LightDependent,
     cubic_interpolator,
