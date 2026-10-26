@@ -145,10 +145,8 @@ class DeviceInteractionRegistry:
         # set scanning parameters from light object
         src.scan_period = (1 / light.pulse_freq) * second
         src.is_pulsed = int(bool(light.is_pulsed))
-        src.scale = 1
 
         # add pulse_width and stagger
-        src.pulse_width = light.pulse_width
         src.pulse_stagger = int(bool(light.pulse_stagger))
 
         # calculate stagger offset per neuron so not all neurons activate simultaneously
@@ -156,7 +154,6 @@ class DeviceInteractionRegistry:
         scan_period_val = src.scan_period[0]
         src.stagger_offset = np.arange(N) / N * scan_period_val
 
-        src.pulse_width = light.pulse_width
         self.connections.add(
             (light, ldd, ng)
         )  # list of what is connected for rebuild later
@@ -204,11 +201,12 @@ class DeviceInteractionRegistry:
             Irr0_prev = self.light_source_ng.Irr0[:]
             n_prev = self.light_source_ng.N
             scan_period_prev = self.light_source_ng.scan_period[:]
-            pulse_width_prev = self.light_source_ng.pulse_width[:]
             is_pulsed_prev = self.light_source_ng.is_pulsed[:]
-            scale_prev = self.light_source_ng.scale[:]
             stagger_offset_prev = self.light_source_ng.stagger_offset[:]
             pulse_stagger_prev = self.light_source_ng.pulse_stagger[:]
+            soma_radius_prev = self.light_source_ng.soma_radius[:]
+            img_width_prev = self.light_source_ng.img_width[:]
+            t_flyback_prev = self.light_source_ng.t_flyback[:]
             # need to remove the old light source from the network
             self._remove_brian_object(self.light_source_ng)
         else:
@@ -220,21 +218,35 @@ class DeviceInteractionRegistry:
             n_prev + light.n,
             """Irr0: watt/meter**2
             scan_period : second
-            pulse_width : second
             is_pulsed : 1
-            scale : 1
             stagger_offset : second
-            pulse_stagger : 1""",
+            pulse_stagger : 1
+            soma_radius : meter
+            img_width : meter
+            t_flyback : second
+            L_fov = (img_width / 2) * sqrt(pi) : meter
+            d_cell = soma_radius * sqrt(pi) : meter
+
+            duty = d_cell / L_fov : 1
+            pulse_width = (scan_period - t_flyback) * duty : second
+            scale = (1 - is_pulsed) + is_pulsed * duty : 1""",
             name="light_source",
         )
         if n_prev > 0:
             self.light_source_ng[:n_prev].Irr0 = Irr0_prev
             self.light_source_ng[:n_prev].scan_period = scan_period_prev
-            self.light_source_ng[:n_prev].pulse_width = pulse_width_prev
             self.light_source_ng[:n_prev].is_pulsed = is_pulsed_prev
-            self.light_source_ng[:n_prev].scale = scale_prev
             self.light_source_ng[:n_prev].stagger_offset = stagger_offset_prev
             self.light_source_ng[:n_prev].pulse_stagger = pulse_stagger_prev
+            self.light_source_ng[:n_prev].soma_radius = soma_radius_prev
+            self.light_source_ng[:n_prev].img_width = img_width_prev
+            self.light_source_ng[:n_prev].t_flyback = t_flyback_prev
+        # Finite defaults for the new light's neurons so duty never divides by 0.
+        # Scope overwrites these for imaging lights.
+        new = self.light_source_ng[n_prev:]
+        new.soma_radius = 10e-6 * meter
+        new.img_width = self.raster_img_width
+        new.t_flyback = 0 * second
         self._add_brian_object(self.light_source_ng)
         self.subgroup_idx_for_light[light] = slice(n_prev, n_prev + light.n)
 
@@ -268,7 +280,6 @@ class DeviceInteractionRegistry:
         spot_radius = light.soma_radius
         spot_area = pi * spot_radius**2
         img_width_area = pi * (img_width / 2) ** 2
-        src.pulse_width = light.pulse_width
         if img_width != self.raster_img_width:
             warnings.warn(
                 "Multiple img_width values detected; CLEO currently assumes a single imaging width. Using latest value.",
