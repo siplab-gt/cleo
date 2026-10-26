@@ -1,4 +1,5 @@
 """Contains basic recorders."""
+
 from attrs import define, field
 from brian2 import (
     NeuronGroup,

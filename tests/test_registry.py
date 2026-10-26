@@ -266,8 +266,8 @@ def test_connections_survive_rebuild():
     sim.inject(opsin, ng)
 
     # inject first imaging light
-    light1 = scope.create_imaging_light(wavelength=473e-9 * meter)
-    sim.inject(light1, ng)
+    scope.inject_imaging_light_for_targets(wavelength=473e-9 * meter)
+    light1 = scope.imaging_light
 
     # verify connection exists
     assert (light1, opsin, ng) in sim.registry.connections
@@ -280,8 +280,8 @@ def test_connections_survive_rebuild():
         sensor=gcamp6f(),
     )
     sim.inject(scope2, ng)
-    light2 = scope2.create_imaging_light(wavelength=473e-9 * meter)
-    sim.inject(light2, ng)
+    scope2.inject_imaging_light_for_targets(wavelength=473e-9 * meter)
+    light2 = scope2.imaging_light
 
     # verify first connection survived the rebuild
     assert (light1, opsin, ng) in sim.registry.connections

@@ -17,7 +17,7 @@ from brian2 import (
 )
 
 
-from brian2.units import Quantity, mm, mm2, mwatt, nmeter, um, second, ms
+from brian2.units import Quantity, mm, mm2, mwatt, nmeter, um, second
 from jaxtyping import Float
 from matplotlib import colors
 from matplotlib.artist import Artist
@@ -277,20 +277,26 @@ def _is_irr(q: Quantity) -> bool:
     return q.has_same_dimensions(mwatt / mm2)
 
 
-def _sync_scan_param_to_registry(instance, attribute, value):
-    """attrs on_setattr hook: pushes scan-related field changes down to the
-    Brian variable on light.source, if this Light is part of a running sim."""
-    if instance.sim is not None:
-        setter_name = f"set_{attribute.name}"
-        if hasattr(instance.sim.registry, setter_name):
-            getattr(instance.sim.registry, setter_name)(instance, value)
+# CLEAN UP: properties/setters on Light, pointing to light.source Brian variables” and “pulse_freq on light
+# which in turn is property/setter to light.source neurons”.
+def _sync_scan_param_to_source(instance, attribute, value):
+    """attrs on_setattr hook: pushes scan-related changes down to the Brian
+    variables on light.source, once this Light has been injected into a sim."""
+    sim = instance.sim
+    if sim is None or instance not in sim.registry.subgroup_idx_for_light:
+        return value  # not injected yet; nothing to sync
+    src = instance.source
+    if attribute.name == "pulse_freq":
+        src.scan_period = (1 / value) * second
+    elif attribute.name in ("is_pulsed", "pulse_stagger"):
+        setattr(src, attribute.name, int(bool(value)))
     return value
 
 
 @define(
     eq=False,
     on_setattr=setters.pipe(
-        setters.convert, setters.validate, _sync_scan_param_to_registry
+        setters.convert, setters.validate, _sync_scan_param_to_source
     ),
 )
 class Light(Stimulator):
@@ -329,15 +335,20 @@ class Light(Stimulator):
     pulse_freq: float = field(default=30, kw_only=True)
     """Rate (Hz) at which the raster scan sweeps over target neurons."""
 
-    pulse_width: Quantity = field(default=0 * ms, kw_only=True)
-    """Duration of each per-neuron light pulse during raster scanning."""
-
     is_pulsed: bool = field(default=False, kw_only=True)
     """Whether this light delivers discrete pulses (raster scanning) vs. constant illumination."""
 
     pulse_stagger: bool = field(default=False, kw_only=True)
     """Whether per-neuron pulses are staggered in time to avoid simultaneous activation."""
 
+    @property
+    def pulse_width(self) -> Quantity:
+        """Duration of each per-neuron light pulse during raster scanning.
+
+        Read-only: computed in the light source's Brian equations from the
+        scan period, flyback time, and soma/image geometry."""
+        return self.source.pulse_width[0]
+    
     @coords.validator
     def _check_coords(self, attribute, value):
         if len(value.shape) != 2 or value.shape[1] != 3:

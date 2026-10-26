@@ -1,12 +1,23 @@
 import pytest
 import quantities as pq
-from brian2 import Network, NeuronGroup, meter, ms, np, um, second
+from brian2 import (
+    Network,
+    NeuronGroup,
+    StateMonitor,
+    defaultclock,
+    meter,
+    mm2,
+    mwatt,
+    ms,
+    np,
+    um,
+    second,
+)
 
 import cleo
 from cleo.coords import assign_coords_rand_rect_prism, assign_xyz
 from cleo.imaging import (
     Scope,
-    Sensor,
     # UniformGaussianNoise,
     gcamp6f,
     target_neurons_in_plane,
@@ -164,49 +175,53 @@ def test_scope_to_neo(regular):
     assert np.all(sig.array_annotations["i_roi"] == np.arange(scope.n))
 
 
-def test_no_simultaneous_neuron():
-    scope = Scope(
-        focus_depth=200 * um,
-        img_width=500 * um,
-        sensor=gcamp6f(),
-    )
+def test_imaging_light_pulse_width_and_power_scale():
+    """Raster scanning is modeled as one wider, dimmer pulse per frame instead of
+    simulating each scan line. Run one scan period and check that:
 
+    1. the light is on for ``scope.dwell_time``
+    2. while on, irradiance is scaled by duty = d_cell / L_fov, so the average
+       light delivered per frame matches a laser that only crosses the soma
+       part of the time.
+    """
+    scope = Scope(focus_depth=200 * um, img_width=500 * um, sensor=gcamp6f())
     ng = NeuronGroup(
         100,
-        """dv/dt = (Iopto - v) / (10*ms) : volt
+        """dv/dt = (Iopto * ohm - v) / (10*ms) : volt
     Iopto : amp""",
         threshold="v > 1*volt",
         method="euler",
     )
     assign_xyz(ng, 0, 0, 0)
     ng.z[0:40] = 200 * um
-    ng.z[40:75] = 300 * um
-    ng.z[75:] = 400 * um
 
     sim = cleo.CLSimulator(Network(ng))
     opsin = chr2_4s()
-
     sim.inject(scope, ng)
     sim.inject(opsin, ng)
-    light = scope.create_imaging_light()
-    sim.inject(light, ng)
+    scope.inject_imaging_light_for_targets(wavelength=473e-9 * meter)
+    light = scope.imaging_light
+    light.update(1 * mwatt / mm2)
+
+    mon = StateMonitor(opsin.light_agg_ngs[ng.name], "Irr", record=[0])
+    sim.network.add(mon)
+    sim.run((1 / scope.scan_freq) * second)
+
+    irr = mon.Irr[0] / (mwatt / mm2)
+    dt = defaultclock.dt
+    on = irr > 0
+    assert on.any()
+
+    # pulse lasts as long as the dwell time (within one timestep)
+    assert np.isclose(
+        on.sum() * dt / second, scope.dwell_time / second, atol=dt / second
+    )
+
+    # irradiance while on is the unscaled value times duty = d_cell / L_fov
     syn = list(sim.registry.light_prop_syns.values())[0]
-    print(list(syn.variables.keys()))
-    src = sim.registry.source_for_light(light)
-    print(list(src.variables.keys()))
-
-    N = src.N
-    scan_period = src.scan_period[0] / second
-    pulse_width = src.pulse_width[0] / second
-
-    # check at multiple timepoints across one scan period
-    for t in np.linspace(0, scan_period, 100):
-        # light prop model formula
-        active = sum(
-            int(((t + scan_period * (i / N)) % scan_period) < pulse_width)
-            for i in range(N)
-        )
-        assert active <= 1
+    unscaled = light.source.Irr0[0] * syn.T[0, 0] * syn.epsilon[0, 0] / (mwatt / mm2)
+    duty = 2 * scope.soma_radius / scope.img_width
+    assert np.isclose(irr.max(), duty * unscaled, rtol=1e-6)
 
 
 def test_rate_scale():
@@ -233,16 +248,16 @@ def test_rate_scale():
 
     sim.inject(scope, ng)
     sim.inject(opsin, ng)
-    light = scope.create_imaging_light()
-    sim.inject(light, ng)
+    scope.inject_imaging_light_for_targets()
+    light = scope.imaging_light
 
     src = sim.registry.source_for_light(light)
     print(list(src.variables.keys()))
 
-    light.pulse_freq = 50
+    scope.scan_freq = 50
     assert np.isclose(src.scan_period[0] / second, 1 / 50, atol=1e-6)
 
-    light.pulse_freq = 60
+    scope.scan_freq = 60
     assert np.isclose(src.scan_period[0] / second, 1 / 60, atol=1e-6)
 
 
@@ -270,16 +285,16 @@ def test_irradiance_scale():
 
     sim.inject(scope, ng)
     sim.inject(opsin, ng)
-    light = scope.create_imaging_light()
-    sim.inject(light, ng)
+    scope.inject_imaging_light_for_targets()
+    light = scope.imaging_light
 
     src = sim.registry.source_for_light(light)
     print(list(src.variables.keys()))
 
     # doubling light.pulse_freq halves scan_period, so pulse_width should also half
-    light.pulse_freq = 30
+    scope.scan_freq = 30
     pulse_width_30 = src.pulse_width[0] / second
-    light.pulse_freq = 60
+    scope.scan_freq = 60
     pulse_width_60 = src.pulse_width[0] / second
     assert np.isclose(pulse_width_60, 0.5 * pulse_width_30, atol=1e-10)
 

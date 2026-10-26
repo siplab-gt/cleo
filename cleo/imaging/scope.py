@@ -6,12 +6,11 @@ from datetime import datetime
 import matplotlib as mpl
 import neo
 import quantities as pq
-from attrs import define, field, fields
-from brian2 import NeuronGroup, Quantity, Unit, meter, mm, ms, np, um, second
+from attrs import define, field, fields, setters
+from brian2 import NeuronGroup, Quantity, Unit, meter, mm, ms, np, um
 from jaxtyping import Float, UInt
 from matplotlib.artist import Artist
 from mpl_toolkits.mplot3d import Axes3D
-from numpy import pi
 
 from cleo.base import Recorder
 from cleo.coords import coords_from_ng
@@ -94,7 +93,26 @@ def target_neurons_in_plane(
     return i_targets, noise_focus_factor[i_targets], coords_on_plane[i_targets]
 
 
-@define(eq=False)
+def _sync_scan_geometry_to_light(instance, attribute, value):
+    """attrs on_setattr hook: when scan geometry changes on the Scope, push it
+    to the imaging light's source neurons to compute dwell time from it."""
+    light = getattr(instance, "imaging_light", None)
+    # only syncs once the imaging light is injected and stored on the scope
+    if light is not None and attribute.name in (
+        "img_width",
+        "soma_radius",
+        "t_flyback",
+    ):
+        setattr(light.source, attribute.name, value)
+    return value
+
+
+@define(
+    eq=False,
+    on_setattr=setters.pipe(
+        setters.convert, setters.validate, _sync_scan_geometry_to_light
+    ),
+)
 class Scope(Recorder):
     """Two-photon microscope.
 
@@ -326,10 +344,6 @@ class Scope(Recorder):
         self.sigma_per_injct.append(sigma_noise)
         self.focus_coords_per_injct.append(focus_coords)
         self.rho_rel_per_injct.append(rho_rel)
-        if self.imaging_light is not None:
-            self.sim.registry.set_img_width(
-                self.imaging_light, self.img_width, self.soma_radius
-            )
 
     def i_targets_for_neuron_group(self, neuron_group):
         """can handle multiple injections into same ng"""
@@ -469,25 +483,54 @@ class Scope(Recorder):
         # want ROI coordinates and size in image
 
     # Method for optional raster scanning
-    def create_imaging_light(self, wavelength=920e-9 * meter, pulse_freq=30):
-        spot_area = pi * self.soma_radius**2
-        img_width_area = pi * (self.img_width / 2) ** 2
-        effective_scan_time = (1 / pulse_freq) * second - self.t_flyback
-        pulse_width = spot_area / img_width_area * effective_scan_time
-        self.imaging_light = Light(
+    def inject_imaging_light_for_targets(
+        self,
+        scan_freq: float = 30,
+        t_flyback: Quantity = None,
+        wavelength: Quantity = 920e-9 * meter,
+    ) -> None:
+        """Injects a raster-scanning 2P imaging light into the neuron groups
+        this scope targets. Call after injecting the scope into neurons."""
+
+        # CLEANUP LATER: using this a local variable so that injection does not get interrupted
+        if t_flyback is not None:
+            self.t_flyback = t_flyback
+        light = Light(
             name=f"{self.name}_imlight",
             light_model=GaussianEllipsoid(),
-            wavelength=wavelength,  # user can pass in wavelength values
-            pulse_freq=pulse_freq,  # user sets pulse freq when creating imaging light
+            wavelength=wavelength,
+            pulse_freq=scan_freq,
             pulse_stagger=True,
             is_pulsed=True,
-            pulse_width=pulse_width,
         )
-        return self.imaging_light
+        for ng in dict.fromkeys(self.neuron_groups):
+            self.sim.inject(light, ng)
+        self.imaging_light = light
+        # build as a local and only assign self.imaging_light after injection,
+        # since the geometry-sync hook needs light.source to exist
+        src = light.source
+        src.img_width = self.img_width
+        src.soma_radius = self.soma_radius
+        src.t_flyback = self.t_flyback
 
-    # keep img_width validator and update imaging width
-    @img_width.validator
-    def _update_img_width(self, attr, value):
-        # Make sure create_imaging_light has been called
-        if self.imaging_light is not None:
-            self.sim.registry.set_img_width(self.imaging_light, value, self.soma_radius)
+    @property
+    def scan_freq(self) -> float:
+        """Frame rate (Hz) of the raster scan; stored on the imaging light."""
+        return self._imaging_light_or_raise().pulse_freq
+
+    @scan_freq.setter
+    def scan_freq(self, value: float) -> None:
+        self._imaging_light_or_raise().pulse_freq = value
+
+    @property
+    def dwell_time(self) -> Quantity:
+        """Read-only duration of each light pulse per neuron, computed from scan
+        frequency, flyback time, and soma/image size."""
+        return self._imaging_light_or_raise().pulse_width
+
+    def _imaging_light_or_raise(self) -> Light:
+        if self.imaging_light is None:
+            raise RuntimeError(
+                "Call inject_imaging_light_for_targets() before using scan settings."
+            )
+        return self.imaging_light

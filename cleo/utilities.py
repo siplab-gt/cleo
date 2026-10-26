@@ -1,4 +1,5 @@
 """Assorted utilities for developers."""
+
 import warnings
 from collections.abc import MutableMapping
 
@@ -177,7 +178,7 @@ def modify_model_with_eqs(neuron_group, eqs_to_add):
                 # 'linked' cannot be combined with other flags
                 if not len(eq.flags) == 1:
                     raise SyntaxError(
-                        ('The "linked" flag cannot be ' "combined with other flags")
+                        ('The "linked" flag cannot be combined with other flags')
                     )
                 neuron_group._linked_variables.add(eq.varname)
             else:

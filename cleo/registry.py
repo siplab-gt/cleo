@@ -8,16 +8,13 @@ from __future__ import annotations
 from typing import Tuple
 
 from attrs import define, field
-from brian2 import NeuronGroup, Subgroup, Synapses, defaultclock, ms
+from brian2 import NeuronGroup, Subgroup, Synapses
 from brian2.units.allunits import joule, kgram, meter, meter2, second
-from brian2 import Quantity
-from numpy import pi
 import numpy as np
 
 from cleo.coords import coords_from_ng
 from cleo.utilities import brian_safe_name
 
-import warnings
 
 
 @define(repr=False)
@@ -85,24 +82,6 @@ class DeviceInteractionRegistry:
         elif "LightDependent" in ancestor_classes:
             self.register_ldd(device, ng)
 
-    # Translate user-set variables to Brian2 simulation variables
-    def _apply_to_img_light(self, light: "Light", **values):
-        src = self.source_for_light(light)
-        for k, v in values.items():
-            setattr(src, k, v)
-
-    # Make it easier to set light to scan
-    def set_is_pulsed(self, light: "Light", enable: bool = True):
-        self._apply_to_img_light(light, is_pulsed=int(bool(enable)))
-
-    # Change pulse frequency after initial setup
-    def set_pulse_freq(self, light: "Light", hz: float):
-        self._apply_to_img_light(light, scan_period=(1 / hz) * second)
-
-    # Change pulse width after initial setup
-    def set_pulse_width(self, light: "Light", width: Quantity):
-        self._apply_to_img_light(light, pulse_width=width)
-
     def connect_light_to_ldd_for_ng(
         self, light: "Light", ldd: "LightDependent", ng: NeuronGroup
     ) -> None:
@@ -140,20 +119,6 @@ class DeviceInteractionRegistry:
             / light.wavelength
         )
         # fmt: on
-        src = self.source_for_light(light)
-
-        # set scanning parameters from light object
-        src.scan_period = (1 / light.pulse_freq) * second
-        src.is_pulsed = int(bool(light.is_pulsed))
-
-        # add pulse_width and stagger
-        src.pulse_stagger = int(bool(light.pulse_stagger))
-
-        # calculate stagger offset per neuron so not all neurons activate simultaneously
-        N = src.N
-        scan_period_val = src.scan_period[0]
-        src.stagger_offset = np.arange(N) / N * scan_period_val
-
         self.connections.add(
             (light, ldd, ng)
         )  # list of what is connected for rebuild later
@@ -247,6 +212,14 @@ class DeviceInteractionRegistry:
         new.soma_radius = 10e-6 * meter
         new.img_width = self.raster_img_width
         new.t_flyback = 0 * second
+
+        # Scan settings for the new light, taken from the Light object
+        new.scan_period = (1 / light.pulse_freq) * second
+        new.is_pulsed = int(bool(light.is_pulsed))
+        new.pulse_stagger = int(bool(light.pulse_stagger))
+
+        # offset each neuron within the scan period so they don't all fire at once
+        new.stagger_offset = np.arange(light.n) / light.n * new.scan_period[0]
         self._add_brian_object(self.light_source_ng)
         self.subgroup_idx_for_light[light] = slice(n_prev, n_prev + light.n)
 
@@ -274,21 +247,6 @@ class DeviceInteractionRegistry:
         """Returns the subgroup representing the given light source"""
         i = self.subgroup_idx_for_light[light]
         return self.light_source_ng[i]
-
-    def set_img_width(self, light: "Light", img_width, soma_radius):
-        src = self.source_for_light(light)
-        spot_radius = light.soma_radius
-        spot_area = pi * spot_radius**2
-        img_width_area = pi * (img_width / 2) ** 2
-        if img_width != self.raster_img_width:
-            warnings.warn(
-                "Multiple img_width values detected; CLEO currently assumes a single imaging width. Using latest value.",
-                UserWarning,
-            )
-            self.raster_img_width = img_width
-
-    def set_pulse_stagger(self, light: "Light", stagger: bool):
-        self._apply_to_img_light(light, pulse_stagger=int(bool(stagger)))
 
 
 registries: dict["CLSimulator", DeviceInteractionRegistry] = {}

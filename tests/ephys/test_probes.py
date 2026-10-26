@@ -1,4 +1,5 @@
 """Tests for electrodes module"""
+
 from typing import Any, Tuple
 
 import neo
