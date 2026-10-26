@@ -348,7 +348,7 @@ class Light(Stimulator):
         Read-only: computed in the light source's Brian equations from the
         scan period, flyback time, and soma/image geometry."""
         return self.source.pulse_width[0]
-    
+
     @coords.validator
     def _check_coords(self, attribute, value):
         if len(value.shape) != 2 or value.shape[1] != 3:

@@ -16,7 +16,6 @@ from cleo.coords import coords_from_ng
 from cleo.utilities import brian_safe_name
 
 
-
 @define(repr=False)
 class DeviceInteractionRegistry:
     """Facilitates the creation and maintenance of 'neurons' and 'synapses'
