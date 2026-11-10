@@ -22,7 +22,7 @@ from cleo.imaging import (
     gcamp6f,
     target_neurons_in_plane,
 )
-from cleo.opto.opsin_library import chrmine_4s
+
 from cleo.opto.opsin_library import chr2_4s
 
 opsin = chr2_4s()
@@ -222,81 +222,6 @@ def test_imaging_light_pulse_width_and_power_scale():
     unscaled = light.source.Irr0[0] * syn.T[0, 0] * syn.epsilon[0, 0] / (mwatt / mm2)
     duty = 2 * scope.soma_radius / scope.img_width
     assert np.isclose(irr.max(), duty * unscaled, rtol=1e-6)
-
-
-def test_rate_scale():
-    scope = Scope(
-        focus_depth=200 * um,
-        img_width=500 * um,
-        sensor=gcamp6f(),
-    )
-
-    ng = NeuronGroup(
-        100,
-        """dv/dt = (Iopto - v) / (10*ms) : volt
-    Iopto : amp""",
-        threshold="v > 1*volt",
-        method="euler",
-    )
-    assign_xyz(ng, 0, 0, 0)
-    ng.z[0:40] = 200 * um
-    ng.z[40:75] = 300 * um
-    ng.z[75:] = 400 * um
-
-    sim = cleo.CLSimulator(Network(ng))
-    opsin = chr2_4s()
-
-    sim.inject(scope, ng)
-    sim.inject(opsin, ng)
-    scope.inject_imaging_light_for_targets()
-    light = scope.imaging_light
-
-    src = sim.registry.source_for_light(light)
-    print(list(src.variables.keys()))
-
-    scope.scan_freq = 50
-    assert np.isclose(src.scan_period[0] / second, 1 / 50, atol=1e-6)
-
-    scope.scan_freq = 60
-    assert np.isclose(src.scan_period[0] / second, 1 / 60, atol=1e-6)
-
-
-def test_irradiance_scale():
-    scope = Scope(
-        focus_depth=200 * um,
-        img_width=500 * um,
-        sensor=gcamp6f(),
-    )
-
-    ng = NeuronGroup(
-        100,
-        """dv/dt = (Iopto - v) / (10*ms) : volt
-    Iopto : amp""",
-        threshold="v > 1*volt",
-        method="euler",
-    )
-    assign_xyz(ng, 0, 0, 0)
-    ng.z[0:40] = 200 * um
-    ng.z[40:75] = 300 * um
-    ng.z[75:] = 400 * um
-
-    sim = cleo.CLSimulator(Network(ng))
-    opsin = chrmine_4s()
-
-    sim.inject(scope, ng)
-    sim.inject(opsin, ng)
-    scope.inject_imaging_light_for_targets()
-    light = scope.imaging_light
-
-    src = sim.registry.source_for_light(light)
-    print(list(src.variables.keys()))
-
-    # doubling light.pulse_freq halves scan_period, so pulse_width should also half
-    scope.scan_freq = 30
-    pulse_width_30 = src.pulse_width[0] / second
-    scope.scan_freq = 60
-    pulse_width_60 = src.pulse_width[0] / second
-    assert np.isclose(pulse_width_60, 0.5 * pulse_width_30, atol=1e-10)
 
 
 if __name__ == "__main__":

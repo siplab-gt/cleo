@@ -288,5 +288,39 @@ def test_connections_survive_rebuild():
     assert (light2, opsin, ng) in sim.registry.connections
 
 
+@pytest.mark.parametrize("opto_crosstalk", [True, False])
+@pytest.mark.parametrize("light_first", [True, False])
+def test_imaging_light_opto_crosstalk(opto_crosstalk, light_first):
+    """The imaging light drives opsins only if opto_crosstalk is True,
+    regardless of whether the light or the opsin is injected first."""
+    scope = Scope(focus_depth=200 * um, img_width=500 * um, sensor=gcamp6f())
+    ng = NeuronGroup(
+        10,
+        """v : volt
+        Iopto : amp""",
+    )
+    assign_xyz(ng, 0, 0, 0)
+    ng.z = 200 * um
+
+    sim = cleo.CLSimulator(Network(ng))
+    opsin = chr2_4s()
+    sim.inject(scope, ng)
+
+    def inject_light():
+        scope.inject_imaging_light_for_targets(
+            wavelength=473e-9 * meter, opto_crosstalk=opto_crosstalk
+        )
+
+    if light_first:
+        inject_light()
+        sim.inject(opsin, ng)
+    else:
+        sim.inject(opsin, ng)
+        inject_light()
+
+    connected = (scope.imaging_light, opsin, ng) in sim.registry.connections
+    assert connected == opto_crosstalk
+
+
 if __name__ == "__main__":
     pytest.main(["-s", __file__])

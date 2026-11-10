@@ -93,8 +93,8 @@ def target_neurons_in_plane(
     return i_targets, noise_focus_factor[i_targets], coords_on_plane[i_targets]
 
 
-def _sync_scan_geometry_to_light(instance, attribute, value):
-    """attrs on_setattr hook: when scan geometry changes on the Scope, push it
+def _sync_scan_parameters_to_light(instance, attribute, value):
+    """attrs on_setattr hook: when scan parameters changes on the Scope, push it
     to the imaging light's source neurons to compute dwell time from it."""
     light = getattr(instance, "imaging_light", None)
     # only syncs once the imaging light is injected and stored on the scope
@@ -110,7 +110,7 @@ def _sync_scan_geometry_to_light(instance, attribute, value):
 @define(
     eq=False,
     on_setattr=setters.pipe(
-        setters.convert, setters.validate, _sync_scan_geometry_to_light
+        setters.convert, setters.validate, _sync_scan_parameters_to_light
     ),
 )
 class Scope(Recorder):
@@ -151,7 +151,9 @@ class Scope(Recorder):
     Smaller neurons have noisier signals."""
 
     t_flyback: Quantity = field(default=0 * ms, kw_only=True)
-    """Dead time per scan cycle for the scanning mirror to reset (flyback)."""
+    """Total dead time per frame while the scanning mirror resets (flyback),
+    summed over all lines. Subtracted once from the frame period when computing
+    dwell time."""
 
     snr_cutoff: float = field(default=1)
     """SNR below which neurons are discarded.
@@ -488,13 +490,31 @@ class Scope(Recorder):
         scan_freq: float = 30,
         t_flyback: Quantity = None,
         wavelength: Quantity = 920e-9 * meter,
+        opto_crosstalk: bool = True,
     ) -> None:
         """Injects a raster-scanning 2P imaging light into the neuron groups
-        this scope targets. Call after injecting the scope into neurons."""
+        this scope targets. Call after injecting the scope into neurons.
 
-        # CLEANUP LATER: using this a local variable so that injection does not get interrupted
+        Parameters
+        ----------
+        scan_freq : float
+            Frame rate (Hz) of the raster scan.
+        t_flyback : Quantity, optional
+            Total dead time per frame while the mirror resets (summed over all
+            lines). Overrides the scope's :attr:`t_flyback` if given.
+        wavelength : Quantity, optional
+            Wavelength of the imaging light, 920 nm by default.
+        opto_crosstalk : bool, optional
+            Whether the imaging light also activates opsins in the targeted
+            neurons, True by default. Set False to test imaging in isolation
+            from stimulation.
+        """
+
         if t_flyback is not None:
             self.t_flyback = t_flyback
+
+        # build as a local and only assign self.imaging_light after injection,
+        # since the parameter syncing needs light.source to exist
         light = Light(
             name=f"{self.name}_imlight",
             light_model=GaussianEllipsoid(),
@@ -502,12 +522,12 @@ class Scope(Recorder):
             pulse_freq=scan_freq,
             pulse_stagger=True,
             is_pulsed=True,
+            opto_crosstalk=opto_crosstalk,
         )
         for ng in dict.fromkeys(self.neuron_groups):
             self.sim.inject(light, ng)
         self.imaging_light = light
-        # build as a local and only assign self.imaging_light after injection,
-        # since the geometry-sync hook needs light.source to exist
+
         src = light.source
         src.img_width = self.img_width
         src.soma_radius = self.soma_radius
