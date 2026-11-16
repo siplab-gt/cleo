@@ -1,5 +1,4 @@
 """Contains opsin models and default parameters"""
-
 from __future__ import annotations
 
 from typing import Any, Tuple

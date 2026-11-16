@@ -1,5 +1,4 @@
 """Basic processor definitions and control/estimation functions"""
-
 from __future__ import annotations
 
 from abc import abstractmethod

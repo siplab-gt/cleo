@@ -153,8 +153,6 @@ dmypy.json
 .pytype/
 
 # Cython debug symbols
-cython_debug/**/.DS_Store
-
+cython_debug/
+.DS_Store
 **/.DS_Store
-*.pkl
-cleo/test_store.py
