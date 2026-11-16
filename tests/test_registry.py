@@ -1,8 +1,6 @@
-import warnings
 
 import pytest
 import cleo
-import brian2
 from brian2 import (
     Network,
     NeuronGroup,
