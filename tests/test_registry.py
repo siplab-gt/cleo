@@ -6,6 +6,7 @@ import brian2
 from brian2 import (
     Network,
     NeuronGroup,
+    StateMonitor,
     mm,
     mm2,
     ms,
@@ -383,6 +384,39 @@ def test_light_into_two_neuron_groups_has_one_source():
 
     assert sim.registry.light_source_ng.N == light.n
     assert sim.registry.subgroup_idx_for_light[light] == slice(0, light.n)
+
+
+def test_imaging_light_staggers_targets_by_y():
+    """Verify that neurons are pulsed one at a time, in order of increasing y."""
+    scope = Scope(focus_depth=200 * um, img_width=500 * um, sensor=gcamp6f())
+    ng = NeuronGroup(
+        10,
+        """dv/dt = (Iopto * ohm - v) / (10*ms) : volt
+        Iopto : amp""",
+    )
+    assign_xyz(ng, 0, 0, 0)
+    ng.z = 200 * um
+    ng.y = (9 - np.arange(10)) * 5 * um  # y decreases with neuron index
+
+    sim = cleo.CLSimulator(Network(ng))
+    opsin = chr2_4s()
+    sim.inject(scope, ng)
+    sim.inject(opsin, ng)
+    scope.inject_imaging_light_for_targets(wavelength=473e-9 * meter)
+    scope.imaging_light.update(1 * mwatt / mm2)
+
+    mon = StateMonitor(opsin.light_agg_ngs[ng.name], "Irr", record=True)
+    sim.network.add(mon)
+    sim.run((1 / scope.scan_freq) * second)
+
+    on = np.array(mon.Irr / (mwatt / mm2)) > 0  # neurons x timesteps
+    assert on.any(axis=1).all()  # every neuron gets pulsed
+    assert on.sum(axis=0).max() == 1  # never two neurons at once
+
+    # lowest y is scanned first: pulse start times increase with y
+    first_on = on.argmax(axis=1)
+    order_by_y = np.argsort(np.array(ng.y / um))
+    assert np.all(np.diff(first_on[order_by_y]) > 0)
 
 
 if __name__ == "__main__":

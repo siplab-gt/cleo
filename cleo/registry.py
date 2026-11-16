@@ -56,7 +56,8 @@ class DeviceInteractionRegistry:
         T : 1
         epsilon : 1
         Ephoton : joule
-        scan_factor = (1 - is_pulsed_pre) + is_pulsed_pre * int(((t + pulse_stagger_pre * stagger_offset_pre) % scan_period_pre) < pulse_width_pre) : 1
+        stagger_frac : 1
+        scan_factor = (1 - is_pulsed_pre) + is_pulsed_pre * int(((t + (1 - pulse_stagger_pre * stagger_frac) * scan_period_pre) % scan_period_pre) < pulse_width_pre) : 1
         Irr_post = epsilon * T * Irr0_pre * scan_factor * scale_pre : watt/meter**2 (summed)
         phi_post = epsilon * T * Irr0_pre * scan_factor * scale_pre / Ephoton : 1/second/meter**2 (summed)
     """
@@ -100,6 +101,13 @@ class DeviceInteractionRegistry:
         ValueError
             if the connection has already been made
         """
+
+        # imaging lights can opt out of driving opsins (opto_crosstalk=False)
+        if not light.opto_crosstalk and "Opsin" in [
+            t.__name__ for t in type(ldd).__mro__
+        ]:
+            return
+
         epsilon = ldd.epsilon(light.wavelength)
         if epsilon == 0:
             return
@@ -118,6 +126,13 @@ class DeviceInteractionRegistry:
             / light.wavelength
         )
         # fmt: on
+
+        # stagger targets by y coordinate: lowest y is scanned first, the rest
+        # evenly spaced through the scan period (as a fraction of the period)
+        y = coords_from_ng(ng)[:, 1]
+        stagger_frac = np.argsort(np.argsort(y)) / len(y)
+        light_prop_syn.stagger_frac[i_source, :] = np.tile(stagger_frac, light.n)
+
         self.connections.add(
             (light, ldd, ng)
         )  # list of what is connected for rebuild later
@@ -166,7 +181,6 @@ class DeviceInteractionRegistry:
             n_prev = self.light_source_ng.N
             scan_period_prev = self.light_source_ng.scan_period[:]
             is_pulsed_prev = self.light_source_ng.is_pulsed[:]
-            stagger_offset_prev = self.light_source_ng.stagger_offset[:]
             pulse_stagger_prev = self.light_source_ng.pulse_stagger[:]
             soma_radius_prev = self.light_source_ng.soma_radius[:]
             img_width_prev = self.light_source_ng.img_width[:]
@@ -183,7 +197,6 @@ class DeviceInteractionRegistry:
             """Irr0: watt/meter**2
             scan_period : second
             is_pulsed : 1
-            stagger_offset : second
             pulse_stagger : 1
             soma_radius : meter
             img_width : meter
@@ -200,7 +213,6 @@ class DeviceInteractionRegistry:
             self.light_source_ng[:n_prev].Irr0 = Irr0_prev
             self.light_source_ng[:n_prev].scan_period = scan_period_prev
             self.light_source_ng[:n_prev].is_pulsed = is_pulsed_prev
-            self.light_source_ng[:n_prev].stagger_offset = stagger_offset_prev
             self.light_source_ng[:n_prev].pulse_stagger = pulse_stagger_prev
             self.light_source_ng[:n_prev].soma_radius = soma_radius_prev
             self.light_source_ng[:n_prev].img_width = img_width_prev
@@ -217,8 +229,6 @@ class DeviceInteractionRegistry:
         new.is_pulsed = int(bool(light.is_pulsed))
         new.pulse_stagger = int(bool(light.pulse_stagger))
 
-        # offset each neuron within the scan period so they don't all fire at once
-        new.stagger_offset = np.arange(light.n) / light.n * new.scan_period[0]
         self._add_brian_object(self.light_source_ng)
         self.subgroup_idx_for_light[light] = slice(n_prev, n_prev + light.n)
 

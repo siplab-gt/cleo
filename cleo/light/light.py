@@ -341,6 +341,10 @@ class Light(Stimulator):
     pulse_stagger: bool = field(default=False, kw_only=True)
     """Whether per-neuron pulses are staggered in time to avoid simultaneous activation."""
 
+    opto_crosstalk: bool = field(default=True, kw_only=True)
+    """Whether this light also drives opsins in the neurons it reaches.
+    Set at construction, and changing it after injection does not reconnect devices."""
+
     @property
     def pulse_width(self) -> Quantity:
         """Duration of each per-neuron light pulse during raster scanning.
