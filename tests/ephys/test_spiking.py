@@ -530,6 +530,26 @@ def test_cutoff(rand_seed):
     )
 
 
+def test_no_neurons():
+    """When neurons are too far away to be picked up at all."""
+    sgg = spike_generator_group([9000, 9001, 9002] * mm, period=1 * ms)
+    sim = CLSimulator(Network(sgg))
+    assert hasattr(sim, "network")
+    ss = SortedSpiking()
+    mua = MultiUnitActivity()
+    probe = Probe([0, 0, 0] * um, [ss, mua])
+    sim.inject(probe, sgg)
+    sim.run(10 * ms)
+    probe.get_state()
+    sim.run(10 * ms)
+    probe.get_state()
+    for sig in [ss, mua]:
+        assert len(sig.i) == 0
+        assert len(sig.t) == 0
+        assert len(sig.t_samp) == 0
+        assert sig.n_neurons == 0
+
+
 def _test_spiking_to_neo(spike_signal_class):
     spike_sig = spike_signal_class()
     n_channels = 50

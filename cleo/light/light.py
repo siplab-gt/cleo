@@ -39,6 +39,9 @@ from cleo.utilities import (
 class LightModel(ABC):
     """Defines how light propagates given a source location and direction."""
 
+    wavelength: Quantity = field(default=473 * nmeter, kw_only=True)
+    """Light wavelength with unit (usually nmeter)."""
+
     @abstractmethod
     def transmittance(
         self,
@@ -220,6 +223,7 @@ def fiber473nm(
     K=0.125 / mm,  # absorbance coefficient
     S=7.37 / mm,  # scattering coefficient
     ntis=1.36,  # tissue index of refraction
+    wavelength=473 * nmeter, 
 ) -> OpticFiber:
     """Returns an :class:`OpticFiber` model with parameters for 473 nm light.
 
@@ -230,6 +234,7 @@ def fiber473nm(
         K=K,
         S=S,
         ntis=ntis,
+        wavelength=wavelength,
     )
 
 
@@ -329,8 +334,6 @@ class Light(Stimulator):
     Can also be an nx3 array for multiple sources.
     """
 
-    wavelength: Quantity = field(default=473 * nmeter, kw_only=True)
-    """light wavelength with unit (usually nmeter)"""
 
     pulse_freq: float = field(default=30, kw_only=True)
     """Rate (Hz) at which the raster scan sweeps over target neurons."""
@@ -407,6 +410,15 @@ class Light(Stimulator):
         registry.register_light(self, neuron_group)
 
     @property
+    def wavelength(self) -> Quantity:
+        """Light wavelength, delegated to the LightModel"""
+        return self.light_model.wavelength
+
+    @wavelength.setter
+    def wavelength(self, value: Quantity):
+        self.light_model.wavelength = value
+
+    @property
     def n(self):
         """Number of light sources"""
         assert len(self.coords.shape) == 2 or len(self.coords.shape) == 1
@@ -438,6 +450,9 @@ class Light(Stimulator):
     def power_(self) -> Quantity:
         """Returns history of light power without units (/mwatt)."""
         return self.power / mwatt
+
+
+
 
     def add_self_to_plot(self, ax, axis_scale_unit, **kwargs) -> list[PathCollection]:
         # show light with point field, assigning r and z coordinates

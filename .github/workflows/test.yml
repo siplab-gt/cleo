@@ -27,31 +27,23 @@ jobs:
         os: [macos-latest, windows-latest, ubuntu-latest]
         python: ["3.10", 3.11, 3.12, 3.13]
 
-    env:
-      # use system python for uv
-      UV_SYSTEM_PYTHON: 1
-
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v5
 
-      - name: Install uv
+      - name: Install uv and set up Python
         uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
           python-version: ${{ matrix.python }}
-          cache: 'pip'
 
       - name: Install package
+        # setup-uv already created and activated a .venv above
         run: uv pip install .[dev]
 
       - name: Run tests
-        run: uv run pytest -n auto --ignore=docs/tutorials/optimal_ctrl.ipynb
+        run: uv run --no-sync pytest -n auto --ignore=docs/tutorials/optimal_ctrl.ipynb
 
       # - name: Setup tmate session # for optional debugging
       #   uses: mxschmitt/action-tmate@v3

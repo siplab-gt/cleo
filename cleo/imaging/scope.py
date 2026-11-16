@@ -517,8 +517,7 @@ class Scope(Recorder):
         # since the parameter syncing needs light.source to exist
         light = Light(
             name=f"{self.name}_imlight",
-            light_model=GaussianEllipsoid(),
-            wavelength=wavelength,
+            light_model=GaussianEllipsoid(wavelength=wavelength),
             pulse_freq=scan_freq,
             pulse_stagger=True,
             is_pulsed=True,
