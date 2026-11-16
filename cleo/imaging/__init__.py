@@ -1,4 +1,5 @@
 """Contains Scope and sensors for two-photon microscopy"""
+
 from cleo.imaging.scope import Scope, target_neurons_in_plane
 from cleo.imaging.sensors import (
     GECI,

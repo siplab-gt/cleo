@@ -2,12 +2,11 @@ from __future__ import annotations
 
 import warnings
 from datetime import datetime
-from typing import Callable
 
 import matplotlib as mpl
 import neo
 import quantities as pq
-from attrs import define, field, fields
+from attrs import define, field, fields, setters
 from brian2 import NeuronGroup, Quantity, Unit, meter, mm, ms, np, um
 from jaxtyping import Float, UInt
 from matplotlib.artist import Artist
@@ -16,6 +15,7 @@ from mpl_toolkits.mplot3d import Axes3D
 from cleo.base import Recorder
 from cleo.coords import coords_from_ng
 from cleo.imaging.sensors import Sensor
+from cleo.light import Light, GaussianEllipsoid
 from cleo.utilities import (
     analog_signal,
     normalize_coords,
@@ -93,7 +93,26 @@ def target_neurons_in_plane(
     return i_targets, noise_focus_factor[i_targets], coords_on_plane[i_targets]
 
 
-@define(eq=False)
+def _sync_scan_parameters_to_light(instance, attribute, value):
+    """attrs on_setattr hook: when scan parameters changes on the Scope, push it
+    to the imaging light's source neurons to compute dwell time from it."""
+    light = getattr(instance, "imaging_light", None)
+    # only syncs once the imaging light is injected and stored on the scope
+    if light is not None and attribute.name in (
+        "img_width",
+        "soma_radius",
+        "t_flyback",
+    ):
+        setattr(light.source, attribute.name, value)
+    return value
+
+
+@define(
+    eq=False,
+    on_setattr=setters.pipe(
+        setters.convert, setters.validate, _sync_scan_parameters_to_light
+    ),
+)
 class Scope(Recorder):
     """Two-photon microscope.
 
@@ -102,30 +121,40 @@ class Scope(Recorder):
     rho_rel_generator : Callable[[int], Float[np.ndarray, "n"], optional
         A function assigning expression levels. Takes n as an arg, outputs float array.
         ``lambda n: np.ones(n)`` by default.
-    focus_depth : Quantity, optional
-        The depth of the focal plane, by default that of the scope.
-    soma_radius : Quantity, optional
-        The radius of the soma of the neuron, by default that of the scope.
-        Used to compute noise focus factor, since smaller ROIs will have
-        a noisier distribution of fluorescence, averaged over fewer pixels.
+            focus_depth : Quantity, optional
+                The depth of the focal plane, by default that of the scope.
+            soma_radius : Quantity, optional
+                The radius of the soma of the neuron, by default that of the scope.
+                Used to compute noise focus factor, since smaller ROIs will have
+                a noisier distribution of fluorescence, averaged over fewer pixels.
     """
 
     sensor: Sensor = field()
     img_width: Quantity = field()
     """The width (diameter) of the (circular) image captured by the microscope.
     Specified in distance units."""
+
     focus_depth: Quantity = None
     """The depth of the focal plane, with distance units"""
+
     location: Quantity = [0, 0, 0] * mm
     """Location of the objective lens."""
+
     direction: Float[np.ndarray, "3"] = field(
         default=(0, 0, 1), converter=normalize_coords
     )
     """Direction in which the microscope is pointing.
     By default straight down (`+z` direction)"""
+
     soma_radius: Quantity = field(default=10 * um)
     """Assumed radius of neurons, used to compute noise focus factor.
     Smaller neurons have noisier signals."""
+
+    t_flyback: Quantity = field(default=0 * ms, kw_only=True)
+    """Total dead time per frame while the scanning mirror resets (flyback),
+    summed over all lines. Subtracted once from the frame period when computing
+    dwell time."""
+
     snr_cutoff: float = field(default=1)
     """SNR below which neurons are discarded.
     Applied only when focus_depth is not None"""
@@ -156,6 +185,9 @@ class Scope(Recorder):
         factory=list, repr=False, init=False
     )
     """relative expression levels of neurons selected from each injection"""
+
+    imaging_light: Light = field(init=False, repr=False, default=None)
+    """raster scanning parameters"""
 
     @property
     def n(self) -> int:
@@ -451,3 +483,73 @@ class Scope(Recorder):
             )
         return signal
         # want ROI coordinates and size in image
+
+    # Method for optional raster scanning
+    def inject_imaging_light_for_targets(
+        self,
+        scan_freq: float = 30,
+        t_flyback: Quantity = None,
+        wavelength: Quantity = 920e-9 * meter,
+        opto_crosstalk: bool = True,
+    ) -> None:
+        """Injects a raster-scanning 2P imaging light into the neuron groups
+        this scope targets. Call after injecting the scope into neurons.
+
+        Parameters
+        ----------
+        scan_freq : float
+            Frame rate (Hz) of the raster scan.
+        t_flyback : Quantity, optional
+            Total dead time per frame while the mirror resets (summed over all
+            lines). Overrides the scope's :attr:`t_flyback` if given.
+        wavelength : Quantity, optional
+            Wavelength of the imaging light, 920 nm by default.
+        opto_crosstalk : bool, optional
+            Whether the imaging light also activates opsins in the targeted
+            neurons, True by default. Set False to test imaging in isolation
+            from stimulation.
+        """
+
+        if t_flyback is not None:
+            self.t_flyback = t_flyback
+
+        # build as a local and only assign self.imaging_light after injection,
+        # since the parameter syncing needs light.source to exist
+        light = Light(
+            name=f"{self.name}_imlight",
+            light_model=GaussianEllipsoid(wavelength=wavelength),
+            pulse_freq=scan_freq,
+            pulse_stagger=True,
+            is_pulsed=True,
+            opto_crosstalk=opto_crosstalk,
+        )
+        for ng in dict.fromkeys(self.neuron_groups):
+            self.sim.inject(light, ng)
+        self.imaging_light = light
+
+        src = light.source
+        src.img_width = self.img_width
+        src.soma_radius = self.soma_radius
+        src.t_flyback = self.t_flyback
+
+    @property
+    def scan_freq(self) -> float:
+        """Frame rate (Hz) of the raster scan; stored on the imaging light."""
+        return self._imaging_light_or_raise().pulse_freq
+
+    @scan_freq.setter
+    def scan_freq(self, value: float) -> None:
+        self._imaging_light_or_raise().pulse_freq = value
+
+    @property
+    def dwell_time(self) -> Quantity:
+        """Read-only duration of each light pulse per neuron, computed from scan
+        frequency, flyback time, and soma/image size."""
+        return self._imaging_light_or_raise().pulse_width
+
+    def _imaging_light_or_raise(self) -> Light:
+        if self.imaging_light is None:
+            raise RuntimeError(
+                "Call inject_imaging_light_for_targets() before using scan settings."
+            )
+        return self.imaging_light

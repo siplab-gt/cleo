@@ -2,9 +2,24 @@ import matplotlib.pyplot as plt
 import neo
 import pytest
 import quantities as pq
-from brian2 import Network, NeuronGroup, asarray, cm, mm, mm2, ms, mwatt, nmeter, np, um
+from brian2 import (
+    Network,
+    NeuronGroup,
+    asarray,
+    cm,
+    mm,
+    mm2,
+    ms,
+    mwatt,
+    nmeter,
+    np,
+    second,
+    um,
+)
 
 import cleo
+from cleo.coords import assign_xyz
+from cleo.imaging import Scope, gcamp6f
 from cleo.light import (
     GaussianEllipsoid,
     KoehlerBeam,
@@ -385,6 +400,28 @@ def test_light_to_neo(n_light, n_direction, squeeze, two_photon):
     assert np.all(sig / pq_units == light_output / b2_units)
     assert np.all(sig.times / pq.ms == light.t / ms)
     assert sig.name == light.name
+
+
+def test_scan_freq_updates_light():
+    """Setting scan_freq on the scope updates the light's pulse_freq, the source's
+    scan_period, and (through the Brian equations) the dwell time."""
+    scope = Scope(focus_depth=200 * um, img_width=500 * um, sensor=gcamp6f())
+    ng = NeuronGroup(10, "v : volt")
+    assign_xyz(ng, 0, 0, 0)
+    ng.z = 200 * um
+
+    sim = cleo.CLSimulator(Network(ng))
+    sim.inject(scope, ng)
+    scope.inject_imaging_light_for_targets()
+    light = scope.imaging_light
+
+    scope.scan_freq = 30
+    dwell_30 = scope.dwell_time
+    scope.scan_freq = 60
+    assert light.pulse_freq == 60
+    assert np.isclose(light.source.scan_period[0] / second, 1 / 60)
+    # t_flyback is 0 here, so dwell time is proportional to the frame period
+    assert np.isclose(scope.dwell_time / second, 0.5 * dwell_30 / second)
 
 
 if __name__ == "__main__":
