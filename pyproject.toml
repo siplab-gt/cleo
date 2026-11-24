@@ -11,7 +11,7 @@ readme = "README.md"
 dynamic = ["classifiers"]
 urls = { documentation = "https://cleosim.readthedocs.io/", source = "https://github.com/siplab-gt/cleo/" }
 
-requires-python = ">=3.10,<3.16"
+requires-python = ">=3.10,<3.15"
 dependencies = [
     "brian2>=2.4,!=2.5.0.2,<3.0.0",
     "matplotlib>=3.7,<4.0.0",
