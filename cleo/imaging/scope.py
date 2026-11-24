@@ -15,7 +15,7 @@ from mpl_toolkits.mplot3d import Axes3D
 
 from cleo.base import Recorder
 from cleo.coords import coords_from_ng
-from cleo.imaging.sensors import Sensor
+from cleo.imaging.sensors import LightDependentGECI, Sensor
 from cleo.utilities import (
     analog_signal,
     normalize_coords,
@@ -113,7 +113,15 @@ class Scope(Recorder):
     sensor: Sensor = field()
     img_width: Quantity = field()
     """The width (diameter) of the (circular) image captured by the microscope.
-    Specified in distance units."""
+    Specified in distance units.
+
+    In the light-dependent SNR model, a larger imaging field reduces
+    the fraction of scanning time allocated to an individual soma,
+    decreasing its estimated dwell time and expected SNR.
+
+    See :attr:`cleo.imaging.sensors.Sensor.snr` for the full
+    brightness-dependent SNR methodology.
+    """
     focus_depth: Quantity = None
     """The depth of the focal plane, with distance units"""
     location: Quantity = [0, 0, 0] * mm
@@ -125,7 +133,22 @@ class Scope(Recorder):
     By default straight down (`+z` direction)"""
     soma_radius: Quantity = field(default=10 * um)
     """Assumed radius of neurons, used to compute noise focus factor.
-    Smaller neurons have noisier signals."""
+    Smaller neurons have noisier signals.
+
+    In the light-dependent SNR model, soma radius also determines
+    the fraction of scanning time allocated to a neuron. Larger
+    somas receive more estimated dwell time, increasing expected SNR.
+
+    See :attr:`cleo.imaging.sensors.Sensor.snr` for the full
+    brightness-dependent SNR methodology.
+    """
+    
+    laser_power: float | None = field(default=None)
+    frequency: float | None = field(default=None)
+    flyback_time: float = field(default=0.001)
+    reference_power: float = field(default=10.0)
+    reference_dwell: float = field(default=0.001)
+
     snr_cutoff: float = field(default=1)
     """SNR below which neurons are discarded.
     Applied only when focus_depth is not None"""
@@ -263,7 +286,37 @@ class Scope(Recorder):
             signal.append(signal_per_ng[ng.name][subset_for_injct])
             n_prev_targets_for_ng[ng] = subset_start + len(i_targets)
         signal = np.concatenate(signal)
-        noise = rng.normal(0, self.sigma_noise, len(signal))
+        sigma_noise = self.sigma_noise.copy()
+
+        if isinstance(self.sensor, LightDependentGECI):
+            if self.laser_power is not None and self.frequency is not None:
+                if self.frequency <= 0 or self.laser_power <= 0:
+                    raise ValueError("Frequency and laser power must be positive.")
+                if self.reference_power <= 0 or self.reference_dwell <= 0:
+                    raise ValueError("Reference power and dwell must be positive.")
+
+                frame_time = 1.0 / self.frequency - self.flyback_time
+                if frame_time <= 0:
+                    raise ValueError("Flyback time must be shorter than frame period.")
+
+                soma_radius = float(self.soma_radius / um)
+                img_width = float(self.img_width / um)
+                geometric_fraction = (soma_radius / (img_width / 2.0)) ** 2
+                if geometric_fraction > 1:
+                    raise ValueError("Soma cannot exceed imaging field of view.")
+
+                dwell_time = frame_time * geometric_fraction
+                i_sat = 10.0
+                hill = self.laser_power**2 / (self.laser_power**2 + i_sat**2)
+                reference_hill = self.reference_power**2 / (
+                    self.reference_power**2 + i_sat**2
+                )
+                brightness_ratio = (
+                    hill * dwell_time / (reference_hill * self.reference_dwell)
+                )
+                sigma_noise = sigma_noise / np.sqrt(brightness_ratio)
+
+        noise = rng.normal(0, sigma_noise, len(signal))
         assert self.n == len(signal) == len(noise) == len(self.sigma_noise)
 
         state = signal + noise

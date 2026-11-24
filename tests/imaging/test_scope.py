@@ -1,15 +1,16 @@
+from cleo.imaging.sensors import NullExcitation
 import pytest
 import quantities as pq
 from brian2 import Network, NeuronGroup, meter, ms, np, um
 
 import cleo
 from cleo.coords import assign_coords_rand_rect_prism, assign_xyz
+from cleo.imaging.scope import Scope, target_neurons_in_plane
 from cleo.imaging import (
-    Scope,
+    # Scope,
     Sensor,
     # UniformGaussianNoise,
     gcamp6f,
-    target_neurons_in_plane,
 )
 
 
@@ -162,3 +163,55 @@ def test_scope_to_neo(regular):
 
 if __name__ == "__main__":
     pytest.main(["-s", "--disable-warnings", __file__])
+
+
+def test_fluorescence_noise_variance():
+    """Check that laser power changes variance in generated fluorescence."""
+    ng = NeuronGroup(1, "dv/dt = -v / (10*ms) : 1", threshold="v > 1")
+    assign_xyz(ng, 0, 0, 0)
+    sim = cleo.CLSimulator(Network(ng))
+
+    scope = Scope(
+        sensor=gcamp6f(light_dependent=True),
+        img_width=500 * um,
+        soma_radius=10 * um,
+        laser_power=5.0,
+        frequency=30.0,
+        flyback_time=0.001,
+        reference_power=10.0,
+        reference_dwell=0.001,
+    )
+
+    scope.sensor.exc_model = NullExcitation()
+    scope.sensor.__attrs_post_init__()
+    sim.inject(scope, ng, focus_depth=None, i_targets=[0])
+    scope.inject_sensor_for_targets()
+
+    samples = {}
+
+    # Keep the underlying fluorescence signal fixed.
+    for power in (5.0, 20.0):
+        scope.laser_power = power
+        samples[power] = np.array(
+            [scope.get_state()[0] for _ in range(3000)]
+        )
+
+    variance_low = np.var(samples[5.0], ddof=1)
+    variance_high = np.var(samples[20.0], ddof=1)
+
+    print(f"\nPower 5 variance: {variance_low:.6f}")
+    print(f"Power 20 variance: {variance_high:.6f}")
+    print(f"Variance ratio: {variance_low / variance_high:.3f}")
+
+    assert variance_low > variance_high
+    # Compare measured variance with the Hill model prediction.
+    def hill(power):
+        return power**2 / (power**2 + 10.0**2)
+
+    expected_ratio = hill(20.0) / hill(5.0)
+    measured_ratio = variance_low / variance_high
+
+    print(f"Expected variance ratio: {expected_ratio:.3f}")
+    print(f"Measured variance ratio: {measured_ratio:.3f}")
+
+    assert np.isclose(measured_ratio, expected_ratio, rtol=0.15)
