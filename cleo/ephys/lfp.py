@@ -14,7 +14,7 @@ import neo
 import quantities as pq
 import wslfp
 from attrs import define, field
-from brian2 import NeuronGroup, Quantity, Synapses, mm, ms, np, um
+from brian2 import NeuronGroup, Quantity, Synapses, mm, ms, np, second, um
 from brian2.monitors.spikemonitor import SpikeMonitor
 from brian2.synapses.synapses import SynapticSubgroup
 from brian2.units import Unit, uvolt
@@ -153,7 +153,9 @@ class TKLFPSignal(LFPSignalBase):
             # prep buffers
             self._tklfps.append(tklfp)
             self._i_buffers.append([np.array([], dtype=int, ndmin=1)] * buf_len)
-            self._t_buffers.append([np.array([], dtype=float, ndmin=1)] * buf_len)
+            self._t_buffers.append(
+                [np.array([], dtype=float, ndmin=1) * second] * buf_len
+            )
             self._buffer_positions.append(0)
 
             # prep SpikeMonitor
@@ -181,7 +183,7 @@ class TKLFPSignal(LFPSignalBase):
     def _reset_buffer(self, i_mon):
         buf_len = len(self._i_buffers[i_mon])
         self._i_buffers[i_mon] = [np.array([], dtype=int, ndmin=1)] * buf_len
-        self._t_buffers[i_mon] = [np.array([], dtype=float, ndmin=1)] * buf_len
+        self._t_buffers[i_mon] = [np.array([], dtype=float, ndmin=1) * second] * buf_len
         self._buffer_positions[i_mon] = 0
 
     def _update_spike_buffer(self, i_mon):
