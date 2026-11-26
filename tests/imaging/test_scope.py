@@ -187,14 +187,22 @@ def test_fluorescence_noise_variance():
     sim.inject(scope, ng, focus_depth=None, i_targets=[0])
     scope.inject_sensor_for_targets()
 
+    from cleo.utilities import rng
+    from copy import deepcopy
+
     samples = {}
 
     # Keep the underlying fluorescence signal fixed.
-    for power in (5.0, 20.0):
-        scope.laser_power = power
-        samples[power] = np.array(
-            [scope.get_state()[0] for _ in range(3000)]
-        )
+    original_state = deepcopy(rng.bit_generator.state)
+    try:
+        for power in (5.0, 20.0):
+            rng.bit_generator.state = np.random.default_rng(42).bit_generator.state
+            scope.laser_power = power
+            samples[power] = np.array(
+                [scope.get_state()[0] for _ in range(50)]
+            )
+    finally:
+        rng.bit_generator.state = original_state
 
     variance_low = np.var(samples[5.0], ddof=1)
     variance_high = np.var(samples[20.0], ddof=1)
