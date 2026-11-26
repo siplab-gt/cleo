@@ -1,12 +1,33 @@
-import warnings
-
 import pytest
-from brian2 import Network, NeuronGroup, mm, mm2, ms, mV, mwatt, nmeter, np, umeter
+import cleo
+from brian2 import (
+    Network,
+    NeuronGroup,
+    StateMonitor,
+    mm,
+    mm2,
+    ms,
+    mV,
+    mwatt,
+    nmeter,
+    np,
+    umeter,
+    meter,
+    second,
+    um,
+)
+
 
 from cleo import CLSimulator
 from cleo.coords import assign_coords, assign_coords_grid_rect_prism
 from cleo.light import Light, fiber473nm
 from cleo.opto import Opsin, chr2_4s, vfchrimson_4s
+
+
+from cleo.imaging.scope import Scope
+
+from cleo.imaging import gcamp6f
+from cleo.coords import assign_xyz
 
 
 @pytest.fixture
@@ -254,6 +275,181 @@ def test_multi_light_opsin(sim_ng1_ng2):
     ):
         assert chr2.epsilon(uv.wavelength) == 0
     assert np.all(ng1.v == -70 * mV)
+
+
+def test_connections_survive_rebuild():
+    """Verify that existing light-opsin connections are preserved when a second light is injected."""
+    scope = Scope(
+        focus_depth=200 * um,
+        img_width=500 * um,
+        sensor=gcamp6f(),
+    )
+    ng = NeuronGroup(
+        100,
+        """dv/dt = (Iopto - v) / (10*ms) : volt
+        Iopto : amp""",
+        threshold="v > 1*volt",
+        method="euler",
+    )
+    assign_xyz(ng, 0, 0, 0)
+    ng.z[0:40] = 200 * um
+
+    sim = cleo.CLSimulator(Network(ng))
+    sim.inject(scope, ng)
+
+    opsin = chr2_4s()
+    sim.inject(opsin, ng)
+
+    # inject first imaging light
+    scope.inject_imaging_light_for_targets(wavelength=473e-9 * meter)
+    light1 = scope.imaging_light
+
+    # verify connection exists
+    assert (light1, opsin, ng) in sim.registry.connections
+
+    # inject second light from a different scope (triggers registry rebuild)
+    scope2 = Scope(
+        name="scope2",
+        focus_depth=200 * um,
+        img_width=500 * um,
+        sensor=gcamp6f(),
+    )
+    sim.inject(scope2, ng)
+    scope2.inject_imaging_light_for_targets(wavelength=473e-9 * meter)
+    light2 = scope2.imaging_light
+
+    # verify first connection survived the rebuild
+    assert (light1, opsin, ng) in sim.registry.connections
+    assert (light2, opsin, ng) in sim.registry.connections
+
+
+@pytest.mark.parametrize("opto_crosstalk", [True, False])
+@pytest.mark.parametrize("light_first", [True, False])
+def test_imaging_light_opto_crosstalk(opto_crosstalk, light_first):
+    """Verify that the imaging light connects to opsins only if
+    opto_crosstalk is True, regardless of injection order."""
+    scope = Scope(focus_depth=200 * um, img_width=500 * um, sensor=gcamp6f())
+    ng = NeuronGroup(
+        10,
+        """v : volt
+        Iopto : amp""",
+    )
+    assign_xyz(ng, 0, 0, 0)
+    ng.z = 200 * um
+
+    sim = cleo.CLSimulator(Network(ng))
+    opsin = chr2_4s()
+    sim.inject(scope, ng)
+
+    def inject_light():
+        scope.inject_imaging_light_for_targets(
+            wavelength=473e-9 * meter, opto_crosstalk=opto_crosstalk
+        )
+
+    if light_first:
+        inject_light()
+        sim.inject(opsin, ng)
+    else:
+        sim.inject(opsin, ng)
+        inject_light()
+
+    connected = (scope.imaging_light, opsin, ng) in sim.registry.connections
+    assert connected == opto_crosstalk
+
+
+def test_first_light_settings_survive_second_light():
+    """Verify that the first imaging light keeps its
+    scan settings and geometry when a second light is injected."""
+    ng = NeuronGroup(10, "v : volt")
+    assign_xyz(ng, 0, 0, 0)
+    ng.z = 200 * um
+    sim = cleo.CLSimulator(Network(ng))
+
+    scope1 = Scope(
+        name="scope1",
+        focus_depth=200 * um,
+        img_width=500 * um,
+        soma_radius=8 * um,
+        sensor=gcamp6f(),
+    )
+    sim.inject(scope1, ng)
+    scope1.inject_imaging_light_for_targets(scan_freq=45)
+    dwell_before = scope1.dwell_time
+
+    scope2 = Scope(
+        name="scope2",
+        focus_depth=200 * um,
+        img_width=300 * um,
+        soma_radius=12 * um,
+        sensor=gcamp6f(),
+    )
+    sim.inject(scope2, ng)
+    scope2.inject_imaging_light_for_targets(scan_freq=20)
+
+    # re-fetch: handles taken before the rebuild are stale
+    src1 = scope1.imaging_light.source
+    assert np.isclose(src1.scan_period[0] / second, 1 / 45)
+    assert np.isclose(src1.img_width[0] / um, 500)
+    assert np.isclose(src1.soma_radius[0] / um, 8)
+    assert np.isclose(scope1.dwell_time / second, dwell_before / second)
+
+    src2 = scope2.imaging_light.source
+    assert np.isclose(src2.scan_period[0] / second, 1 / 20)
+    assert np.isclose(src2.img_width[0] / um, 300)
+
+
+def test_light_into_two_neuron_groups_has_one_source():
+    """Verify that injecting one imaging light into
+    two neuron groups creates a single light source."""
+    ngs = []
+    for _ in range(2):
+        ng = NeuronGroup(10, "v : volt")
+        assign_xyz(ng, 0, 0, 0)
+        ng.z = 200 * um
+        ngs.append(ng)
+    sim = cleo.CLSimulator(Network(*ngs))
+
+    scope = Scope(focus_depth=200 * um, img_width=500 * um, sensor=gcamp6f())
+    for ng in ngs:
+        sim.inject(scope, ng)
+    scope.inject_imaging_light_for_targets()
+    light = scope.imaging_light
+
+    assert sim.registry.light_source_ng.N == light.n
+    assert sim.registry.subgroup_idx_for_light[light] == slice(0, light.n)
+
+
+def test_imaging_light_staggers_targets_by_y():
+    """Verify that neurons are pulsed one at a time, in order of increasing y."""
+    scope = Scope(focus_depth=200 * um, img_width=500 * um, sensor=gcamp6f())
+    ng = NeuronGroup(
+        10,
+        """dv/dt = (Iopto * ohm - v) / (10*ms) : volt
+        Iopto : amp""",
+    )
+    assign_xyz(ng, 0, 0, 0)
+    ng.z = 200 * um
+    ng.y = (9 - np.arange(10)) * 5 * um  # y decreases with neuron index
+
+    sim = cleo.CLSimulator(Network(ng))
+    opsin = chr2_4s()
+    sim.inject(scope, ng)
+    sim.inject(opsin, ng)
+    scope.inject_imaging_light_for_targets(wavelength=473e-9 * meter)
+    scope.imaging_light.update(1 * mwatt / mm2)
+
+    mon = StateMonitor(opsin.light_agg_ngs[ng.name], "Irr", record=True)
+    sim.network.add(mon)
+    sim.run((1 / scope.scan_freq) * second)
+
+    on = np.array(mon.Irr / (mwatt / mm2)) > 0  # neurons x timesteps
+    assert on.any(axis=1).all()  # every neuron gets pulsed
+    assert on.sum(axis=0).max() == 1  # never two neurons at once
+
+    # lowest y is scanned first: pulse start times increase with y
+    first_on = on.argmax(axis=1)
+    order_by_y = np.argsort(np.array(ng.y / um))
+    assert np.all(np.diff(first_on[order_by_y]) > 0)
 
 
 if __name__ == "__main__":

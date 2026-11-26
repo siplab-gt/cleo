@@ -128,9 +128,7 @@ def _(b2, c, cleo):
         [neurons, exc, inh, syn_exc, syn_inh, ext_input, syn_ext, spike_mon]
     )
     sim = cleo.CLSimulator(net)
-    cleo.viz.plot(
-        exc, inh, colors=[c["exc"], c["inh"]], scatterargs={"alpha": 0.6}
-    )
+    cleo.viz.plot(exc, inh, colors=[c["exc"], c["inh"]], scatterargs={"alpha": 0.6})
     return exc, inh, n_e, sim, spike_mon, syn_exc, syn_ext, syn_inh
 
 
@@ -241,7 +239,6 @@ def _(b2, c, cleo_paper_style, mua, np, plt, ss):
 
         return fig
 
-
     with cleo_paper_style():
         meas_coll_plots().savefig("img/fig/ephys-meas-coll.svg")
     return
@@ -273,8 +270,8 @@ def _(c, cleo, cleo_paper_style, exc, inh, probe):
         )
 
         handles, labels = ax.get_legend_handles_labels()
-        labels = ['exc', 'inh', 'probe']
-        ax.legend(handles, labels, loc='upper center', bbox_to_anchor=(0.5, 1.25))
+        labels = ["exc", "inh", "probe"]
+        ax.legend(handles, labels, loc="upper center", bbox_to_anchor=(0.5, 1.25))
         ax.set_xticks([-200, 200])
         ax.set_yticks([-200, 200])
         ax.set_zticks([0, 500, 1000])
@@ -401,8 +398,8 @@ def _(
             ylim=[-0.5, probe.n - 0.5],
         )
 
-        _fig.suptitle('Spikes from simulated network:')
-        _fig.savefig('img/fig/ephys-spikes.svg')
+        _fig.suptitle("Spikes from simulated network:")
+        _fig.savefig("img/fig/ephys-spikes.svg")
     return
 
 
@@ -469,12 +466,14 @@ def _(cleo, plt):
             plt.rc("savefig", transparent=False)
             plt.show()
             plt.rcParams.update(self.original_rcParams)
+
     return (cleo_paper_style,)
 
 
 @app.cell
 def _():
     import marimo as mo
+
     return (mo,)
 
 

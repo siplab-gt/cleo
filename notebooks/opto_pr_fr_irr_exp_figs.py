@@ -120,7 +120,6 @@ def _(foutz12_data_combined, np, pd, pulse_rates):
             ),
         }
 
-
     interp_rates = (
         foutz12_data_combined.groupby(["rho_rel", "Irr0/Irr0_thres"])
         .apply(_interp_group, include_groups=False)
@@ -171,14 +170,9 @@ def _(mo):
         "AdEx_Markov",
     ]
     run_checkboxes = mo.ui.dictionary(
-        {
-            model_str: mo.ui.checkbox(False, label=model_str)
-            for model_str in model_types
-        }
+        {model_str: mo.ui.checkbox(False, label=model_str) for model_str in model_types}
     )
-    mo.vstack(
-        ["(Re-)run simulations?", run_checkboxes.hstack(justify="space-around")]
-    )
+    mo.vstack(["(Re-)run simulations?", run_checkboxes.hstack(justify="space-around")])
     return model_types, run_checkboxes
 
 
@@ -251,6 +245,7 @@ def _(b2, expt_setup, mo, n_rates, pulse_width, reset):
 
             reset(expt)
         return phi_curr / b2.mm2 / b2.second
+
     return (find_phi_thresh,)
 
 
@@ -258,17 +253,16 @@ def _(b2, expt_setup, mo, n_rates, pulse_width, reset):
 def _():
     debug = True
 
-
     def dprint(*args, **kwargs):
         if debug:
             print(*args, **kwargs)
+
     return (debug,)
 
 
 @app.cell
 def _(b2, cleo):
     from dataclasses import dataclass
-
 
     @dataclass
     class Experiment:
@@ -289,6 +283,7 @@ def _(b2, cleo):
         @property
         def model_name(self) -> str:
             return self.ng.name
+
     return (Experiment,)
 
 
@@ -307,6 +302,7 @@ def _(Experiment, np):
             f"expt.ng.Iopto should be neutral, got {expt.ng.Iopto}"
         )
         assert np.all(expt.spmon.count == 0)
+
     return (reset,)
 
 
@@ -383,6 +379,7 @@ def _(
         expt = Experiment(sim, ng, opsin, spmon, params2opt)
         reset(expt)
         return expt
+
     return (expt_setup,)
 
 
@@ -422,6 +419,7 @@ def _(Experiment, b2, debug, find_phi_thresh, pd, plt, sim_len_s):
             plt.show()
         # dprint(rates)
         return rates
+
     return (simulate_rates,)
 
 
@@ -448,7 +446,6 @@ def _(bo, mo, np):
         )
         opt.maximize(init_points=5, n_iter=10)
         return opt
-
 
     _opt = opt_test()
     # _opt.space.dim
@@ -549,16 +546,15 @@ def _(
 
         return optimizer
 
-
     def optimal_params(model_name):
         optimizer = optimize(model_name)
         return optimizer.max["params"]
-
 
     def optimal_rates(model_name):
         expt = expt_setup(model_name)
         opt_params = optimal_params(model_name)
         return simulate_rates(opt_params, expt)
+
     return optimal_params, optimal_rates, optimize
 
 
@@ -604,7 +600,6 @@ def _(np, optimize, pd, run_checkboxes):
         data = np.column_stack([opt.space.target, opt.space.params])
         return pd.DataFrame(data, columns=["target"] + opt.space.keys)
 
-
     if run_checkboxes["AdEx_Markov"].value:
         _opt_history = opt_table("AdEx_Markov")
     _opt_history
@@ -615,8 +610,8 @@ def _(np, optimize, pd, run_checkboxes):
 def _(model_types, opt_table, run_checkboxes):
     for _model_name in model_types:
         if run_checkboxes[_model_name].value:
-            _df = opt_table(_model_name).sort_values(by='target', ascending=False)
-            _df.to_csv(f'data/{_model_name}_opt_history.csv')
+            _df = opt_table(_model_name).sort_values(by="target", ascending=False)
+            _df.to_csv(f"data/{_model_name}_opt_history.csv")
     return
 
 
@@ -655,7 +650,6 @@ def _(
         axs[3].plot(phi_mon.t, phi_mon.phi.T)
         plt.show()
 
-
     if debug and run_checkboxes["AdEx_Markov"].value:
         debug_delay_AdEx("AdEx_Markov")
     return
@@ -691,7 +685,6 @@ def _(
         axs[2].plot(phi_mon.t, phi_mon.phi.T)
         plt.show()
 
-
     if debug and run_checkboxes["LIF_simple"].value:
         debug_delay_LIF("LIF_simple")
     return
@@ -717,7 +710,9 @@ def _():
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""Next we load the original data for comparison. First, from the top panel, showing data for different irradiance levels.""")
+    mo.md(
+        r"""Next we load the original data for comparison. First, from the top panel, showing data for different irradiance levels."""
+    )
     return
 
 
@@ -836,6 +831,7 @@ def _(pulse_rates, sns):
             g.fig.tight_layout()
             g.fig.set(**figargs)
         return (g_irr, g_exp)
+
     return (plot_fr_2panel,)
 
 
@@ -883,12 +879,14 @@ def _(cleo, plt):
             plt.rc("savefig", transparent=False)
             plt.show()
             plt.rcParams.update(self.original_rcParams)
+
     return (cleo_paper_style,)
 
 
 @app.cell
 def _():
     import marimo as mo
+
     return (mo,)
 
 

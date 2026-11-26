@@ -9,20 +9,15 @@ from typing import Any
 
 import matplotlib as mpl
 import quantities as pq
-from attrs import define, field
+from attrs import define, field, setters
 from brian2 import (
     NeuronGroup,
     Subgroup,
     np,
 )
-from brian2.units import (
-    Quantity,
-    mm,
-    mm2,
-    mwatt,
-    nmeter,
-    um,
-)
+
+
+from brian2.units import Quantity, mm, mm2, mwatt, nmeter, um, second
 from jaxtyping import Float
 from matplotlib import colors
 from matplotlib.artist import Artist
@@ -228,7 +223,7 @@ def fiber473nm(
     K=0.125 / mm,  # absorbance coefficient
     S=7.37 / mm,  # scattering coefficient
     ntis=1.36,  # tissue index of refraction
-    wavelength=473 * nmeter, 
+    wavelength=473 * nmeter,
 ) -> OpticFiber:
     """Returns an :class:`OpticFiber` model with parameters for 473 nm light.
 
@@ -287,7 +282,28 @@ def _is_irr(q: Quantity) -> bool:
     return q.has_same_dimensions(mwatt / mm2)
 
 
-@define(eq=False)
+# CLEAN UP: properties/setters on Light, pointing to light.source Brian variables” and “pulse_freq on light
+# which in turn is property/setter to light.source neurons”.
+def _sync_scan_param_to_source(instance, attribute, value):
+    """attrs on_setattr hook: pushes scan-related changes down to the Brian
+    variables on light.source, once this Light has been injected into a sim."""
+    sim = instance.sim
+    if sim is None or instance not in sim.registry.subgroup_idx_for_light:
+        return value  # not injected yet; nothing to sync
+    src = instance.source
+    if attribute.name == "pulse_freq":
+        src.scan_period = (1 / value) * second
+    elif attribute.name in ("is_pulsed", "pulse_stagger"):
+        setattr(src, attribute.name, int(bool(value)))
+    return value
+
+
+@define(
+    eq=False,
+    on_setattr=setters.pipe(
+        setters.convert, setters.validate, _sync_scan_param_to_source
+    ),
+)
 class Light(Stimulator):
     """Delivers light to the network for photostimulation and (when implemented) imaging.
 
@@ -318,6 +334,26 @@ class Light(Stimulator):
     Can also be an nx3 array for multiple sources.
     """
 
+    pulse_freq: float = field(default=30, kw_only=True)
+    """Rate (Hz) at which the raster scan sweeps over target neurons."""
+
+    is_pulsed: bool = field(default=False, kw_only=True)
+    """Whether this light delivers discrete pulses (raster scanning) vs. constant illumination."""
+
+    pulse_stagger: bool = field(default=False, kw_only=True)
+    """Whether per-neuron pulses are staggered in time to avoid simultaneous activation."""
+
+    opto_crosstalk: bool = field(default=True, kw_only=True)
+    """Whether this light also drives opsins in the neurons it reaches.
+    Set at construction, and changing it after injection does not reconnect devices."""
+
+    @property
+    def pulse_width(self) -> Quantity:
+        """Duration of each per-neuron light pulse during raster scanning.
+
+        Read-only: computed in the light source's Brian equations from the
+        scan period, flyback time, and soma/image geometry."""
+        return self.source.pulse_width[0]
 
     @coords.validator
     def _check_coords(self, attribute, value):
@@ -413,9 +449,6 @@ class Light(Stimulator):
     def power_(self) -> Quantity:
         """Returns history of light power without units (/mwatt)."""
         return self.power / mwatt
-
-
-
 
     def add_self_to_plot(self, ax, axis_scale_unit, **kwargs) -> list[PathCollection]:
         # show light with point field, assigning r and z coordinates
