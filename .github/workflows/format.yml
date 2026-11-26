@@ -1,0 +1,18 @@
+name: Formatting
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  ruff-format:
+    name: Ruff format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v5
+      - run: uvx ruff@0.16.3 format --check --config 'include = ["*.py", "*.pyi"]' .

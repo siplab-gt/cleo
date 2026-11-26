@@ -43,6 +43,7 @@ def _(mo):
 def _():
     import numpy as np
     import matplotlib.pyplot as plt
+
     return np, plt
 
 
@@ -151,9 +152,7 @@ def _(N, Ne, X, Y, Z, b2, cleo, data, tmax, xmax, ymax):
     sim = cleo.CLSimulator(b2.Network(ng_e, ng_i))
     sim.set_io_processor(cleo.ioproc.RecordOnlyProcessor(b2.ms))
     tklfp_signal = cleo.ephys.TKLFPSignal()
-    probe = cleo.ephys.Probe(
-        [xmax / 2, ymax / 2, 0] * b2.mm, signals=[tklfp_signal]
-    )
+    probe = cleo.ephys.Probe([xmax / 2, ymax / 2, 0] * b2.mm, signals=[tklfp_signal])
     sim.inject(probe, ng_e, tklfp_type="exc")
     sim.inject(probe, ng_i, tklfp_type="inh")
     sim.run(tmax * b2.ms)
@@ -257,12 +256,14 @@ def _(cleo, plt):
             plt.rc("savefig", transparent=False)
             plt.show()
             plt.rcParams.update(self.original_rcParams)
+
     return (cleo_paper_style,)
 
 
 @app.cell
 def _():
     import marimo as mo
+
     return (mo,)
 
 

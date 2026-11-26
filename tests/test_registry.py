@@ -1,4 +1,3 @@
-
 import pytest
 import cleo
 from brian2 import (

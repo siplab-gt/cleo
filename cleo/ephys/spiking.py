@@ -591,8 +591,8 @@ class SortedSpiking(Spiking):
     Should be higher than :attr:`~Spiking.threshold_sigma`.
     Spikes from units with SNR < snr_cutoff still factor into collision sampling and
     are reported as unsorted (index -1), essentially "multi-unit activity"."""
-    collision_prob_fn: Callable[[Quantity], float] = lambda t: 0.2 * np.exp(
-        -t / (0.3 * ms)
+    collision_prob_fn: Callable[[Quantity], float] = lambda t: (
+        0.2 * np.exp(-t / (0.3 * ms))
     )
 
     @property

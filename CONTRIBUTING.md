@@ -50,11 +50,23 @@ my_function(a, b='B'):
 ```
 
 ## Style
-We will use Black-style formatting, as implemented (faster) by Ruff.
-The easiest way is to enable Ruff as the formatter in your IDE with auto-formatting on save.
+We use Ruff to format Python source files. CI checks formatting on pull
+requests. You can also enable Ruff formatting on save in your editor.
 
-## Linting
-I was going to lint using flake8 but then I realized, this is a small research code package! We don't need super pretty, consistent code. Just try to follow Python conventions and use Black.
+Install hk 2.14 or later and uv, and make sure `hk` and `uvx` are on your
+`PATH`. [Install hk](https://hk.jdx.dev/getting_started.html) ·
+[Install uv](https://docs.astral.sh/uv/getting-started/installation/)
+
+Run this from the repository root.
+
+```sh
+hk install
+```
+
+The pre-commit hook formats staged Python files and stages the formatting
+changes. Run `hk fix --all` to format all tracked Python files or
+`hk check --all` to check them. For Jupyter notebooks, follow the notebook
+instructions below.
 
 ## Structure
 We structure big modules like `ephys` as a folder with an `__init__.py` that imports from the submodules (`spiking`, `lfp`, etc.).

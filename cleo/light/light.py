@@ -223,7 +223,7 @@ def fiber473nm(
     K=0.125 / mm,  # absorbance coefficient
     S=7.37 / mm,  # scattering coefficient
     ntis=1.36,  # tissue index of refraction
-    wavelength=473 * nmeter, 
+    wavelength=473 * nmeter,
 ) -> OpticFiber:
     """Returns an :class:`OpticFiber` model with parameters for 473 nm light.
 
@@ -333,7 +333,6 @@ class Light(Stimulator):
     the base of the light source, by default (0, 0, 0)*mm.
     Can also be an nx3 array for multiple sources.
     """
-
 
     pulse_freq: float = field(default=30, kw_only=True)
     """Rate (Hz) at which the raster scan sweeps over target neurons."""
@@ -450,9 +449,6 @@ class Light(Stimulator):
     def power_(self) -> Quantity:
         """Returns history of light power without units (/mwatt)."""
         return self.power / mwatt
-
-
-
 
     def add_self_to_plot(self, ax, axis_scale_unit, **kwargs) -> list[PathCollection]:
         # show light with point field, assigning r and z coordinates

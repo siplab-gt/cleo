@@ -121,12 +121,12 @@ class Scope(Recorder):
     rho_rel_generator : Callable[[int], Float[np.ndarray, "n"], optional
         A function assigning expression levels. Takes n as an arg, outputs float array.
         ``lambda n: np.ones(n)`` by default.
-            focus_depth : Quantity, optional
-                The depth of the focal plane, by default that of the scope.
-            soma_radius : Quantity, optional
-                The radius of the soma of the neuron, by default that of the scope.
-                Used to compute noise focus factor, since smaller ROIs will have
-                a noisier distribution of fluorescence, averaged over fewer pixels.
+    focus_depth : Quantity, optional
+        The depth of the focal plane, by default that of the scope.
+    soma_radius : Quantity, optional
+        The radius of the soma of the neuron, by default that of the scope.
+        Used to compute noise focus factor, since smaller ROIs will have
+        a noisier distribution of fluorescence, averaged over fewer pixels.
     """
 
     sensor: Sensor = field()

@@ -1,4 +1,5 @@
 """Tests for cleo/processing/__init__.py"""
+
 from typing import Any, Tuple
 
 import pytest
